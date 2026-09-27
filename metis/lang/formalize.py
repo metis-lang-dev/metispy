@@ -110,6 +110,22 @@ def admit_text_pack(text: str, llp: str,
             return r
     r.merged = merged_cat
 
+    # discipline warning: traces, MAP read-back and the debug
+    # sidecar identify events by the SHORT rule name — a collision
+    # (across layers, or within one catalog) makes the narration
+    # ambiguous even though entry names stay layer-qualified.
+    short_counts: Dict[str, int] = {}
+    for ent in merged_cat.entries:
+        if type(ent.payload).__name__ in ("ClauseSchema", "LinkSchema"):
+            short = ent.name.rsplit("/", 1)[-1]
+            short_counts[short] = short_counts.get(short, 0) + 1
+    for short, n in sorted(short_counts.items()):
+        if n > 1:
+            r.warnings.append(
+                f"rule name '{short}' appears {n}x across layers — "
+                "trace events and the debug sidecar read short "
+                "names; rename to keep the read-back unambiguous")
+
     # the approval units
     for d in cat.decls:
         if isinstance(d, A.Stage):
