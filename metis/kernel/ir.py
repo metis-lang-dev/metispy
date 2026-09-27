@@ -175,3 +175,22 @@ def ir_artifact_lines(name: str, fp: FactoredProgram,
         out.append(f"F {a} {v}")
     out.append(".")
     return out
+
+
+def ir_debug_lines(name: str, fp: FactoredProgram) -> List[str]:
+    """The DETACHED DEBUG INFO — the DWARF analogue for the wire.
+
+    The artifact itself is name-free by design; 01-ir-spec's
+    determinism contract (site-candidate order = canonical event
+    order) makes rule identity DERIVABLE, so it ships as a sidecar
+    (`D` lines), keyed to its artifact by name + program identity,
+    never as authority: an interpreter joins artifact + sidecar to
+    answer WHICH RULE a site's chosen candidate is (and, through the
+    catalog's %% docs, WHY — the narrated-read-back seam of
+    07-formalization). A missing sidecar degrades to indices, never
+    to wrong names."""
+    out = [f"C {name}"]
+    for s in fp._sites:
+        out.append(f"D {s.var} {len(s.recs)} "
+                   + " ".join(ev.name for ev, _, _ in s.recs))
+    return out
