@@ -1,0 +1,69 @@
+% The road mini corpus, recoded in rulescript v2 — the Stage-9 recode
+% proof. Content-identical to mini.py: ground programs must share
+% program_key with the python-built catalog.
+catalog road 2.
+provenance hand "recode of mini.py" "2026-07-18".
+layers (detection object-behavior ego road rss pack).
+stages (ego others check).
+
+type car {ego alfa}.
+type lane {l0 l1}.
+type cell {c0 c1 c2 c3 c4}.
+type vel {v0 v1 v2}.
+
+namespace kinematic produce (object-behavior ego) consume (object-behavior ego rss).
+namespace control produce (object-behavior ego road rss).
+
+pred st(car,lane,cell,vel) : kinematic.
+pred eturn : control.
+pred ot(car) : control.
+pred crash : control.
+pred wreck(car) : control.
+
+input corridor.
+output setpoint.
+
+bwd adv(cell,vel,cell).
+bwd faster(vel,vel).
+bwd slower(vel,vel).
+
+adv(c0,v0,c0). adv(c1,v0,c1). adv(c2,v0,c2). adv(c3,v0,c3). adv(c4,v0,c4).
+adv(c0,v1,c1). adv(c1,v1,c2). adv(c2,v1,c3). adv(c3,v1,c4).
+adv(c0,v2,c2). adv(c1,v2,c3). adv(c2,v2,c4).
+faster(v0,v1). faster(v1,v2).
+slower(v1,v0). slower(v2,v1).
+
+stage ego {
+  %% ego keep: consume the turn token, advance the actor by its speed
+  %% bucket; disabled off-road by the adv guard.
+  keep [ego] : eturn * st(ego,L,C,V) * adv(C,V,C2)
+    -o st(ego,L,C2,V)  @w 0.55.
+  %% ego accel: speed up one bucket, then advance; disabled at the cap
+  %% and off-road by the guards.
+  accel [ego] : eturn * st(ego,L,C,V) * faster(V,V2) * adv(C,V2,C2)
+    -o st(ego,L,C2,V2)  @w 0.2.
+  %% ego brake: slow one bucket, then advance.
+  brake [ego] : eturn * st(ego,L,C,V) * slower(V,V2) * adv(C,V2,C2)
+    -o st(ego,L,C2,V2)  @w 0.15.
+}
+
+stage others {
+  %% other actor keeps its speed and advances (turn-token driven).
+  okeep [object-behavior] : ot(X) * st(X,L,C,V) * adv(C,V,C2)
+    -o st(X,L,C2,V)  @w 0.55.
+  %% other actor brakes one bucket, then advances.
+  obrake [object-behavior] : ot(X) * st(X,L,C,V) * slower(V,V2) * adv(C,V2,C2)
+    -o st(X,L,C2,V2)  @w 0.15.
+}
+
+stage check {
+  %% Two distinct actors in the same lane-cell wreck and raise crash —
+  %% the check stage's only rule.
+  collide [rss] : st(X,L,C,VX) * st(Y,L,C,VY) * X <> Y
+    -o crash * wreck(X) * wreck(Y).
+}
+
+%% Ego turn exhausted -> others move.
+qui eo [road] : ego -o others.
+%% All other-actor turns exhausted -> collision check.
+qui oc [road] : others -o check.

@@ -1,0 +1,12 @@
+% Port manifest for the Game of Life domain. The program is built by
+% the seam (kernel.sync + the instance topology); the catalog's job
+% here is the framework contract — declared ports, bound at load,
+% fail-fast. Rules stay code-side because the topology is per-instance
+% (the same note as sysadmin's per-instance chain).
+catalog gol 1.
+provenance hand "IPPC 2011 Game of Life port manifest" "2026-07-18".
+layers (dyn).
+stages (mark update sweep).
+
+input grid.
+output action.

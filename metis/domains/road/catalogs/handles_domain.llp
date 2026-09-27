@@ -1,0 +1,88 @@
+% FROZEN kernel-parity FIXTURE (catalog-reconciliation): the canonical,
+% evolving copy is chariot's wayplan/catalog/road_handles.llp.
+%
+% Road semantics over GEOMETRIC HANDLES — the lifted domain
+% (docs/road-encoding.md). Rules mention only handles and relations;
+% no coordinate ever appears. Geometry (splines, s/d, speed limits)
+% stays in the geometric model behind the SemanticCompiler
+% (domains/road/semantic.py): the adjacency graph arrives as Horn
+% facts, continuous quantities reach the measure ONLY through weight
+% ports whose bindings read the geometric objects — and whose
+% declared `reads` scopes keep the factorization sound.
+%
+% Tick: ego maneuver (planner-forced cmd) -> world (the lead
+% vehicle's longitudinal row evolves the RSS gap CLASS) -> check
+% (collision hazard priced by the rss port). Gap classes are the
+% qualitative longitudinal calculus: the MEASURE lives on
+% {gclose, gsafe}; exact s,d ride as metadata into the motion
+% handoff.
+catalog road-handles 1.
+provenance hand "RSS road semantics over handles" "2026-07-20".
+layers (dyn).
+stages (ego world check).
+
+namespace veh produce (dyn).
+namespace risk produce (dyn).
+
+pred on(vehicle,lane) : veh.
+pred gclose : veh.
+pred gsafe : veh.
+pred cmd(maneuver) : veh.
+pred emvt : veh.
+pred edone : veh.
+pred mvt : veh.
+pred adone : veh.
+pred ck : veh.
+pred ckd : veh.
+pred crash : risk.
+
+bwd leftof(lane,lane).
+bwd rightof(lane,lane).
+bwd islane(lane).
+
+input scene.
+output maneuver.
+
+weight brk(V) reads {}.
+weight cls(V) reads {}.
+weight rss reads {gclose, on(ego,L) if islane(L),
+                  on(alfa,L) if islane(L)}.
+
+stage ego {
+  %% hold the lane.
+  mkeep [dyn] : emvt * cmd(keep) -o edone.
+  %% move to the left-adjacent lane handle.
+  mleft [dyn] : emvt * cmd(left) * on(ego,L) * leftof(L2,L)
+    -o on(ego,L2) * edone.
+  %% move to the right-adjacent lane handle.
+  mright [dyn] : emvt * cmd(right) * on(ego,L) * rightof(L2,L)
+    -o on(ego,L2) * edone.
+}
+
+stage world {
+  %% lead keeps speed: a close gap stays close.
+  akc [dyn] : mvt * gclose -o gclose * adone  @w ~brk(alfa).
+  %% lead brakes off the pressure: the close gap opens.
+  abo [dyn] : mvt * gclose -o gsafe * adone  @w brk(alfa).
+  %% closing in: the safe gap tightens (relative speed, via port).
+  asc [dyn] : mvt * gsafe -o gclose * adone  @w cls(alfa).
+  %% cruising: the safe gap holds.
+  ass [dyn] : mvt * gsafe -o gsafe * adone  @w ~cls(alfa).
+}
+
+stage check {
+  %% same lane and close at decision time: the hazard fires with the
+  %% rss-priced probability (the port reads gap + lane occupancy and
+  %% the GEOMETRY behind the handles).
+  hit [dyn] : ck * $gclose * $on(ego,L) * $on(alfa,L)
+    -o crash * ckd  @w rss.
+  %% the tick passes clean (complement mass of the same port).
+  ok [dyn] : ck -o ckd  @w ~rss.
+}
+
+%% ego resolved -> the world moves.
+qui ew [dyn] : ego * edone -o world * mvt.
+%% world resolved -> safety check.
+qui wc [dyn] : world * adone -o check * ck.
+%% checked -> next tick (base policy: hold the lane).
+qui cb [dyn] : check * ckd -o ego * emvt * cmd(keep).

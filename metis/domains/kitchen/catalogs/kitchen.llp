@@ -1,0 +1,44 @@
+% Overcooked strategic layer — the recipe as linear resources. This is
+% the AUTHORED catalog (not generated): ingredients literally are
+% linear tokens; the 3-onion soup is a multiplicity-3 premise.
+catalog kitchen 1.
+provenance hand "Overcooked-AI cramped_room strategic layer" "2026-07-18".
+layers (task).
+stages (task).
+
+namespace k produce (task).
+pred hand_free : k.
+pred held_onion : k.
+pred held_dish : k.
+pred held_soup : k.
+pred pot_space : k.
+pred pot_onion : k.
+pred cooking : k.
+pred ready : k.
+pred served : k.
+
+input scene.
+output intent.
+weight w_fetch_onion.
+weight w_load.
+weight w_cook.
+weight w_fetch_dish.
+weight w_plate.
+weight w_serve.
+
+stage task {
+  %% walk to a dispenser and take an onion.
+  fetch_onion [task] : hand_free -o held_onion  @w w_fetch_onion.
+  %% drop the onion into pot capacity.
+  load [task] : held_onion * pot_space -o hand_free * pot_onion  @w w_load.
+  %% three onions start the cook — needs a free hand to press start
+  %% (the env's interact semantics; also forces cook-before-dish).
+  cook [task] : $hand_free * pot_onion * pot_onion * pot_onion
+    -o cooking  @w w_cook.
+  %% fetch a dish while the soup cooks.
+  fetch_dish [task] : hand_free -o held_dish  @w w_fetch_dish.
+  %% cooked soup onto the held dish.
+  plate [task] : held_dish * cooking -o held_soup  @w w_plate.
+  %% deliver.
+  serve [task] : held_soup -o hand_free * served  @w w_serve.
+}

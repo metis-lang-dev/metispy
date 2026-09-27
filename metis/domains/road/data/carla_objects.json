@@ -1,0 +1,263 @@
+{
+ "vehicles": {
+  "vehicle.audi.a2": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.audi.etron": {
+   "base": "car",
+   "special": "electric",
+   "wheels": 0
+  },
+  "vehicle.audi.tt": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.bh.crossbike": {
+   "base": "bicycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.bmw.grandtourer": {
+   "base": "",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.carlamotors.carlacola": {
+   "base": "truck",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.carlamotors.european_hgv": {
+   "base": "truck",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.carlamotors.firetruck": {
+   "base": "truck",
+   "special": "emergency",
+   "wheels": 0
+  },
+  "vehicle.chevrolet.impala": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.citroen.c3": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.diamondback.century": {
+   "base": "bicycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.dodge.charger_2020": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.dodge.charger_police": {
+   "base": "car",
+   "special": "emergency",
+   "wheels": 0
+  },
+  "vehicle.dodge.charger_police_2020": {
+   "base": "car",
+   "special": "emergency",
+   "wheels": 0
+  },
+  "vehicle.ford.ambulance": {
+   "base": "van",
+   "special": "emergency",
+   "wheels": 0
+  },
+  "vehicle.ford.crown": {
+   "base": "car",
+   "special": "taxi",
+   "wheels": 0
+  },
+  "vehicle.ford.mustang": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.gazelle.omafiets": {
+   "base": "bicycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.harley-davidson.low_rider": {
+   "base": "motorcycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.jeep.wrangler_rubicon": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.kawasaki.ninja": {
+   "base": "motorcycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.lincoln.mkz_2017": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.lincoln.mkz_2020": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.mercedes.coupe": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.mercedes.coupe_2020": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.mercedes.sprinter": {
+   "base": "van",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.micro.microlino": {
+   "base": "car",
+   "special": "electric",
+   "wheels": 0
+  },
+  "vehicle.mini.cooper_s": {
+   "base": "",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.mini.cooper_s_2021": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.mitsubishi.fusorosa": {
+   "base": "Bus",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.nissan.micra": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.nissan.patrol": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.nissan.patrol_2021": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.seat.leon": {
+   "base": "car",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.tesla.cybertruck": {
+   "base": "truck",
+   "special": "electric",
+   "wheels": 0
+  },
+  "vehicle.tesla.model3": {
+   "base": "car",
+   "special": "electric",
+   "wheels": 0
+  },
+  "vehicle.toyota.prius": {
+   "base": "car",
+   "special": "electric",
+   "wheels": 0
+  },
+  "vehicle.vespa.zx125": {
+   "base": "motorcycle",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.volkswagen.t2": {
+   "base": "van",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.volkswagen.t2_2021": {
+   "base": "van",
+   "special": "",
+   "wheels": 0
+  },
+  "vehicle.yamaha.yzf": {
+   "base": "motorcycle",
+   "special": "",
+   "wheels": 0
+  }
+ },
+ "walkers": [
+  "walker.pedestrian.0022",
+  "walker.pedestrian.0038",
+  "walker.pedestrian.0042",
+  "walker.pedestrian.0031",
+  "walker.pedestrian.0027",
+  "walker.pedestrian.0004",
+  "walker.pedestrian.0041",
+  "walker.pedestrian.0030",
+  "walker.pedestrian.0001",
+  "walker.pedestrian.0019",
+  "walker.pedestrian.0002",
+  "walker.pedestrian.0024",
+  "walker.pedestrian.0020",
+  "walker.pedestrian.0006",
+  "walker.pedestrian.0008",
+  "walker.pedestrian.0035",
+  "walker.pedestrian.0023",
+  "walker.pedestrian.0018",
+  "walker.pedestrian.0032",
+  "walker.pedestrian.0016",
+  "walker.pedestrian.0007",
+  "walker.pedestrian.0036",
+  "walker.pedestrian.0044",
+  "walker.pedestrian.0040",
+  "walker.pedestrian.0003",
+  "walker.pedestrian.0051",
+  "walker.pedestrian.0047",
+  "walker.pedestrian.0010",
+  "walker.pedestrian.0048",
+  "walker.pedestrian.0050",
+  "walker.pedestrian.0039",
+  "walker.pedestrian.0046",
+  "walker.pedestrian.0043",
+  "walker.pedestrian.0052",
+  "walker.pedestrian.0028",
+  "walker.pedestrian.0033",
+  "walker.pedestrian.0029",
+  "walker.pedestrian.0049",
+  "walker.pedestrian.0014",
+  "walker.pedestrian.0026",
+  "walker.pedestrian.0021",
+  "walker.pedestrian.0034",
+  "walker.pedestrian.0017",
+  "walker.pedestrian.0045",
+  "walker.pedestrian.0015",
+  "walker.pedestrian.0013",
+  "walker.pedestrian.0025",
+  "walker.pedestrian.0012",
+  "walker.pedestrian.0005",
+  "walker.pedestrian.0009",
+  "walker.pedestrian.0037",
+  "walker.pedestrian.0011"
+ ]
+}

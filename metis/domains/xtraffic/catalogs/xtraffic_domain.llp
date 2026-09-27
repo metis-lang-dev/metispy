@@ -1,0 +1,127 @@
+% CrossingTraffic LIFTED domain — included by generated instances.
+% The instance supplies: cell/idx types, adjacency + noadj facts, the
+% obstacle chain (cidx/succ), goal(-) and lastidx(-). Everything
+% below is instance-independent: the goal cell enters through the
+% goal(C) guard, the chain end through lastidx(I) on the links (bwd
+% guards on links — pruned at grounding like clause guards).
+catalog xtraffic-domain 1.
+provenance hand "IPPC 2011 CrossingTraffic, lifted domain" "2026-07-19".
+layers (dyn).
+stages (move mark update sweep).
+
+namespace state produce (dyn).
+
+pred rob(cell) : state.
+pred o(cell) : state.
+pred e(cell) : state.
+pred po(cell) : state.
+pred pe(cell) : state.
+pred tok(cell) : state.
+pred no2(cell) : state.
+pred ne2(cell) : state.
+pred dead : state.
+pred paid : state.
+pred mvt : state.
+pred cmdnorth : state.
+pred cmdsouth : state.
+pred cmdeast : state.
+pred cmdwest : state.
+pred m(idx) : state.
+pred u(idx) : state.
+pred s(idx) : state.
+
+bwd north(cell,cell).
+bwd south(cell,cell).
+bwd east(cell,cell).
+bwd west(cell,cell).
+bwd noadj_north(cell).
+bwd noadj_south(cell).
+bwd noadj_east(cell).
+bwd noadj_west(cell).
+bwd cidx(cell,idx).
+bwd succ(idx,idx).
+bwd goal(cell).
+bwd lastidx(idx).
+bwd ocell(cell).
+
+input scene.
+output move.
+
+% declared read scopes — derived from the bindings, so the factored
+% emission admits the catalog: obs reads the east neighbor's snapshot;
+% go/stayw read the cmd tokens, the own-cell obstacle and the full
+% configuration (the policy table's key); forced moves read o(C) only.
+weight obs(C1) reads {po(D) if east(C1,D)}.
+weight go(C1,C2) reads {cmdnorth, cmdsouth, cmdeast, cmdwest, o(C1),
+  o(D) if ocell(D)}.
+weight stayw(C1) reads {cmdnorth, cmdsouth, cmdeast, cmdwest, o(C1),
+  o(D) if ocell(D)}.
+weight fgo(C1,C2) reads {o(C1)}.
+weight fstayw(C1) reads {o(C1)}.
+
+stage move {
+  %% forced first move north (cmd token).
+  fmv_north [dyn] : mvt * rob(C) * cmdnorth * north(C,C2) -o rob(C2) * paid  @w fgo(C,C2).
+  %% forced first move north against the edge: stay.
+  fst_north [dyn] : mvt * rob(C) * cmdnorth * noadj_north(C) -o rob(C) * paid  @w fstayw(C).
+  %% base-policy move north.
+  mv_north [dyn] : mvt * rob(C) * north(C,C2) -o rob(C2) * paid  @w go(C,C2).
+  %% forced first move south (cmd token).
+  fmv_south [dyn] : mvt * rob(C) * cmdsouth * south(C,C2) -o rob(C2) * paid  @w fgo(C,C2).
+  %% forced first move south against the edge: stay.
+  fst_south [dyn] : mvt * rob(C) * cmdsouth * noadj_south(C) -o rob(C) * paid  @w fstayw(C).
+  %% base-policy move south.
+  mv_south [dyn] : mvt * rob(C) * south(C,C2) -o rob(C2) * paid  @w go(C,C2).
+  %% forced first move east (cmd token).
+  fmv_east [dyn] : mvt * rob(C) * cmdeast * east(C,C2) -o rob(C2) * paid  @w fgo(C,C2).
+  %% forced first move east against the edge: stay.
+  fst_east [dyn] : mvt * rob(C) * cmdeast * noadj_east(C) -o rob(C) * paid  @w fstayw(C).
+  %% base-policy move east.
+  mv_east [dyn] : mvt * rob(C) * east(C,C2) -o rob(C2) * paid  @w go(C,C2).
+  %% forced first move west (cmd token).
+  fmv_west [dyn] : mvt * rob(C) * cmdwest * west(C,C2) -o rob(C2) * paid  @w fgo(C,C2).
+  %% forced first move west against the edge: stay.
+  fst_west [dyn] : mvt * rob(C) * cmdwest * noadj_west(C) -o rob(C) * paid  @w fstayw(C).
+  %% base-policy move west.
+  mv_west [dyn] : mvt * rob(C) * west(C,C2) -o rob(C2) * paid  @w go(C,C2).
+  %% base-policy stay (edge mass).
+  str [dyn] : mvt * rob(C) -o rob(C) * paid  @w stayw(C).
+  %% an obstacle on the robot's cell kills it (pre-shift state, per the RDDL).
+  dier [dyn] : mvt * rob(C) * $o(C) -o dead * paid.
+  %% goal is absorbing and free.
+  atgoal [dyn] : mvt * rob(C) * goal(C) -o rob(C).
+  %% a vanished robot keeps paying every epoch.
+  deadtick [dyn] : mvt * dead -o dead * paid.
+}
+
+stage mark {
+  %% snapshot an obstacle cell.
+  mrO [dyn] : m(I) * o(C) * cidx(C,I) * succ(I,I2) -o po(C) * tok(C) * m(I2).
+  %% snapshot an empty obstacle cell.
+  mrE [dyn] : m(I) * e(C) * cidx(C,I) * succ(I,I2) -o pe(C) * tok(C) * m(I2).
+}
+stage update {
+  %% next-state obstacle: east neighbor's snapshot (edge: arrival Bernoulli).
+  upO [dyn] : u(I) * tok(C) * cidx(C,I) * succ(I,I2) -o no2(C) * u(I2)  @w obs(C).
+  %% next-state empty.
+  upE [dyn] : u(I) * tok(C) * cidx(C,I) * succ(I,I2) -o ne2(C) * u(I2)  @w ~obs(C).
+}
+stage sweep {
+  %% commit po/no2.
+  sw_po_no2 [dyn] : s(I) * po(C) * no2(C) * cidx(C,I) * succ(I,I2) -o o(C) * s(I2).
+  %% commit po/ne2.
+  sw_po_ne2 [dyn] : s(I) * po(C) * ne2(C) * cidx(C,I) * succ(I,I2) -o e(C) * s(I2).
+  %% commit pe/no2.
+  sw_pe_no2 [dyn] : s(I) * pe(C) * no2(C) * cidx(C,I) * succ(I,I2) -o o(C) * s(I2).
+  %% commit pe/ne2.
+  sw_pe_ne2 [dyn] : s(I) * pe(C) * ne2(C) * cidx(C,I) * succ(I,I2) -o e(C) * s(I2).
+}
+
+%% robot resolved -> shift obstacles.
+qui mm [dyn] : move -o mark * m(i0).
+%% snapshot done -> update pass.
+qui mu [dyn] : mark * m(I) * lastidx(I) -o update * u(i0).
+%% update done -> commit.
+qui us [dyn] : update * u(I) * lastidx(I) -o sweep * s(i0).
+%% committed -> next epoch.
+qui sm [dyn] : sweep * s(I) * lastidx(I) -o move * mvt.

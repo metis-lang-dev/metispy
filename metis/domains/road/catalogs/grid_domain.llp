@@ -1,0 +1,187 @@
+% FROZEN kernel-parity FIXTURE (catalog-reconciliation): the canonical,
+% evolving copy is chariot's wayplan/catalog/road_grid.llp. This copy
+% pins the metis kernel tests; it changes only with the kernel, never
+% for behavior. Parity gate: wayplan py/tests/test_catalog_parity.py.
+%
+% The lolli window kernel in rulescript — ALL lolli rules (vehicle
+% kinematics, directed walkers, crash), LIFTED, and MERGED with the
+% handle encoding: the lateral vocabulary is the HANDLE relations
+% (leftof/rightof — the same predicates handles_domain.llp uses), the
+% longitudinal vocabulary is grid classes whose tables (advf/advb,
+% speed lattice, windows) are Horn facts GENERATED FROM GEOMETRY by
+% the compiler (gridcat.py). Rules mention relations only; every
+% number lives in the instance tables or behind ports.
+%
+% Recode proof: gridcat grounds this catalog program_key-IDENTICAL to
+% lldsl.build_program (tests/test_gridcat.py) — the same measure the
+% oracle corpus pins.
+catalog road-grid 1.
+provenance hand "lolli window kernel, lifted recode" "2026-07-20".
+layers (dyn).
+stages (ego others check).
+
+namespace state produce (dyn).
+
+pred st(car,lane,cell,speed) : state.
+pred pos(car,lane,cell) : state.
+pred eturn : state.
+pred ot(car) : state.
+pred run : state.
+pred crash : state.
+pred occ(lane,cell) : state.
+pred maybe : state.
+pred no_ghost : state.
+
+bwd advf(cell,speed,cell).
+bwd advb(cell,speed,cell).
+bwd vup(speed,speed).
+bwd vdn(speed,speed).
+bwd vhb(speed,speed).
+bwd vpos(speed).
+bwd leftof(lane,lane).
+bwd rightof(lane,lane).
+bwd win(car,cell).
+bwd pair(car,car).
+bwd veh(car).
+bwd wplus(car).
+bwd wminus(car).
+bwd pd(car).
+bwd pdisc(car,cell,cell).
+bwd plat(lane,lane).
+bwd gspeed(speed).
+bwd occluded.
+bwd frontier(lane,cell).
+
+input scene.
+output maneuver.
+
+% Policy as PORTS (docs/road-encoding.md): the RSS shield, behavior
+% rows, danger response, manifest priors and the ghost/occlusion
+% priors live in registry BINDINGS, not in the rules — the rules
+% stay pure kinematics (program_key-identical to lldsl). The action
+% is a CONSTANT port arg, the actor a variable; the binding decodes
+% the state from counts (RSS is inherently global, so these ports
+% are opaque — the grid encoding does not factorize, by design).
+weight emove(act).
+weight omove(car,act).
+weight wmove(car,act).
+weight pmove(car,lane,cell,lane,cell).
+weight gappear.
+weight gdecline.
+
+stage ego {
+  %% ego holds speed; the ring advance comes from the advf table.
+  ekeep [dyn] : eturn * st(ego,L,X,V) * pos(ego,L,X) * $run
+    * win(ego,X) * advf(X,V,X2) -o st(ego,L,X2,V) * pos(ego,L,X2)
+    @w emove(keep).
+  %% ego accelerates one speed class (vup: the saturating lattice).
+  eaccel [dyn] : eturn * st(ego,L,X,V) * pos(ego,L,X) * $run
+    * win(ego,X) * vup(V,V2) * advf(X,V2,X2)
+    -o st(ego,L,X2,V2) * pos(ego,L,X2)  @w emove(accel).
+  %% ego brakes one class.
+  ebrake [dyn] : eturn * st(ego,L,X,V) * pos(ego,L,X) * $run
+    * win(ego,X) * vdn(V,V2) * advf(X,V2,X2)
+    -o st(ego,L,X2,V2) * pos(ego,L,X2)  @w emove(brake).
+  %% ego moves to the left-adjacent lane HANDLE (motion required).
+  eleft [dyn] : eturn * st(ego,L,X,V) * pos(ego,L,X) * $run
+    * win(ego,X) * leftof(L2,L) * vpos(V) * advf(X,V,X2)
+    -o st(ego,L2,X2,V) * pos(ego,L2,X2)  @w emove(left).
+  %% ego moves to the right-adjacent lane HANDLE.
+  eright [dyn] : eturn * st(ego,L,X,V) * pos(ego,L,X) * $run
+    * win(ego,X) * rightof(L2,L) * vpos(V) * advf(X,V,X2)
+    -o st(ego,L2,X2,V) * pos(ego,L2,X2)  @w emove(right).
+}
+
+stage others {
+  %% a vehicle actor holds speed.
+  okeep [dyn] : ot(C) * veh(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * advf(X,V,X2) -o st(C,L,X2,V) * pos(C,L,X2)
+    @w omove(C,keep).
+  %% a vehicle actor accelerates.
+  oaccel [dyn] : ot(C) * veh(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vup(V,V2) * advf(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w omove(C,accel).
+  %% a vehicle actor brakes.
+  obrake [dyn] : ot(C) * veh(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vdn(V,V2) * advf(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w omove(C,brake).
+  %% a vehicle actor hard-brakes (two classes: the A_MAX_BRAKE bucket).
+  ohbrake [dyn] : ot(C) * veh(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vhb(V,V2) * advf(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w omove(C,hbrake).
+  %% co-directed walker holds speed (advance along its sign).
+  wpkeep [dyn] : ot(C) * wplus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * advf(X,V,X2) -o st(C,L,X2,V) * pos(C,L,X2)
+    @w wmove(C,keep).
+  %% co-directed walker speeds up.
+  wpaccel [dyn] : ot(C) * wplus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vup(V,V2) * advf(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w wmove(C,accel).
+  %% co-directed walker slows.
+  wpbrake [dyn] : ot(C) * wplus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vdn(V,V2) * advf(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w wmove(C,brake).
+  %% co-directed walker crosses toward the left lane handle.
+  wpleft [dyn] : ot(C) * wplus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * leftof(L2,L) * vpos(V) * advf(X,V,X2)
+    -o st(C,L2,X2,V) * pos(C,L2,X2)  @w wmove(C,left).
+  %% co-directed walker crosses toward the right lane handle.
+  wpright [dyn] : ot(C) * wplus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * rightof(L2,L) * vpos(V) * advf(X,V,X2)
+    -o st(C,L2,X2,V) * pos(C,L2,X2)  @w wmove(C,right).
+  %% oncoming walker holds speed (cell-DECREASING: the advb table).
+  wmkeep [dyn] : ot(C) * wminus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * advb(X,V,X2) -o st(C,L,X2,V) * pos(C,L,X2)
+    @w wmove(C,keep).
+  %% oncoming walker speeds up.
+  wmaccel [dyn] : ot(C) * wminus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vup(V,V2) * advb(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w wmove(C,accel).
+  %% oncoming walker slows.
+  wmbrake [dyn] : ot(C) * wminus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * vdn(V,V2) * advb(X,V2,X2)
+    -o st(C,L,X2,V2) * pos(C,L,X2)  @w wmove(C,brake).
+  %% oncoming walker crosses left.
+  wmleft [dyn] : ot(C) * wminus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * leftof(L2,L) * vpos(V) * advb(X,V,X2)
+    -o st(C,L2,X2,V) * pos(C,L2,X2)  @w wmove(C,left).
+  %% oncoming walker crosses right.
+  wmright [dyn] : ot(C) * wminus(C) * st(C,L,X,V) * pos(C,L,X) * $run
+    * win(C,X) * rightof(L2,L) * vpos(V) * advb(X,V,X2)
+    -o st(C,L2,X2,V) * pos(C,L2,X2)  @w wmove(C,right).
+  %% HOLONOMIC ped disc (dogs/kids): re-manifest anywhere within the
+  %% disc (pdisc) and one adjacent lane handle (plat), speed pinned 0
+  %% — the port carries the source+target so the binding recovers the
+  %% displacement for the stay-biased manifest prior.
+  pman [dyn] : ot(C) * pd(C) * st(C,L,X,0) * pos(C,L,X) * $run
+    * win(C,X) * pdisc(C,X,X2) * plat(L,L2)
+    -o st(C,L2,X2,0) * pos(C,L2,X2)  @w pmove(C,L,X,L2,X2).
+  %% OCCLUSION (RSS Defs 23-26): spend `maybe` to manifest a hidden
+  %% vehicle at a frontier with any modeled speed (gspeed).
+  gapp [dyn] : maybe * occ(L,X) * $run * gspeed(V) * frontier(L,X)
+    -o st(ghost,L,X,V) * pos(ghost,L,X)  @w gappear.
+  %% ...or decline the ghost (the complementary occlusion mass).
+  gnone [dyn] : maybe * $run * occluded -o no_ghost  @w gdecline.
+  %% a declined ghost's turn token is discarded each tick.
+  gabsent [dyn] : ot(ghost) * $run * $no_ghost * occluded -o one.
+}
+
+stage check {
+  %% two actors on one (lane, cell): the crash consumes run and
+  %% freezes the world at the next quiescence. Window intersection
+  %% is the win(A,X)*win(B,X) join.
+  hit [dyn] : pos(A,L,X) * pos(B,L,X) * run * pair(A,B)
+    * win(A,X) * win(B,X) -o crash.
+  %% a hidden vehicle threatens ego's PLAN (its crashes with real
+  %% cars are not modeled — the ghost is a hypothesis, not the
+  %% truth); over the ghost's whole reachable frontier window.
+  ghit [dyn] : pos(ego,L,X) * pos(ghost,L,X) * run * win(ghost,X)
+    -o crash.
+}
+
+%% ego committed -> the others move.
+qui eo [dyn] : ego * $run -o others.
+%% others committed -> collision sweep.
+qui oc [dyn] : others * $run -o check.
+% (the check -> ego link re-arming the turn tokens is INSTANCE-emitted
+%  — its produce list enumerates the scene's actors.)

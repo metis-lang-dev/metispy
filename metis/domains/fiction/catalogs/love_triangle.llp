@@ -1,0 +1,26 @@
+% Port of ceptre-tutorial/sol/love-triangle.cep (Martens' Ceptre
+% tutorial; A Midsummer Night's Dream) — the ORIGIN lineage demo:
+% metis began as a rewrite of the Ceptre interpreter (~/repo/if), and
+% this catalog is that heritage run through everything metis added.
+% The operational core is DELIBERATELY identical (Thm 1: the
+% falling-factorial measure IS Ceptre's token-individuated choice,
+% made exact); the differences are the measure readouts, the typing,
+% and the canonical identity. Ceptre's neq fact table becomes the
+% <> distinctness sugar; `-o ()` becomes the LL unit `one`.
+catalog love-triangle 1.
+provenance hand "port:ceptre-tutorial/sol/love-triangle.cep" "2026-07-22".
+layers (story).
+stages (go).
+type character {helena hermia lysander}.
+namespace heart produce (story).
+pred eros(character,character) : heart.
+pred anger(character,character) : heart.
+stage go {
+  %% A loves B while C loves A: the rival C seethes at beloved and rival both.
+  jealousy [story] : $eros(A,B) * $eros(C,A) * C <> A
+    -o anger(C,A) * anger(C,B).
+  %% three angers at the beloved and the love dies (multiplicity-3
+  %% premise: 3!=6 transition tokens — the falling-factorial gate).
+  move_on [story] : eros(A,B) * anger(A,B) * anger(A,B) * anger(A,B)
+    -o one.
+}

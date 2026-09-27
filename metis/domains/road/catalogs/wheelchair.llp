@@ -1,0 +1,20 @@
+% FROZEN kernel-parity FIXTURE (catalog-reconciliation): the canonical,
+% evolving copy is chariot's wayplan/catalog/packs/wheelchair.llp.
+%
+% The wheelchair demo pack, recoded — a pack may only ADD (containment
+% by construction); it reads kinematic state ($) and produces only its
+% own atoms.
+catalog wheelchair 1.
+extends road.
+provenance hand "recode of mini.wheelchair_pack" "2026-07-18".
+
+namespace wc produce (pack).
+
+pred caution(cell) : wc.
+pred wc_scan : wc.
+
+stage check {
+  %% Mark the cell of any observed non-ego actor as a caution zone
+  %% (one scan token per tick).
+  wcmark [pack] : wc_scan * $st(alfa,L,C,V) -o caution(C).
+}

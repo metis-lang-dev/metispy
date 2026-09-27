@@ -1,0 +1,34 @@
+% Navigation LIFTED domain — included by generated instances.
+catalog nav-domain 1.
+provenance hand "IPPC 2011 Navigation, lifted domain" "2026-07-18".
+layers (dyn).
+stages (nav).
+namespace loc produce (dyn).
+pred at(cell) : loc.
+pred dead : loc.
+bwd north(cell,cell).
+bwd south(cell,cell).
+bwd east(cell,cell).
+bwd west(cell,cell).
+input pos.
+output move.
+weight go(C1,C2) reads {}.
+weight die(C1,C2) reads {}.
+stage nav {
+  %% move north: arrive with survival probability.
+  mv_north [dyn] : at(C) * north(C,C2) -o at(C2)  @w go(C,C2).
+  %% move north: the cell claims the robot.
+  die_north [dyn] : at(C) * north(C,C2) -o dead  @w die(C,C2).
+  %% move south: arrive with survival probability.
+  mv_south [dyn] : at(C) * south(C,C2) -o at(C2)  @w go(C,C2).
+  %% move south: the cell claims the robot.
+  die_south [dyn] : at(C) * south(C,C2) -o dead  @w die(C,C2).
+  %% move east: arrive with survival probability.
+  mv_east [dyn] : at(C) * east(C,C2) -o at(C2)  @w go(C,C2).
+  %% move east: the cell claims the robot.
+  die_east [dyn] : at(C) * east(C,C2) -o dead  @w die(C,C2).
+  %% move west: arrive with survival probability.
+  mv_west [dyn] : at(C) * west(C,C2) -o at(C2)  @w go(C,C2).
+  %% move west: the cell claims the robot.
+  die_west [dyn] : at(C) * west(C,C2) -o dead  @w die(C,C2).
+}
