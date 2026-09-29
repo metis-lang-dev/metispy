@@ -117,3 +117,38 @@ def test_buffer_lines_apply_to_the_live_session():
                      "bad directive: #context init"]
     run(r, "undo", "undo", "undo", "undo")          # marks unwind
     assert "anger(helena,hermia)" not in r.counts
+
+
+def test_rule_text_gets_the_reload_hint_not_noise():
+    """A selection of RULE source sent to the REPL (the user's
+    shift+enter on the jealousy block) points at save+reload; `-o`
+    never falls into the '-ATOM' retract shorthand; `edit` aliases
+    reload; unknown commands say bare-words."""
+    r = shell()
+    out = run(r, "jealousy [story] : $eros(A,B) * $eros(C,A) * C <> A",
+              "  -o anger(C,A) * anger(C,B).",
+              "move_on [story] : eros(A,B) * anger(A,B)",
+              "  -o one.", "}", "stage go {")
+    lines = [l for l in out.splitlines() if l]
+    assert len(lines) == 6
+    assert all("LLP source" in l and "reload" in l for l in lines)
+    assert "retract" not in out and "unknown command" not in out
+    out = run(r, "frobnicate")
+    assert "bare words" in out
+    out = run(r, "-anger(hermia,helena)")       # shorthand still works
+    assert "only 0 present" in out
+    assert "reloaded" in run(r, "edit")
+
+
+def test_trace_replays_the_case_without_touching_the_session():
+    """ctrl+alt+enter's contract: `trace` = metisc --run, fresh from
+    #init, while the interactive session keeps its state."""
+    r = shell()
+    run(r, "assert anger(helena,hermia) 2", "step 1")
+    before = (r.stage, dict(r.counts), list(r.fired))
+    out = run(r, "trace")
+    assert out.splitlines()[0] == "case love_triangle steps=6 seeds=3"
+    assert sum(l.startswith("T ") for l in out.splitlines()) == 3
+    assert (r.stage, r.counts, r.fired) == before
+    run(r, "#steps 0")
+    assert "cannot trace" in run(r, "trace")

@@ -16,6 +16,7 @@ Discovery only: certified expectations stay in manifests."""
 import argparse
 import atexit
 import os
+import re
 import sys
 from cmd import Cmd
 from dataclasses import replace
@@ -25,7 +26,8 @@ from metis.kernel import ForwardProjection, program_key
 from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
                                     choice_weight)
 from metis.lang import compile_catalog, parse, resolve_includes
-from metis.lang.directives import embedded_case
+from metis.lang.directives import (DirectiveError, embedded_case,
+                                   render_run)
 
 _HELP = """\
 events              enabled transitions of the firing tier, numbered
@@ -39,15 +41,20 @@ seed N              reseed the sampler
 undo                back one mutating command
 reset               back to the file's #init directives
 reload              re-read + recompile the file; state carries over
+                    (alias: edit — rule changes go file -> reload)
+trace               replay the file's embedded '#'-case, fresh from
+                    #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
 key                 canonical program_key of the serving catalog
 quit                leave (also: exit, ctrl-d)
 
+Commands are bare words — no prefix; 'help' or '?' lists them.
 '#'-directive lines (sent from the buffer with shift+enter) apply to
 the live session: #init ATOM N assigns the count (assert ADDS),
 #query runs, #steps/#seeds/#unknown/#lik update the case; '%'
-comments pass silently."""
+comments pass silently. Rule text is not REPL input: edit the file,
+save, 'reload'."""
 
 
 def _fmt_counts(counts):
@@ -312,6 +319,19 @@ class Repl(Cmd):
                   f"{self.key[:12]}…); "
                   f"stage {self.stage} | {_fmt_counts(self.counts)}")
 
+    do_edit = do_reload                 # the sketch's name, kept
+
+    def do_trace(self, arg):
+        """replay the file's embedded '#'-case (= metisc --run):
+        fresh ground from #init, seeded I/T/F/Q lines + exact= where
+        tractable. Leaves the interactive session untouched."""
+        try:
+            prog = self.doc.catalog.ground(dict(self.case["init"]))
+            self._say(render_run(self.path.stem, self.case, prog))
+        except DirectiveError as e:
+            self._say(f"cannot trace: {e} — e.g. '#steps 6' in the "
+                      "file or as a sent line")
+
     def _directive_block(self):
         lines = [f"#init {a} {n}"
                  for a, n in sorted(self.counts.items())]
@@ -372,11 +392,34 @@ class Repl(Cmd):
                                         # buffer selection sends whole
         if s.startswith("#"):
             return self._directive(s)
+        if self._looks_like_source(s):
+            self._say("that is LLP source — rules live in the FILE: "
+                      "edit it, save, then 'reload' here (session "
+                      "state carries over)")
+            return
         if s.startswith("+"):
             return self.do_assert(s[1:])
         if s.startswith("-"):
             return self.do_retract(s[1:])
-        self._say(f"unknown command: {s.split()[0]!r} — 'help'")
+        self._say(f"unknown command: {s.split()[0]!r} — commands are "
+                  "bare words; 'help' lists them ('#' only prefixes "
+                  "directive lines)")
+
+    _DECL_WORDS = frozenset(
+        ["catalog", "provenance", "extends", "include", "layers",
+         "stages", "type", "namespace", "pred", "bwd", "weight",
+         "guard", "input", "output", "stage", "qui"])
+
+    def _looks_like_source(self, s):
+        """A buffer selection of RULE text sent here (shift+enter)
+        deserves a pointer to the save+reload flow, not per-line
+        'unknown command' noise — and `-o ...` must never fall into
+        the '-ATOM' retract shorthand."""
+        parts = s.split()
+        return (parts[0] in self._DECL_WORDS
+                or "-o" in parts
+                or s in ("{", "}")
+                or bool(re.match(r"[a-z][A-Za-z0-9_-]*\s*\[", s)))
 
     def _directive(self, s):
         """A '#'-directive line sent from the buffer (the editor's
