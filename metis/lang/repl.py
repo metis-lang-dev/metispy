@@ -1,0 +1,486 @@
+"""metis — the interactive shell over a .llp catalog.
+
+The Ceptre lineage's `#interactive`, upgraded: a stateful session
+(current stage + multiset) you can step, sample, assert into and
+query exactly, over a catalog you keep editing in your editor
+(`reload` re-compiles; a broken edit keeps the previous catalog
+serving — the mis-deployed-pack doctrine). Stepping uses the
+REFERENCE sampler's normative selection (canonical event order,
+splitmix64, left-to-right sum), so an unperturbed seeded session
+replays `metisc --run` byte-for-byte, and `save` writes the session
+state back as '#'-directives (00-language-spec §8) — a discovered
+state is immediately re-runnable by either toolchain.
+
+Discovery only: certified expectations stay in manifests."""
+
+import argparse
+import atexit
+import os
+import sys
+from cmd import Cmd
+from dataclasses import replace
+from pathlib import Path
+
+from metis.kernel import ForwardProjection, program_key
+from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
+                                    choice_weight)
+from metis.lang import compile_catalog, parse, resolve_includes
+from metis.lang.directives import embedded_case
+
+_HELP = """\
+events              enabled transitions of the firing tier, numbered
+step [k|name]       fire candidate k (or by name); no arg = sampled
+run N               sample N steps (stops at quiescence)
+state               current stage + multiset
+assert ATOM [N]     add N (default 1) tokens          [alias: +]
+retract ATOM [N]    remove N (default 1) tokens       [alias: -]
+query ATOM [STEPS]  exact presence marginal from HERE (filter)
+seed N              reseed the sampler
+undo                back one mutating command
+reset               back to the file's #init directives
+reload              re-read + recompile the file; state carries over
+save [PATH]         session state as '#'-directives (stdout or file)
+log                 fired events this session
+key                 canonical program_key of the serving catalog
+quit                leave (also: exit, ctrl-d)
+
+'#'-directive lines (sent from the buffer with shift+enter) apply to
+the live session: #init ATOM N assigns the count (assert ADDS),
+#query runs, #steps/#seeds/#unknown/#lik update the case; '%'
+comments pass silently."""
+
+
+def _fmt_counts(counts):
+    return " ".join(f"{a}:{n}" for a, n in sorted(counts.items())) \
+        or "(empty)"
+
+
+class Repl(Cmd):
+    prompt = "llp> "
+
+    def __init__(self, path, seed=1, **kw):
+        super().__init__(**kw)
+        self.path = Path(path)
+        self.rng = SplitMix64(seed)
+        self.undo_stack = []
+        self.fired = []
+        self._load(initial=True)
+        self.intro = (
+            f"metis shell — {self.path.name} "
+            f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
+            f"stage {self.stage} | {_fmt_counts(self.counts)}\n"
+            "type 'help' for commands, 'events' to see what can fire")
+
+    # -- catalog / session plumbing ------------------------------------
+
+    def _compile(self):
+        text = self.path.read_text()
+        ast = parse(text)
+        doc = compile_catalog(resolve_includes(ast, self.path.parent))
+        return text, doc, embedded_case(text)
+
+    def _load(self, initial=False):
+        text, doc, case = self._compile()
+        self.text, self.doc, self.case = text, doc, case
+        self.prog = doc.catalog.ground(dict(case["init"]))
+        self.events_tbl = canonical_events(self.prog)
+        self.key = program_key(self.prog)
+        if initial or self.stage not in (
+                list(self.prog.stages) + [DONE]):
+            self.stage = self.prog.init_stage
+            self.counts = dict(case["init"])
+        self.atoms = set(self.case["init"])
+        for _, _, ev in self.events_tbl:
+            self.atoms |= set(ev.consume) | set(ev.produce) \
+                | set(ev.persist)
+
+    def _mark(self):
+        self.undo_stack.append(
+            (self.stage, dict(self.counts), len(self.fired)))
+
+    def _candidates(self):
+        """The firing tier, exactly as the reference sampler sees it:
+        enabled clauses of the current stage, else its links."""
+        if self.stage == DONE:
+            return []
+        for kind in ("clause", "link"):
+            ws = [(i, choice_weight(ev, self.counts))
+                  for i, (k, s, ev) in enumerate(self.events_tbl)
+                  if k == kind and s == self.stage]
+            ws = [(i, w) for i, w in ws if w > 0]
+            if ws:
+                return ws
+        return []
+
+    def _fire(self, i):
+        kind, _, ev = self.events_tbl[i]
+        for q, n in ev.consume.items():
+            self.counts[q] = self.counts.get(q, 0) - n
+        for q, n in ev.produce.items():
+            self.counts[q] = self.counts.get(q, 0) + n
+        self.counts = {q: n for q, n in self.counts.items() if n > 0}
+        if kind == "link":
+            self.stage = ev.post
+        self.fired.append(ev.name)
+        return ev.name
+
+    def _sample(self):
+        """One normative selection step (06-sampler-wire §4)."""
+        ws = self._candidates()
+        if not ws:
+            self.stage = DONE
+            return None
+        total = 0.0
+        for _, w in ws:
+            total += w
+        threshold = self.rng.unit() * total
+        acc = 0.0
+        chosen = ws[-1][0]
+        for i, w in ws:
+            acc += w
+            if threshold < acc:
+                chosen = i
+                break
+        return self._fire(chosen)
+
+    def _say(self, s):
+        self.stdout.write(s + "\n")
+
+    # -- commands ------------------------------------------------------
+
+    def do_events(self, arg):
+        """enabled transitions of the firing tier, numbered"""
+        ws = self._candidates()
+        if not ws:
+            self._say(f"quiescent (stage {self.stage})")
+            return
+        kind = self.events_tbl[ws[0][0]][0]
+        total = sum(w for _, w in ws)
+        for k, (i, w) in enumerate(ws, 1):
+            ev = self.events_tbl[i][2]
+            self._say(f"  {k}. {ev.name}  w={w:g}  p={w / total:g}")
+        if kind == "link":
+            self._say("  (quiescence links — firing switches stage)")
+
+    def do_step(self, arg):
+        """fire candidate k or by name; no argument = sampled"""
+        ws = self._candidates()
+        if not ws:
+            self.stage = DONE
+            self._say("quiescent — nothing can fire")
+            return
+        self._mark()
+        if not arg.strip():
+            name = self._sample()
+            self._say(f"fired (sampled): {name}")
+            return
+        a = arg.strip()
+        pick = None
+        if a.isdigit() and 1 <= int(a) <= len(ws):
+            pick = ws[int(a) - 1][0]
+        else:
+            hits = [i for i, _ in ws
+                    if self.events_tbl[i][2].name.startswith(a)]
+            if len(hits) == 1:
+                pick = hits[0]
+            elif hits:
+                self.undo_stack.pop()
+                self._say(f"ambiguous: {len(hits)} candidates match "
+                          f"{a!r} — 'events' to list them")
+                return
+        if pick is None:
+            self.undo_stack.pop()
+            self._say(f"no enabled candidate {a!r} — 'events' lists "
+                      f"1..{len(ws)}")
+            return
+        self._say(f"fired: {self._fire(pick)}")
+
+    def do_run(self, arg):
+        """sample N steps (stops at quiescence)"""
+        try:
+            n = int(arg.strip() or "1")
+        except ValueError:
+            self._say("usage: run N")
+            return
+        self._mark()
+        names = []
+        for _ in range(n):
+            name = self._sample()
+            if name is None:
+                break
+            names.append(name)
+        self._say(" ".join(names) if names else "(quiescent)")
+        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
+
+    def do_state(self, arg):
+        """current stage + multiset"""
+        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
+
+    def _adjust(self, arg, sign, usage):
+        parts = arg.split()
+        if not parts or len(parts) > 2:
+            self._say(usage)
+            return
+        atom = parts[0]
+        try:
+            n = int(parts[1]) if len(parts) == 2 else 1
+        except ValueError:
+            self._say(usage)
+            return
+        if atom not in self.atoms:
+            self._say(f"note: {atom} appears in no rule of this "
+                      "catalog (typo?)")
+        self._mark()
+        c = self.counts.get(atom, 0) + sign * n
+        if c < 0:
+            self._say(f"only {self.counts.get(atom, 0)} present; "
+                      "removed all")
+            c = 0
+        self.counts[atom] = c
+        if c == 0:
+            self.counts.pop(atom, None)
+        self._say(f"{atom}:{c}")
+
+    def do_assert(self, arg):
+        """assert ATOM [N] — add N (default 1) tokens"""
+        self._adjust(arg, +1, "usage: assert ATOM [N]")
+
+    def do_retract(self, arg):
+        """retract ATOM [N] — remove N (default 1) tokens"""
+        self._adjust(arg, -1, "usage: retract ATOM [N]")
+
+    def do_query(self, arg):
+        """query ATOM [STEPS] — exact presence marginal from here"""
+        parts = arg.split()
+        if not parts or len(parts) > 2:
+            self._say("usage: query ATOM [STEPS]")
+            return
+        atom = parts[0]
+        steps = int(parts[1]) if len(parts) == 2 \
+            else (self.case["steps"] or 1)
+        if self.stage == DONE:
+            p = float(self.counts.get(atom, 0) > 0)
+            self._say(f"P[{atom} present | done] = {p:g}")
+            return
+        here = replace(self.prog, init_stage=self.stage,
+                       init=dict(self.counts))
+        try:
+            pr = ForwardProjection(here, steps)
+        except Exception as e:
+            self._say(f"filter failed: {e!r}")
+            return
+        p = sum(q for (_, k), q in pr.final.items()
+                if any(a == atom and n > 0 for a, n in k))
+        self._say(f"P[{atom} present after {steps} steps] = {p:.6g}")
+
+    def do_seed(self, arg):
+        """seed N — reseed the sampler"""
+        try:
+            self.rng = SplitMix64(int(arg.strip()))
+            self._say(f"seed {arg.strip()}")
+        except ValueError:
+            self._say("usage: seed N")
+
+    def do_undo(self, arg):
+        """back one mutating command"""
+        if not self.undo_stack:
+            self._say("nothing to undo")
+            return
+        self.stage, self.counts, k = self.undo_stack.pop()
+        del self.fired[k:]
+        self.do_state("")
+
+    def do_reset(self, arg):
+        """back to the file's #init directives"""
+        self._mark()
+        self.stage = self.prog.init_stage
+        self.counts = dict(self.case["init"])
+        self.do_state("")
+
+    def do_reload(self, arg):
+        """re-read + recompile the file; session state carries over"""
+        old_key = self.key
+        try:
+            self._load()
+        except Exception as e:
+            findings = getattr(e, "findings", None) or [str(e)]
+            self._say("reload failed — previous catalog still "
+                      "serving:\n  " + "\n  ".join(findings))
+            return
+        what = "unchanged" if self.key == old_key else "NEW key"
+        self._say(f"reloaded {self.path.name} ({what} "
+                  f"{self.key[:12]}…); "
+                  f"stage {self.stage} | {_fmt_counts(self.counts)}")
+
+    def _directive_block(self):
+        lines = [f"#init {a} {n}"
+                 for a, n in sorted(self.counts.items())]
+        if self.case["steps"]:
+            lines.append(f"#steps {self.case['steps']}")
+        if self.case["seeds"]:
+            lines.append(f"#seeds {self.case['seeds']}")
+        lines += [f"#query {q}" for q in self.case["queries"]]
+        return lines
+
+    def do_save(self, arg):
+        """session state as '#'-directives (stdout, or a .llp file)"""
+        block = self._directive_block()
+        path = arg.strip()
+        if not path:
+            for l in block:
+                self._say(l)
+            return
+        body = [l for l in self.text.splitlines()
+                if not l.lstrip().startswith("#")]
+        while body and not body[-1].strip():
+            body.pop()
+        Path(path).write_text("\n".join(body + block) + "\n")
+        self._say(f"wrote {path} (catalog + {len(block)} directives) "
+                  f"— replay: metisc --run {path}")
+
+    def do_log(self, arg):
+        """fired events this session"""
+        self._say("\n".join(f"  {k}. {n}"
+                            for k, n in enumerate(self.fired, 1))
+                  or "(nothing fired yet)")
+
+    def do_key(self, arg):
+        """canonical program_key of the serving catalog"""
+        self._say(self.key)
+
+    def do_help(self, arg):
+        if arg:
+            super().do_help(arg)
+        else:
+            self._say(_HELP)
+
+    def do_quit(self, arg):
+        """leave the shell"""
+        return True
+
+    do_exit = do_quit
+    do_EOF = do_quit
+
+    def emptyline(self):            # never repeat-last (cmd default):
+        pass                        # blank lines in a sent buffer
+                                    # selection must be inert
+
+    def default(self, line):
+        s = line.strip()
+        if not s or s.startswith("%"):
+            return                      # comments pass silently, so a
+                                        # buffer selection sends whole
+        if s.startswith("#"):
+            return self._directive(s)
+        if s.startswith("+"):
+            return self.do_assert(s[1:])
+        if s.startswith("-"):
+            return self.do_retract(s[1:])
+        self._say(f"unknown command: {s.split()[0]!r} — 'help'")
+
+    def _directive(self, s):
+        """A '#'-directive line sent from the buffer (the editor's
+        shift+enter) applies to the LIVE session: #init is an
+        assignment (sets the count, unlike assert's add), #query
+        runs, #steps/#seeds/#unknown/#lik update the case that
+        `query` defaults and `save` write out."""
+        parts = s[1:].split()
+        if not parts:
+            return
+        key, args = parts[0], parts[1:]
+        try:
+            if key == "init" and len(args) == 2:
+                atom, n = args[0], int(args[1])
+                self._mark()
+                if n > 0:
+                    self.counts[atom] = n
+                else:
+                    self.counts.pop(atom, None)
+                self.case["init"][atom] = n
+                self._say(f"{atom}:{n}")
+            elif key == "steps" and len(args) == 1:
+                self.case["steps"] = int(args[0])
+                self._say(f"steps {args[0]}")
+            elif key == "seeds" and len(args) == 1:
+                self.case["seeds"] = int(args[0])
+                self._say(f"seeds {args[0]}")
+            elif key == "query" and len(args) == 1:
+                if args[0] not in self.case["queries"]:
+                    self.case["queries"].append(args[0])
+                self.do_query(args[0])
+            elif key == "unknown" and len(args) == 1:
+                if args[0] not in self.case["unknowns"]:
+                    self.case["unknowns"].append(args[0])
+                self._say(f"unknown {args[0]}")
+            elif key == "lik" and args:
+                from metis.lang.directives import _clamp
+                self.case["liks"].append([_clamp(t) for t in args])
+                self._say(f"lik {' '.join(args)}")
+            else:
+                self._say(f"bad directive: {s}")
+        except ValueError:
+            self._say(f"bad directive: {s}")
+
+    # -- completion (readline) -----------------------------------------
+
+    def _complete_atoms(self, text):
+        return sorted(a for a in self.atoms if a.startswith(text))
+
+    complete_assert = complete_retract = complete_query = \
+        lambda self, text, *rest: self._complete_atoms(text)
+
+    def complete_step(self, text, *rest):
+        return sorted({self.events_tbl[i][2].name
+                       for i, _ in self._candidates()
+                       if self.events_tbl[i][2].name.startswith(text)})
+
+
+def _history():
+    base = Path(os.environ.get("XDG_STATE_HOME",
+                               Path.home() / ".local/state"))
+    d = base / "metis"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    return d / "history"
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="metis",
+        description="interactive shell over a .llp catalog "
+                    "(line editing, history and tab completion via "
+                    "readline)")
+    ap.add_argument("llp", help="the catalog to serve")
+    ap.add_argument("--seed", type=int, default=1,
+                    help="sampler seed (default 1)")
+    args = ap.parse_args(argv)
+    try:
+        import readline
+        hist = _history()
+        if hist:
+            try:
+                readline.read_history_file(hist)
+            except OSError:
+                pass
+            readline.set_history_length(1000)
+            atexit.register(lambda: readline.write_history_file(hist))
+    except ImportError:
+        pass                        # line editing degrades gracefully
+    try:
+        repl = Repl(args.llp, seed=args.seed)
+    except Exception as e:
+        findings = getattr(e, "findings", None) or [str(e)]
+        print("cannot serve %s:\n  %s"
+              % (args.llp, "\n  ".join(findings)), file=sys.stderr)
+        return 1
+    try:
+        repl.cmdloop()
+    except KeyboardInterrupt:
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

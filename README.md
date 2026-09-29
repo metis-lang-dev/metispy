@@ -15,7 +15,13 @@ headers; metispy referees both.
   canonical identity, notching, records.
 - `metis/lang/` — parser/compiler/typecheck (the python front-end,
   kept as differential oracle for metisc), the LSP dev server, the
-  formalize harness.
+  formalize harness, and the discovery pair over `#`-directives
+  (00-language-spec §8): `directives.py` (the `llp.trace` /
+  `metisc --run` replay) and `repl.py` — the `metis <file.llp>`
+  shell (readline editing/history/completion; step/sample on the
+  reference sampler, assert/retract, exact `query` from the current
+  state, `reload` with degrade-to-last-good, `save` back to
+  directives).
 - `metis/fw/` — the python evaluator product loop (truth generator
   for the C++ Evaluator).
 - `metis/domains/` — the benchmark playground models (fiction/

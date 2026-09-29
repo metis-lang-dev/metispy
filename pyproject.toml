@@ -1,11 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "metispy"
 version = "0.1.0"
 description = "The metis python referee + research kit: exact semantics, learning, the formalize harness — cross-checking the metis-lang toolchain"
 requires-python = ">=3.9"
 
+[project.scripts]
+metis = "metis.lang.repl:main"
+
 [project.optional-dependencies]
 sysadmin = ["pyRDDLGym", "rddlrepository"]
+
+[tool.setuptools.packages.find]
+include = ["metis*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

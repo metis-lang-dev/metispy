@@ -312,6 +312,8 @@ class Server:
                 "hoverProvider": True,
                 "definitionProvider": True,
                 "documentSymbolProvider": True,
+                "executeCommandProvider": {
+                    "commands": ["llp.trace"]},
             }, "serverInfo": {"name": "metis-llp",
                               "version": "0.1"}})
         elif method == "shutdown":
@@ -334,6 +336,8 @@ class Server:
             self.reply(rid, self.definition(params))
         elif method == "textDocument/documentSymbol":
             self.reply(rid, self.symbols(params))
+        elif method == "workspace/executeCommand":
+            self.reply(rid, self.execute(params))
         elif rid is not None:
             self.reply(rid, None)
 
@@ -405,6 +409,51 @@ class Server:
                         "kind": kinds.get(kind, 13),
                         "range": rng, "selectionRange": rng})
         return out
+
+
+    # -- the interpreter channel (00-language-spec §8) -----------------
+
+    def execute(self, params):
+        if params.get("command") == "llp.trace":
+            args = params.get("arguments") or []
+            return self.trace(args[0] if args else None)
+        return None
+
+    def trace(self, uri):
+        """llp.trace: replay the buffer's embedded '#'-directive case
+        on the reference sampler (same seeds and I/T/F lines as
+        `metisc --run`), plus exact presence marginals where the
+        filter is tractable. Runs on the HELD buffer — unsaved edits
+        included."""
+        a = self.docs.get(uri)
+        if a is None:
+            return {"ok": False, "text": "no open document: %s" % uri}
+        if a.cat is None:
+            msgs = "\n".join(d["message"] for d in a.diags)
+            return {"ok": False,
+                    "text": "cannot run: parse failed\n" + msgs}
+        from metis.lang.directives import (DirectiveError,
+                                           embedded_case, render_run)
+        path = uri_to_path(uri)
+        name = path.stem if path else "buffer"
+        try:
+            case = embedded_case(a.doc.text)
+            if not case["init"] and not case["steps"]:
+                return {"ok": False, "text":
+                        "no '#'-directives in this file — add e.g.\n"
+                        "  #init <atom> 1\n  #steps 6\n  #seeds 3\n"
+                        "  #query <atom>"}
+            resolved = resolve_includes(
+                a.cat, path.parent if path else Path("."))
+            doc = compile_catalog(resolved)
+            prog = doc.catalog.ground(case["init"])
+            return {"ok": True, "text": render_run(name, case, prog)}
+        except (DirectiveError, LangError, CatalogError) as e:
+            findings = getattr(e, "findings", None) or [str(e)]
+            return {"ok": False,
+                    "text": "cannot run:\n" + "\n".join(findings)}
+        except Exception as e:
+            return {"ok": False, "text": "internal: %r" % e}
 
 
 if __name__ == "__main__":

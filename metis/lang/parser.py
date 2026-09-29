@@ -2,8 +2,10 @@
 
 Line comments: `% ...` dropped; `%% ...` are DOC lines, attached to
 the next rule or link (mandatory there — the compiler enforces it).
-Idents may contain hyphens (object-behavior); the arrow `-o` must be
-whitespace-separated."""
+`# ...` lines are interpreter directives (embedded case lines,
+metis/lang/directives.py) — a comment class here: the compiler never
+sees them. Idents may contain hyphens (object-behavior); the arrow
+`-o` must be whitespace-separated."""
 
 import re
 from typing import List, Optional, Tuple
@@ -13,6 +15,7 @@ from . import ast
 _TOKEN = re.compile(r"""
     (?P<doc>%%[^\n]*) |
     (?P<comment>%[^%\n][^\n]*|%$) |
+    (?P<directive>\#[^\n]*) |
     (?P<string>"[^"\n]*") |
     (?P<arrow>-o(?![A-Za-z0-9_-])) |
     (?P<horn>:-) |
@@ -51,7 +54,7 @@ def _tokens(text: str) -> List[Tuple[str, str]]:
     out = []
     for m in _TOKEN.finditer(text):
         kind = m.lastgroup
-        if kind in ("comment", "ws"):
+        if kind in ("comment", "ws", "directive"):
             continue
         if kind == "bad":
             raise ParseError(f"bad character {m.group()!r} at "

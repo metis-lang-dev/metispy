@@ -146,3 +146,29 @@ def test_compile_finding_anchored_at_rule():
         assert d["range"]["start"]["line"] == 8   # the r1 rule line
     finally:
         c.close()
+
+
+def test_send_to_interpreter():
+    """workspace/executeCommand llp.trace: the editor's Send to
+    Interpreter — replay the buffer's embedded '#'-directive case."""
+    c = make_client()
+    try:
+        uri = "file:///tmp/lt.llp"
+        assert c.open(uri, GOOD) == []
+        r = c.request("workspace/executeCommand",
+                      {"command": "llp.trace", "arguments": [uri]})
+        assert r["ok"]
+        lines = r["text"].splitlines()
+        assert lines[0] == "case lt steps=6 seeds=3"
+        assert any(l.startswith("T 1 jealousy[") for l in lines)
+        assert any(l.startswith("Q anger(hermia,helena)")
+                   for l in lines)
+        # a buffer with no directives says how to add them
+        u2 = "file:///tmp/bare.llp"
+        c.open(u2, "\n".join(
+            l for l in GOOD.splitlines() if not l.startswith("#")))
+        r2 = c.request("workspace/executeCommand",
+                       {"command": "llp.trace", "arguments": [u2]})
+        assert not r2["ok"] and "#init" in r2["text"]
+    finally:
+        c.close()

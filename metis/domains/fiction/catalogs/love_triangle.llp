@@ -24,3 +24,15 @@ stage go {
   move_on [story] : eros(A,B) * anger(A,B) * anger(A,B) * anger(A,B)
     -o one.
 }
+% The origin's `context init` and `#trace _ go init.` restored, as
+% interpreter directives (case lines behind '#'): the compiler — and
+% the catalog's canonical key — never see them. Run with
+% `metisc --run <this file>` or "Send to Interpreter" in the editor.
+#init eros(helena,hermia) 1
+#init eros(hermia,helena) 1
+#init eros(helena,lysander) 1
+#init eros(lysander,hermia) 1
+#steps 6
+#seeds 3
+#query anger(hermia,helena)
+#query eros(helena,hermia)
