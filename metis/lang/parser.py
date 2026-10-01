@@ -24,7 +24,7 @@ _TOKEN = re.compile(r"""
     (?P<range>\.\.) |
     (?P<num>\d+\.\d+|\.\d+|\d+) |
     (?P<ident>[A-Za-z][A-Za-z0-9_-]*) |
-    (?P<punct>[{}().,*:\[\]~$]) |
+    (?P<punct>[{}().,*:\[\]~$|]) |
     (?P<ws>[ \t\n]+) |
     (?P<bad>.)
 """, re.VERBOSE | re.MULTILINE)
@@ -50,29 +50,54 @@ def _expand_range(a: str, b: str):
                                       int(mb.group(2)) + 1)]
 
 
-def _tokens(text: str) -> List[Tuple[str, str]]:
-    out = []
+def _line_col(text: str, offset: int) -> Tuple[int, int]:
+    """1-based line:column of a character offset."""
+    line = text.count("\n", 0, offset) + 1
+    bol = text.rfind("\n", 0, offset) + 1
+    return line, offset - bol + 1
+
+
+def _tokens(text: str):
+    """-> (tokens, positions): parallel lists of (kind, val) and the
+    1-based (line, col) each token starts at."""
+    out, pos = [], []
     for m in _TOKEN.finditer(text):
         kind = m.lastgroup
         if kind in ("comment", "ws", "directive"):
             continue
         if kind == "bad":
-            raise ParseError(f"bad character {m.group()!r} at "
-                             f"offset {m.start()}")
+            ln, col = _line_col(text, m.start())
+            raise ParseError(f"{ln}:{col}: bad character "
+                             f"{m.group()!r}")
         val = m.group()
         if kind == "doc":
             val = val.strip()[2:].strip()
         if kind == "string":
             val = val[1:-1]
         out.append((kind, val))
-    return out
+        pos.append(_line_col(text, m.start()))
+    return out, pos
 
 
 class _P:
-    def __init__(self, toks):
+    def __init__(self, toks, pos):
         self.toks = toks
+        self.pos = pos
         self.i = 0
         self.docs: List[str] = []
+
+    def where(self, k: Optional[int] = None) -> str:
+        """line:col of token index k (default: the token just
+        consumed), for error messages."""
+        j = self.i - 1 if k is None else k
+        if not self.pos:
+            return "1:1"
+        j = max(0, min(j, len(self.pos) - 1))
+        ln, col = self.pos[j]
+        return f"{ln}:{col}"
+
+    def err(self, msg: str):
+        raise ParseError(f"{self.where()}: {msg}")
 
     def peek(self, k=0):
         j = self.i + k
@@ -86,8 +111,7 @@ class _P:
     def expect(self, kind, val=None):
         k, v = self.next()
         if k != kind or (val is not None and v != val):
-            raise ParseError(f"expected {val or kind}, got {v!r} "
-                             f"(token {self.i - 1})")
+            self.err(f"expected {val or kind}, got {v!r}")
         return v
 
     def punct(self, ch):
@@ -108,7 +132,7 @@ class _P:
         if k == "num":
             return ast.Term("const", v)
         if k != "ident":
-            raise ParseError(f"expected term, got {v!r}")
+            self.err(f"expected term, got {v!r}")
         return ast.Term("var" if v[0].isupper() else "const", v)
 
     def atom(self) -> ast.Atom:
@@ -126,7 +150,7 @@ class _P:
                 if (k, v) == ("punct", ")"):
                     break
                 if (k, v) != ("punct", ","):
-                    raise ParseError(f"expected , or ) got {v!r}")
+                    self.err(f"expected , or ) got {v!r}")
         return ast.Atom(name, tuple(terms), persist=persist)
 
     def body_elem(self):
@@ -166,7 +190,7 @@ class _P:
             if (k, v) == ("punct", ")"):
                 return tuple(out)
             if (k, v) != ("punct", ","):
-                raise ParseError(f"expected , or ) got {v!r}")
+                self.err(f"expected , or ) got {v!r}")
 
     def weight(self) -> ast.Weight:
         k, v = self.peek()
@@ -209,8 +233,23 @@ class _P:
         self.next()
         return tuple(out)
 
-    def rule(self) -> ast.Rule:
+    def head_atoms(self) -> Tuple[ast.Atom, ...]:
+        """A head position: '()' is the LL unit (alias of 'one'),
+        else a '*'-list of atoms."""
+        if self.peek() == ("punct", "(") and \
+                self.peek(1) == ("punct", ")"):
+            self.next()
+            self.next()
+            return (ast.Atom("one"),)
+        return self.atoms_star(self.atom)
+
+    def rule(self) -> List[ast.Rule]:
+        """One or more clauses: the alternative-head sugar
+        '-o ( head @w w | head @w w ... )' expands here (spec 07 P1),
+        exactly as in metisc — one clause per branch, named
+        <name>-1 .. <name>-k, sharing the body (one CHOICE site)."""
         doc = self.take_docs()
+        line = self.pos[self.i][0] if self.i < len(self.pos) else 0
         name = self.expect("ident")
         self.punct("[")
         layer = self.expect("ident")
@@ -218,28 +257,60 @@ class _P:
         self.punct(":")
         body = self.atoms_star(self.body_elem)
         self.expect("arrow")
-        head = self.atoms_star(self.atom)
+        if self.peek() == ("punct", "(") and \
+                self.peek(1) != ("punct", ")"):
+            self.next()
+            branches = []
+            while True:
+                h = self.head_atoms()
+                if self.peek()[0] != "weight":
+                    self.err(f"alternative head: every branch needs "
+                             f"'@w' (rule {name})")
+                self.next()
+                branches.append((h, self.weight()))
+                k, v = self.next()
+                if (k, v) == ("punct", ")"):
+                    break
+                if (k, v) != ("punct", "|"):
+                    self.err(f"expected '|' or ')' in alternative "
+                             f"head (rule {name})")
+            if len(branches) < 2:
+                self.err(f"alternative head needs >= 2 branches "
+                         f"(rule {name})")
+            self.punct(".")
+            return [ast.Rule(f"{name}-{k + 1}", layer, doc, body,
+                             h, w, line=line)
+                    for k, (h, w) in enumerate(branches)]
+        head = self.head_atoms()
         w = None
         if self.peek()[0] == "weight":
             self.next()
             w = self.weight()
         self.punct(".")
-        return ast.Rule(name, layer, doc, body, head, w)
+        return [ast.Rule(name, layer, doc, body, head, w, line=line)]
 
     def stage(self) -> ast.Stage:
         name = self.expect("ident")
         self.punct("{")
-        rules = []
+        rules: List[ast.Rule] = []
         while True:
             self.drain_docs()
             if self.peek() == ("punct", "}"):
                 self.next()
                 break
-            rules.append(self.rule())
+            rules.extend(self.rule())
+        seen = set()
+        for r in rules:
+            if r.name in seen:
+                self.err(f"duplicate rule name {r.name} in stage "
+                         f"{name} (note: alternative heads reserve "
+                         f"<name>-<k>)")
+            seen.add(r.name)
         return ast.Stage(name, tuple(rules))
 
     def link(self) -> ast.LinkDecl:
         doc = self.take_docs()
+        line = self.pos[self.i][0] if self.i < len(self.pos) else 0
         name = self.expect("ident")
         self.punct("[")
         layer = self.expect("ident")
@@ -258,11 +329,11 @@ class _P:
             post_atoms = self.atoms_star(self.atom)
         self.punct(".")
         return ast.LinkDecl(name, layer, doc, pre, pre_atoms, post,
-                            post_atoms)
+                            post_atoms, line=line)
 
 
 def parse(text: str) -> ast.Catalog:
-    p = _P(_tokens(text))
+    p = _P(*_tokens(text))
     p.drain_docs()
     p.expect("ident", "catalog")
     name = p.expect("ident")
@@ -279,7 +350,7 @@ def parse(text: str) -> ast.Catalog:
         if k == "eof":
             break
         if k != "ident":
-            raise ParseError(f"expected declaration, got {v!r}")
+            p.err(f"expected declaration, got {v!r}")
         if v == "include":
             p.next()
             path = p.expect("string")
@@ -312,12 +383,12 @@ def parse(text: str) -> ast.Catalog:
             while p.peek() != ("punct", "}"):
                 k2, v2 = p.next()
                 if k2 not in ("ident", "num"):
-                    raise ParseError(f"bad type constant {v2!r}")
+                    self.err(f"bad type constant {v2!r}")
                 if p.peek()[0] == "range":
                     p.next()
                     k3, v3 = p.next()
                     if k3 not in ("ident", "num"):
-                        raise ParseError(f"bad range end {v3!r}")
+                        self.err(f"bad range end {v3!r}")
                     consts.extend(_expand_range(v2, v3))
                 else:
                     consts.append(v2)
@@ -356,8 +427,8 @@ def parse(text: str) -> ast.Catalog:
             reads = None
             if p.peek() == ("ident", "reads"):
                 if v != "weight":
-                    raise ParseError(f"{v} port {oname}: reads is for "
-                                     f"weight ports only")
+                    p.err(f"{v} port {oname}: reads is for "
+                          f"weight ports only")
                 p.next()
                 reads = p.reads_block()
             p.punct(".")

@@ -240,17 +240,19 @@ def compile_catalog(cat: ast.Catalog,
                                   vars=vs), "")
         elif isinstance(d, ast.Stage):
             for r in d.rules:
+                rloc = f"line {r.line}: " if r.line else ""
                 if not r.doc.strip():
-                    findings.append(f"{r.name}: missing %% doc "
+                    findings.append(f"{rloc}{r.name}: missing %% doc "
                                     f"(mandatory)")
                 atoms = [a for a in r.body
                          if isinstance(a, ast.Atom)] + list(r.head)
-                vars_ = _infer_vars(r.name, atoms, sigs, findings)
+                vars_ = _infer_vars(f"{rloc}{r.name}", atoms, sigs,
+                                    findings)
                 for a in atoms:
                     for t in a.terms:
                         if t.kind == "var" and t.value not in vars_:
-                            findings.append(f"{r.name}: var {t.value} "
-                                            f"untypable")
+                            findings.append(f"{rloc}{r.name}: var "
+                                            f"{t.value} untypable")
                 consume, persist, guards = [], [], []
                 for a in r.body:
                     if isinstance(a, ast.Distinct):
@@ -268,19 +270,19 @@ def compile_catalog(cat: ast.Catalog,
                     else:
                         if r.weight.factor not in ports.weights:
                             findings.append(
-                                f"{r.name}: weight port "
+                                f"{rloc}{r.name}: weight port "
                                 f"'{r.weight.factor}' not declared")
                         for t in r.weight.args:
                             if t.kind == "var" and t.value not in vars_:
                                 findings.append(
-                                    f"{r.name}: weight arg {t.value} "
-                                    f"is not a rule var")
+                                    f"{rloc}{r.name}: weight arg "
+                                    f"{t.value} is not a rule var")
                         if r.weight.factor in ports.reads and \
                                 len(r.weight.args) != \
                                 len(ports.weights[r.weight.factor]):
                             findings.append(
-                                f"{r.name}: weight {r.weight.factor} "
-                                f"takes "
+                                f"{rloc}{r.name}: weight "
+                                f"{r.weight.factor} takes "
                                 f"{len(ports.weights[r.weight.factor])}"
                                 f" args, got {len(r.weight.args)}")
                         ports.weight_refs[r.name] = WeightRef(
@@ -300,10 +302,13 @@ def compile_catalog(cat: ast.Catalog,
                                   if isinstance(x, ast.Distinct)],
                         weight=weight)))
         elif isinstance(d, ast.LinkDecl):
+            dloc = f"line {d.line}: " if d.line else ""
             if not d.doc.strip():
-                findings.append(f"{d.name}: missing %% doc (mandatory)")
+                findings.append(f"{dloc}{d.name}: missing %% doc "
+                                f"(mandatory)")
             atoms = list(d.pre_atoms) + list(d.post_atoms)
-            vars_ = _infer_vars(d.name, atoms, sigs, findings)
+            vars_ = _infer_vars(f"{dloc}{d.name}", atoms, sigs,
+                                findings)
             # bwd atoms in the pre are Horn GUARDS, exactly as on
             # clauses (the grounding machinery already supports them)
             # — what makes chain-end links liftable (lastidx(I));
@@ -319,8 +324,8 @@ def compile_catalog(cat: ast.Catalog,
                     lconsume.append(_pattern(a))
             for a in d.post_atoms:
                 if a.pred in bwd or a.pred in inherited_bwd:
-                    findings.append(f"{d.name}: bwd '{a.pred}' in "
-                                    f"link post")
+                    findings.append(f"{dloc}{d.name}: bwd '{a.pred}' "
+                                    f"in link post")
             entries.append(Entry(
                 name=f"{d.layer}/{d.name}", layer=d.layer, kind="link",
                 comment=d.doc, provenance=prov,

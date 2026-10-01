@@ -149,12 +149,32 @@ class Analysis:
             self.diags.append(diag(
                 self.doc.rng(0, 1), f"internal: {e}", 1))
 
+    def _linecol_rng(self, msg):
+        """Parser/lexer messages lead with '<line>:<col>: ' (1-based);
+        map that straight to a one-token-ish range."""
+        m = re.match(r"(\d+):(\d+): ", msg)
+        if not m:
+            return None
+        ln, col = int(m.group(1)) - 1, int(m.group(2)) - 1
+        ln = min(ln, len(self.doc.line_starts) - 1)
+        off = self.doc.line_starts[ln] + col
+        wm = re.match(r"[A-Za-z][A-Za-z0-9_-]*",
+                      self.doc.text[off:off + 80])
+        return self.doc.rng(off, off + (wm.end() if wm else 1))
+
     def _offset_diag(self, msg):
-        m = re.search(r"offset (\d+)", msg)
-        off = int(m.group(1)) if m else 0
-        self.diags.append(diag(self.doc.rng(off, off + 1), msg))
+        rng = self._linecol_rng(msg)
+        if rng is None:
+            m = re.search(r"offset (\d+)", msg)
+            off = int(m.group(1)) if m else 0
+            rng = self.doc.rng(off, off + 1)
+        self.diags.append(diag(rng, msg))
 
     def _parse_diag(self, msg):
+        rng = self._linecol_rng(msg)
+        if rng is not None:
+            self.diags.append(diag(rng, msg))
+            return
         m = re.search(r"token (\d+)", msg)
         toks = self.doc.tokens()
         if m and toks:
@@ -174,6 +194,17 @@ class Analysis:
         """Compiler findings name their subject ('rule: ...',
         'weight f: ...', \"predicate 'p' ...\"); anchor the range at
         that subject's declaration."""
+        m = re.match(r"line (\d+): ", finding)
+        if m:
+            # compiler findings carry their declaration's source line
+            ln = min(int(m.group(1)) - 1,
+                     len(self.doc.line_starts) - 1)
+            start = self.doc.line_starts[ln]
+            end = (self.doc.line_starts[ln + 1] - 1
+                   if ln + 1 < len(self.doc.line_starts)
+                   else len(self.doc.text))
+            self.diags.append(diag(self.doc.rng(start, end), finding))
+            return
         subject = None
         m = re.match(r"([A-Za-z][A-Za-z0-9_/-]*):", finding)
         if m:

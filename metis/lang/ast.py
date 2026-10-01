@@ -62,6 +62,9 @@ class Rule:
     body: Tuple[Union[Atom, Distinct], ...]
     head: Tuple[Atom, ...]
     weight: Optional[Weight] = None
+    # source line (diagnostics only: excluded from equality/hash, so
+    # the round-trip contract parse(pretty(ast)) == ast is untouched)
+    line: int = field(default=0, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,7 @@ class LinkDecl:
     pre_atoms: Tuple[Atom, ...]
     post: str
     post_atoms: Tuple[Atom, ...]
+    line: int = field(default=0, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -170,6 +174,15 @@ def _atoms(atoms) -> str:
     return " * ".join(str(a) for a in atoms)
 
 
+def _head(atoms) -> str:
+    """A sole LL-unit head prints as '()' (spec 07 P4, the canonical
+    spelling; the parser reads both spellings onto the atom 'one')."""
+    if len(atoms) == 1 and atoms[0].pred == "one" \
+            and not atoms[0].terms and not atoms[0].persist:
+        return "()"
+    return _atoms(atoms)
+
+
 def pretty(cat: Catalog) -> str:
     out = [f"catalog {cat.name} {cat.version}."]
     if cat.extends:
@@ -219,6 +232,6 @@ def pretty(cat: Catalog) -> str:
             for r in d.rules:
                 w = f"  {r.weight}" if r.weight else ""
                 out.append(f"{_doc(r.doc)}  {r.name} [{r.layer}] : "
-                           f"{_atoms(r.body)} -o {_atoms(r.head)}{w}.")
+                           f"{_atoms(r.body)} -o {_head(r.head)}{w}.")
             out.append("}")
     return "\n".join(out) + "\n"

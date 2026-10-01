@@ -29,7 +29,8 @@ def embedded_case(text: str) -> Dict:
     """Scan a .llp source for '#'-directive lines; return the case as
     {init, steps, seeds, unknowns, queries, liks}."""
     case = {"init": {}, "steps": 0, "seeds": 0,
-            "unknowns": [], "queries": [], "liks": []}
+            "unknowns": [], "queries": [], "liks": [],
+            "interactive": []}
     for raw in text.splitlines():
         line = raw.strip()
         if not line.startswith("#"):
@@ -50,6 +51,12 @@ def embedded_case(text: str) -> Dict:
             case["queries"].append(args[0])
         elif key == "lik" and args:
             case["liks"].append([_clamp(t) for t in args])
+        elif key == "interactive" and len(args) == 1:
+            # the additive &: the stage's CHOICE is environment-
+            # resolved under metisc --run; in this REPL the prompt
+            # itself is the external chooser, so the directive is
+            # recorded but drives nothing here.
+            case["interactive"].append(args[0])
         else:
             raise DirectiveError(f"bad directive: {line}")
     return case
