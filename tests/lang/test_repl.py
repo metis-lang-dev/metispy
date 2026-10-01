@@ -41,7 +41,9 @@ def test_sampled_session_is_the_reference_trace():
 def test_events_step_and_undo():
     r = shell()
     out = run(r, "events")
-    assert out.count("jealousy[") == 5 and "p=0.2" in out
+    # grouped listing: one rule header, five aligned binding rows
+    assert "jealousy  (p=1)" in out
+    assert out.count("[A=") == 5 and "p=0.2" in out
     before = dict(r.counts)
     out = run(r, "step 3", "undo")
     assert "fired: jealousy[" in out
