@@ -160,7 +160,9 @@ def test_send_to_interpreter():
         assert r["ok"]
         lines = r["text"].splitlines()
         assert lines[0] == "case lt steps=6 seeds=3"
-        assert any(l.startswith("T 1 jealousy[") for l in lines)
+        # the editor surface renders the pretty (Foata-beat) form
+        assert any(l.startswith("T 1 ") and "beats" in l for l in lines)
+        assert any("jealousy" in l for l in lines)
         assert any(l.startswith("Q anger(hermia,helena)")
                    for l in lines)
         # a buffer with no directives says how to add them
