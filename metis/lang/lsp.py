@@ -478,7 +478,9 @@ class Server:
                 a.cat, path.parent if path else Path("."))
             doc = compile_catalog(resolved)
             prog = doc.catalog.ground(case["init"])
-            return {"ok": True, "text": render_run(name, case, prog)}
+            return {"ok": True,
+                    "text": render_run(name, case, prog,
+                                       pretty=True)}
         except (DirectiveError, LangError, CatalogError) as e:
             findings = getattr(e, "findings", None) or [str(e)]
             return {"ok": False,

@@ -62,12 +62,72 @@ def embedded_case(text: str) -> Dict:
     return case
 
 
-def render_run(name: str, case: Dict, prog) -> str:
-    """The --run replay, mirroring metisc byte-for-byte on the shared
-    lines (I/T/F: same reference sampler, same seeds), plus the exact
-    presence probabilities the python referee can add (metisc's Q is
-    the sampled hit count; here it carries `exact=` when the filter
-    is tractable)."""
+def _pretty_trace(seed: int, rows) -> List[str]:
+    """A trace as its Foata beats — the naturally induced grouping
+    (nets.foata_levels, the layering run_key hashes): one block per
+    causal level, events within a beat are pairwise independent
+    (concurrent; their order carries no information). Rule names
+    column-aligned."""
+    from metis.kernel.nets import foata_levels
+    if not rows:
+        return [f"T {seed} -"]
+    levels = foata_levels(rows)
+    beats = max(levels) + 1
+    out = [f"T {seed} — {len(rows)} events, {beats} beats"]
+    name_w = 0
+    split = []
+    for _, _, ev in rows:
+        base, bra, rest = ev.name.partition("[")
+        split.append((base, bra + rest))
+        name_w = max(name_w, len(base))
+    beat_w = len(str(beats))
+    # reorder into the normal form proper: one block per layer (a
+    # legitimate reordering — Theorem 4: same trace class, same
+    # weight); within a beat, firing order
+    for lvl in range(beats):
+        first = True
+        for (base, binds), l in zip(split, levels):
+            if l != lvl:
+                continue
+            tag = f"{lvl + 1:>{beat_w}}" if first else " " * beat_w
+            out.append(f"  {tag} | {base:<{name_w}} {binds}")
+            first = False
+    return out
+
+
+def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
+    """The final multiset tabulated by predicate: one row per pred,
+    `(args)` terms (`:n` when n > 1), wrapped and aligned."""
+    by_pred: Dict[str, List[str]] = {}
+    for atom, n in sorted(kappa):
+        pred, bra, rest = atom.partition("(")
+        item = (bra + rest) if bra else ""
+        if n > 1:
+            item += f":{n}"
+        by_pred.setdefault(pred, []).append(item if item else "·")
+    out = [f"F {seed} {stage}"]
+    if not by_pred:
+        return out
+    pred_w = max(len(p) for p in by_pred)
+    for pred, items in by_pred.items():
+        line = f"  {pred:<{pred_w}} "
+        indent = " " * len(line)
+        for it in items:
+            if len(line) + len(it) + 1 > 78 and line.strip() != pred:
+                out.append(line.rstrip())
+                line = indent
+            line += " " + it
+        out.append(line.rstrip())
+    return out
+
+
+def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:
+    """The --run replay. Default (wire) mode mirrors metisc
+    byte-for-byte on the shared lines (I/T/F: same reference sampler,
+    same seeds) — the parity surface, pinned by tests. `pretty=True`
+    is the human surface (REPL, editor): T becomes the trace's Foata
+    beats, F a per-predicate state table; I/Q and the exact=
+    annotations are identical in both modes."""
     from metis.kernel.refsample import (canonical_events, final_line,
                                         run_trace)
     steps = case["steps"]
@@ -81,9 +141,15 @@ def render_run(name: str, case: Dict, prog) -> str:
     hits = {q: 0 for q in case["queries"]}
     for seed in range(1, seeds + 1):
         trace, final = run_trace(prog, steps, seed)
-        names = " ".join(events[i][2].name for i in trace) or "-"
-        out.append(f"T {seed} {names}")
-        out.append(final_line(seed, final))
+        if pretty:
+            rows = [events[i] for i in trace]
+            out += _pretty_trace(seed, rows)
+            stage, kappa = final
+            out += _pretty_state(seed, stage, kappa)
+        else:
+            names = " ".join(events[i][2].name for i in trace) or "-"
+            out.append(f"T {seed} {names}")
+            out.append(final_line(seed, final))
         _, kappa = final
         for q in hits:
             if any(a == q and n > 0 for a, n in kappa):

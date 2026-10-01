@@ -156,33 +156,16 @@ class Repl(Cmd):
     # -- commands ------------------------------------------------------
 
     def do_events(self, arg):
-        """enabled transitions of the firing tier, grouped by rule"""
+        """enabled transitions of the firing tier, numbered"""
         ws = self._candidates()
         if not ws:
             self._say(f"quiescent (stage {self.stage})")
             return
         kind = self.events_tbl[ws[0][0]][0]
         total = sum(w for _, w in ws)
-        # group by rule (the text before '['), bindings aligned per
-        # group; numbering is the global candidate order, so
-        # 'step k' is unchanged
-        groups, order = {}, []
         for k, (i, w) in enumerate(ws, 1):
-            name = self.events_tbl[i][2].name
-            base, bra, rest = name.partition("[")
-            if base not in groups:
-                groups[base] = []
-                order.append(base)
-            groups[base].append((k, bra + rest, w))
-        num_w = len(str(len(ws)))
-        for base in order:
-            rows = groups[base]
-            gtotal = sum(w for _, _, w in rows)
-            self._say(f"  {base}  (p={gtotal / total:.3g})")
-            bind_w = max(len(b) for _, b, _ in rows)
-            for k, b, w in rows:
-                self._say(f"    {k:>{num_w}}. {b:<{bind_w}}"
-                          f"  w={w:g}  p={w / total:.3g}")
+            ev = self.events_tbl[i][2]
+            self._say(f"  {k}. {ev.name}  w={w:g}  p={w / total:g}")
         if kind == "link":
             self._say("  (quiescence links — firing switches stage)")
 
@@ -344,7 +327,8 @@ class Repl(Cmd):
         tractable. Leaves the interactive session untouched."""
         try:
             prog = self.doc.catalog.ground(dict(self.case["init"]))
-            self._say(render_run(self.path.stem, self.case, prog))
+            self._say(render_run(self.path.stem, self.case, prog,
+                                 pretty=True))
         except DirectiveError as e:
             self._say(f"cannot trace: {e} — e.g. '#steps 6' in the "
                       "file or as a sent line")

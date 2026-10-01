@@ -74,3 +74,21 @@ def test_render_run_replays_the_origin_trace():
     assert 0.0 < p < 1.0
     # seeded replay: byte-stable (the metisc --run parity surface)
     assert render_run("love_triangle", case, prog) == out
+
+
+def test_render_run_pretty_beats_and_state():
+    text = CATALOG.read_text()
+    case = embedded_case(text)
+    prog = compile_catalog(parse(text)).catalog.ground(case["init"])
+    out = render_run("love_triangle", case, prog, pretty=True)
+    # the wire lines are replaced by the human form ...
+    assert "beats" in out and " | " in out
+    assert not any(l.startswith("T 1 jealousy") for l in out.splitlines())
+    # ... the beat layering is the run_key layering (Foata), and the
+    # state is tabulated by predicate
+    assert any(l.strip().startswith("anger") for l in out.splitlines())
+    # I and Q lines are identical in both modes
+    wire = render_run("love_triangle", case, prog)
+    for pre in ("I ", "Q "):
+        assert [l for l in out.splitlines() if l.startswith(pre)] == \
+               [l for l in wire.splitlines() if l.startswith(pre)]

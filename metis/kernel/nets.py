@@ -143,18 +143,17 @@ def independent_events(program: Program, i: int, j: int) -> bool:
     return not (w1 & (w2 | r2)) and not (w2 & (w1 | r1))
 
 
-def run_key(program: Program, events: List[int]) -> str:
-    """Foata normal form of the trace, hashed. Invariant under
-    permutation of adjacent independent events; discriminates different
-    event multisets and different causal orders."""
-    table = program.events()
-    fps, keys = [], []
-    for e in events:
-        kind, stage, ev = table[e]
-        fps.append(_footprint(kind, stage, ev))
-        keys.append(_event_key(kind, stage, ev))
-    level = []
-    for i in range(len(events)):
+def foata_levels(rows) -> List[int]:
+    """The Foata normal form's layering: for each position of a trace
+    (rows = (kind, stage, event) triples in firing order), the causal
+    level — 1 + the max level of any earlier DEPENDENT event (footprint
+    conflict, writer-vs-anything). Positions sharing a level are
+    pairwise independent: the concurrent "beats" of the run. This is
+    the naturally induced grouping of a trace — exactly what run_key
+    hashes, exposed for rendering."""
+    fps = [_footprint(kind, stage, ev) for kind, stage, ev in rows]
+    level: List[int] = []
+    for i in range(len(rows)):
         ri, wi = fps[i]
         lvl = 0
         for j in range(i):
@@ -162,6 +161,17 @@ def run_key(program: Program, events: List[int]) -> str:
             if (wi & (wj | rj)) or (wj & (wi | ri)):
                 lvl = max(lvl, level[j] + 1)
         level.append(lvl)
+    return level
+
+
+def run_key(program: Program, events: List[int]) -> str:
+    """Foata normal form of the trace, hashed. Invariant under
+    permutation of adjacent independent events; discriminates different
+    event multisets and different causal orders."""
+    table = program.events()
+    rows = [table[e] for e in events]
+    keys = [_event_key(kind, stage, ev) for kind, stage, ev in rows]
+    level = foata_levels(rows)
     depth = max(level, default=-1) + 1
     layers: List[List[Tuple]] = [[] for _ in range(depth)]
     for i, l in enumerate(level):
