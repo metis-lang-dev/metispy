@@ -26,6 +26,7 @@ from metis.kernel import ForwardProjection, program_key
 from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
                                     choice_weight, run_trace)
 from metis.lang import compile_catalog, parse, resolve_includes
+from metis.loop.verbs import LoopState, LoopVerbs, fmt as _loop_fmt
 from metis.lang.directives import (DirectiveError, embedded_case,
                                    render_run)
 
@@ -46,6 +47,22 @@ trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
+map                 modal derivation (Viterbi) of the file scene
+
+the loop (text -> candidate -> gates -> world; one kernel REPL,
+every UI a wrapper):
+sink FILE.jsonl     load surprise records     records    list them
+record [N]          select one (scene + text adopted from it)
+replay              recover() it against the world (explain/verify)
+mine [TEXT]         the gap to mine / set + stamp the approved unit
+text <<EOF          set the approved doc text (heredoc)
+llp <<EOF           set the candidate LLP source (heredoc)
+load FILE.llp       candidate from file
+formalize [SPEC]    draft via the llm endpoint (repair loop)
+gate                gate candidate as a PACK against the world
+revise              gate as a BASE EDIT (accept replaces the world)
+accept              admitted candidate joins the served world LIVE
+show [what]         loop state     export [DIR]   world as files
 llm [SPEC]          show/set the LLM endpoint (ollama[:MODEL] |
                     anthropic[:MODEL] | command:ARGV; via metis-loop)
 narrate [SEED]      the session so far (or a seeded trace) as prose:
@@ -66,7 +83,7 @@ def _fmt_counts(counts):
         or "(empty)"
 
 
-class Repl(Cmd):
+class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
     def __init__(self, path, seed=1, **kw):
@@ -75,6 +92,7 @@ class Repl(Cmd):
         self.rng = SplitMix64(seed)
         self.undo_stack = []
         self.fired = []
+        self.loop = LoopState()
         self.fired_rows = []   # (kind, stage, ev) per fired event
         self.llm = ""          # LLM endpoint spec (loop.llm)
         self._load(initial=True)
@@ -103,6 +121,21 @@ class Repl(Cmd):
             self.stage = self.prog.init_stage
             self.counts = dict(case["init"])
         self.atoms = set(self.case["init"])
+        for _, _, ev in self.events_tbl:
+            self.atoms |= set(ev.consume) | set(ev.produce) \
+                | set(ev.persist)
+
+    def _reserve(self, catalog):
+        """Re-serve a merged/revised catalog LIVE (loop accept):
+        new ground, events, key, atoms; counts and stage carry over
+        exactly as `reload` does."""
+        self.doc = replace(self.doc, catalog=catalog)
+        self.prog = catalog.ground(dict(self.case["init"]))
+        self.events_tbl = canonical_events(self.prog)
+        self.key = program_key(self.prog)
+        if self.stage not in (list(self.prog.stages) + [DONE]):
+            self.stage = self.prog.init_stage
+            self.counts = dict(self.case["init"])
         for _, _, ev in self.events_tbl:
             self.atoms |= set(ev.consume) | set(ev.produce) \
                 | set(ev.persist)
@@ -322,6 +355,12 @@ class Repl(Cmd):
             self._say("reload failed — previous catalog still "
                       "serving:\n  " + "\n  ".join(findings))
             return
+        if self.key != old_key and (self.loop.accepted
+                                    or self.loop.base_src):
+            self.loop.accepted = []
+            self.loop.base_src = ""
+            self._say("note: accepted packs/revision dropped — the "
+                      "re-read file is the world now")
         what = "unchanged" if self.key == old_key else "NEW key"
         self._say(f"reloaded {self.path.name} ({what} "
                   f"{self.key[:12]}…); "
@@ -329,15 +368,97 @@ class Repl(Cmd):
 
     do_edit = do_reload                 # the sketch's name, kept
 
+    def _heredoc(self, arg):
+        """`text <<EOF` convention: read lines from stdin until the
+        tag; a plain arg passes through."""
+        a = arg.strip()
+        if not a.startswith("<<"):
+            return arg
+        tag = a[2:].strip() or "EOF"
+        lines = []
+        while True:
+            line = self.stdin.readline()
+            if not line or line.rstrip("\n") == tag:
+                break
+            lines.append(line)
+        return "".join(lines)
+
+    def _loop_say(self, res):
+        self._say(_loop_fmt(res))
+
+    def do_text(self, arg):
+        """set the approved doc text (multi-line: text <<EOF)"""
+        self._loop_say(self.cmd_text(self._heredoc(arg)))
+
+    def do_llp(self, arg):
+        """set the candidate LLP source (multi-line: llp <<EOF)"""
+        self._loop_say(self.cmd_llp(self._heredoc(arg)))
+
+    def do_load(self, arg):
+        """load a candidate .llp file (its header comment becomes
+        the text when none is set)"""
+        self._loop_say(self.cmd_load(arg))
+
+    def do_formalize(self, arg):
+        """draft the candidate from the text via the llm endpoint
+        (repair loop; findings feed back)"""
+        self._loop_say(self.cmd_formalize(arg))
+
+    def do_gate(self, arg):
+        """gate the candidate as a PACK against the served world"""
+        self._loop_say(self.cmd_gate(arg))
+
+    def do_revise(self, arg):
+        """gate the candidate as a BASE EDIT (accept then replaces
+        the world; measure diff shown)"""
+        self._loop_say(self.cmd_revise(arg))
+
+    def do_accept(self, arg):
+        """admitted candidate joins the served world — re-served
+        LIVE (new key/events; counts and stage carry over)"""
+        self._loop_say(self.cmd_accept(arg))
+
+    def do_sink(self, arg):
+        """load surprise records from a JSONL sink"""
+        self._loop_say(self.cmd_sink(arg))
+
+    def do_records(self, arg):
+        """list loaded surprise records"""
+        self._loop_say(self.cmd_records(arg))
+
+    def do_record(self, arg):
+        """select a record; its init/steps become the scene, its
+        mined text the approved text"""
+        self._loop_say(self.cmd_record(arg))
+
+    def do_replay(self, arg):
+        """recover() the record against the served world
+        (explanation before a fix, verification after)"""
+        self._loop_say(self.cmd_replay(arg))
+
+    def do_mine(self, arg):
+        """bare: the observed-vs-modeled gap; with TEXT: set + stamp
+        the approved unit"""
+        self._loop_say(self.cmd_mine(self._heredoc(arg)))
+
+    def do_show(self, arg):
+        """loop state: show [state|text|base|llp]"""
+        self._loop_say(self.cmd_show(arg))
+
+    def do_export(self, arg):
+        """accepted world as files: base.llp + packs + text.md"""
+        self._loop_say(self.cmd_export(arg))
+
+    def do_map(self, arg):
+        """the modal derivation (Viterbi) + final state, from the
+        file scene"""
+        from metis.loop.wire import _op_map
+        self._loop_say(_op_map(self, arg))
+
     def do_llm(self, arg):
         """show/set the LLM endpoint (metis-loop's loop.llm):
         ollama[:MODEL] | anthropic[:MODEL] | command:ARGV"""
-        try:
-            from loop.llm import DEFAULT_SPEC, resolve
-        except ImportError:
-            self._say("the LLM seams live in metis-loop — "
-                      "pip install -e ./metis-loop")
-            return
+        from metis.loop.llm import DEFAULT_SPEC, resolve
         a = arg.strip()
         if not a:
             self._say(f"llm: {self.llm or f'(default: {DEFAULT_SPEC})'}")
@@ -355,12 +476,7 @@ class Repl(Cmd):
         fresh seeded trace) as prose: Foata beats + final state + the
         catalog's %% docs through the configured llm endpoint — the
         loop's narrate-out boundary"""
-        try:
-            from loop.narrate import narrate
-        except ImportError:
-            self._say("the narrate boundary lives in metis-loop — "
-                      "pip install -e ./metis-loop")
-            return
+        from metis.loop.narrate import narrate
         a = arg.strip()
         if a:
             try:
@@ -568,7 +684,22 @@ def main(argv=None):
     ap.add_argument("llp", help="the catalog to serve")
     ap.add_argument("--seed", type=int, default=1,
                     help="sampler seed (default 1)")
+    ap.add_argument("--json", action="store_true",
+                    help="the JSON-lines wrapper wire: one {op, arg} "
+                         "per stdin line, one JSON result per line "
+                         "(the web console's channel)")
     args = ap.parse_args(argv)
+    if args.json:
+        from metis.loop.wire import serve_json
+        try:
+            shell = Repl(args.llp, seed=args.seed)
+        except Exception as e:
+            import json as _json
+            findings = getattr(e, "findings", None) or [str(e)]
+            print(_json.dumps({"ok": False, "findings": findings}),
+                  file=sys.stderr)
+            return 1
+        return serve_json(shell)
     try:
         import readline
         hist = _history()
