@@ -152,3 +152,24 @@ def test_trace_replays_the_case_without_touching_the_session():
     assert (r.stage, r.counts, r.fired) == before
     run(r, "#steps 0")
     assert "cannot trace" in run(r, "trace")
+
+
+def test_llm_and_narrate_via_command_backend():
+    """The shell's narrate command through metis-loop's endpoint with
+    `cat` in the LLM seat: the output is the prompt, so the material
+    (this session's Foata beats + the file's %% docs) is verifiable."""
+    r = shell()
+    out = run(r, "llm")
+    assert "default" in out
+    out = run(r, "llm sorcery:x")
+    assert "unknown LLM backend" in out
+    run(r, "llm command:cat", "run 5")
+    out = run(r, "narrate")
+    assert "beats" in out and "== the rules" in out
+    assert "jealousy" in out
+    # a seeded replay narration works without session history
+    r2 = shell()
+    out = run(r2, "llm command:cat", "narrate 2")
+    assert "beats" in out
+    out = run(r2, "narrate nonsense")
+    assert "usage: narrate" in out

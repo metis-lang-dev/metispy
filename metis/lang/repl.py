@@ -24,7 +24,7 @@ from pathlib import Path
 
 from metis.kernel import ForwardProjection, program_key
 from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
-                                    choice_weight)
+                                    choice_weight, run_trace)
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.lang.directives import (DirectiveError, embedded_case,
                                    render_run)
@@ -46,6 +46,10 @@ trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
+llm [SPEC]          show/set the LLM endpoint (ollama[:MODEL] |
+                    anthropic[:MODEL] | command:ARGV; via metis-loop)
+narrate [SEED]      the session so far (or a seeded trace) as prose:
+                    Foata beats + %% docs through the llm endpoint
 key                 canonical program_key of the serving catalog
 quit                leave (also: exit, ctrl-d)
 
@@ -71,6 +75,8 @@ class Repl(Cmd):
         self.rng = SplitMix64(seed)
         self.undo_stack = []
         self.fired = []
+        self.fired_rows = []   # (kind, stage, ev) per fired event
+        self.llm = ""          # LLM endpoint spec (loop.llm)
         self._load(initial=True)
         self.intro = (
             f"metis shell — {self.path.name} "
@@ -129,6 +135,7 @@ class Repl(Cmd):
         if kind == "link":
             self.stage = ev.post
         self.fired.append(ev.name)
+        self.fired_rows.append(self.events_tbl[i])
         return ev.name
 
     def _sample(self):
@@ -295,6 +302,7 @@ class Repl(Cmd):
             return
         self.stage, self.counts, k = self.undo_stack.pop()
         del self.fired[k:]
+        del self.fired_rows[k:]
         self.do_state("")
 
     def do_reset(self, arg):
@@ -320,6 +328,67 @@ class Repl(Cmd):
                   f"stage {self.stage} | {_fmt_counts(self.counts)}")
 
     do_edit = do_reload                 # the sketch's name, kept
+
+    def do_llm(self, arg):
+        """show/set the LLM endpoint (metis-loop's loop.llm):
+        ollama[:MODEL] | anthropic[:MODEL] | command:ARGV"""
+        try:
+            from loop.llm import DEFAULT_SPEC, resolve
+        except ImportError:
+            self._say("the LLM seams live in metis-loop — "
+                      "pip install -e ./metis-loop")
+            return
+        a = arg.strip()
+        if not a:
+            self._say(f"llm: {self.llm or f'(default: {DEFAULT_SPEC})'}")
+            return
+        try:
+            resolve(a)
+        except ValueError as e:
+            self._say(str(e))
+            return
+        self.llm = a
+        self._say(f"llm: {a}")
+
+    def do_narrate(self, arg):
+        """tell this session's fired events (or 'narrate SEED' for a
+        fresh seeded trace) as prose: Foata beats + final state + the
+        catalog's %% docs through the configured llm endpoint — the
+        loop's narrate-out boundary"""
+        try:
+            from loop.narrate import narrate
+        except ImportError:
+            self._say("the narrate boundary lives in metis-loop — "
+                      "pip install -e ./metis-loop")
+            return
+        a = arg.strip()
+        if a:
+            try:
+                seed = int(a)
+            except ValueError:
+                self._say("usage: narrate [SEED]")
+                return
+            idx, (stage, kappa) = run_trace(self.prog,
+                                            self.case["steps"] or 6,
+                                            seed)
+            rows = [self.events_tbl[i] for i in idx]
+        else:
+            seed = 0
+            rows = list(self.fired_rows)
+            stage = self.stage
+            kappa = [(q, n) for q, n in sorted(self.counts.items())
+                     if n > 0]
+        if not rows:
+            self._say("nothing to narrate — step/run first, or "
+                      "'narrate SEED' for a sampled trace")
+            return
+        try:
+            text = narrate(self.llm or "ollama", rows, stage, kappa,
+                           self.text, seed=seed)
+        except Exception as e:
+            self._say(f"narrate failed ({type(e).__name__}): {e}")
+            return
+        self._say(text)
 
     def do_trace(self, arg):
         """replay the file's embedded '#'-case (= metisc --run):
