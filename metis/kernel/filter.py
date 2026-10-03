@@ -49,11 +49,15 @@ class ForwardProjection:
         self.events = program.events()
         self.event_dists: List[List[float]] = []
 
-        # per (stage, kind): events indexed by their RAREST consume atom,
+        # per (stage, kind): events indexed by their RAREST premise atom
+        # (consume OR persist — an absent persist atom zeroes count**n
+        # exactly as an absent consume atom zeroes the falling factorial),
         # so a state only inspects events that could possibly be enabled
-        # (plus the few with no linear premises). Pure optimization of
+        # (plus the few with no premises at all). Pure optimization of
         # the same CHOICE — the ll2pg oracle's tier index, ported after
-        # profiling on the golden corpus (4-car blocks: 84 s -> tractable).
+        # profiling on the golden corpus (4-car blocks: 84 s -> tractable;
+        # consume-only keys left $-read-only groundings unindexed:
+        # tragedy, 14800 events, 8136 of them persist-only, 94 s -> s).
         self._tier_index = {}
         for stage in program.stage_names:
             for kind in ("clause", "link"):
@@ -61,12 +65,13 @@ class ForwardProjection:
                         if k == kind and s == stage]
                 freq: Dict[str, int] = {}
                 for _, ev in tier:
-                    for a in ev.consume:
+                    for a in (*ev.consume, *ev.persist):
                         freq[a] = freq.get(a, 0) + 1
                 index, rest = {}, []
                 for i, ev in tier:
-                    if ev.consume:
-                        key = min(ev.consume, key=lambda a: freq[a])
+                    atoms = (*ev.consume, *ev.persist)
+                    if atoms:
+                        key = min(atoms, key=lambda a: freq[a])
                         index.setdefault(key, []).append((i, ev))
                     else:
                         rest.append((i, ev))
