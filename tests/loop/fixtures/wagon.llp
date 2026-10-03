@@ -1,0 +1,21 @@
+% Bus fixture, world B: the wagon acts on the scout's WORD — an
+% init atom set by the driver from the blackboard. The two worlds
+% share no state; the word is the declared seam.
+catalog wagon 1.
+provenance hand "bus fixture: wagon — go or camp on the scout's word" "2026-10-03".
+layers (dyn).
+stages (travel).
+namespace st produce (dyn).
+pred wagon : st.
+pred word_clear : st.
+pred word_blocked : st.
+pred arrived : st.
+pred camped : st.
+stage travel {
+  %% the word is clear: roll through the pass.
+  go [dyn] : wagon * word_clear -o arrived.
+  %% the word is blocked: make camp below.
+  camp [dyn] : wagon * word_blocked -o camped.
+}
+#init wagon 1
+#steps 1

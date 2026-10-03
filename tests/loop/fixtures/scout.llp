@@ -1,0 +1,19 @@
+% Bus fixture, world A: the scout rides out and reports whether
+% the pass is clear. Its verdict leaves the world through the
+% driver (bus blackboard), never through shared state.
+catalog scout 1.
+provenance hand "bus fixture: scout — is the pass clear" "2026-10-03".
+layers (dyn).
+stages (look).
+namespace st produce (dyn).
+pred patrol : st.
+pred clear : st.
+pred blocked : st.
+stage look {
+  %% the pass is open.
+  open [dyn] : patrol -o clear @w 3.
+  %% rockfall: the pass is blocked.
+  block [dyn] : patrol -o blocked @w 1.
+}
+#init patrol 1
+#steps 1

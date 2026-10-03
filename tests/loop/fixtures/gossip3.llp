@@ -1,0 +1,46 @@
+% Bus fixture: the single-world REFERENCE for the three-world
+% gossip wiring — same mechanism as domains/social/gossip.llp
+% (metis-catalog), reduced to the test's ring: alice follows bob
+% follows carol follows alice; each starts knowing one message.
+% The bus run must reproduce THIS world's closure.
+catalog gossip3 1.
+provenance hand "bus fixture: 3-person gossip ring, single world" "2026-10-03".
+layers (story).
+stages (say read).
+type person {alice bob carol}.
+type message {m1 m2 m3}.
+namespace net produce (story).
+pred knows(person,message) : net.
+pred posted(person,message) : net.
+pred not_posted(person,message) : net.
+pred unheard(person,message) : net.
+bwd follows(person,person).
+follows(alice,bob).
+follows(bob,carol).
+follows(carol,alice).
+stage say {
+  %% a known, not-yet-posted message goes out.
+  say [story] : $knows(P,M) * not_posted(P,M) -o posted(P,M).
+}
+%% all posting done -> reading.
+qui sr [story] : say -o read.
+stage read {
+  %% a follower's first hearing: learns it, may repost.
+  read [story] : $posted(S,M) * follows(F,S) * unheard(F,M)
+    -o knows(F,M) * not_posted(F,M).
+}
+%% all reading done -> back to saying.
+qui rs [story] : read -o say.
+#init knows(alice,m1) 1
+#init not_posted(alice,m1) 1
+#init knows(bob,m2) 1
+#init not_posted(bob,m2) 1
+#init knows(carol,m3) 1
+#init not_posted(carol,m3) 1
+#init unheard(alice,m2) 1
+#init unheard(alice,m3) 1
+#init unheard(bob,m1) 1
+#init unheard(bob,m3) 1
+#init unheard(carol,m1) 1
+#init unheard(carol,m2) 1
+#steps 30

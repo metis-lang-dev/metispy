@@ -1,0 +1,24 @@
+% Bus fixture: ONE person of the gossip world (the three-world
+% wiring of domains/social/gossip.llp, metis-catalog). The social
+% graph is NOT here: `follows` became DRIVER wiring — who hears
+% whose posts is bus policy on the blackboard. The world only knows
+% how to hear, learn and repost; same once-token discipline as the
+% single-world port.
+catalog gossip_node 1.
+provenance hand "bus fixture: one gossip person; the graph is the wiring" "2026-10-03".
+layers (dyn).
+stages (talk).
+type message {m1 m2 m3}.
+namespace st produce (dyn).
+pred heard(message) : st.
+pred unheard(message) : st.
+pred knows(message) : st.
+pred not_posted(message) : st.
+pred posted(message) : st.
+stage talk {
+  %% a first hearing: the message becomes known and repostable.
+  hear [dyn] : heard(M) * unheard(M) -o knows(M) * not_posted(M).
+  %% a known, unposted message goes out.
+  post [dyn] : $knows(M) * not_posted(M) -o posted(M).
+}
+#steps 10
