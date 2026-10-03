@@ -63,11 +63,16 @@ gate                gate candidate as a PACK against the world
 revise              gate as a BASE EDIT (accept replaces the world)
 accept              admitted candidate joins the served world LIVE
 show [what]         loop state     export [DIR]   world as files
-llm [SPEC]          show/set the LLM endpoint (ollama[:MODEL] |
-                    anthropic[:MODEL] | command:ARGV; via metis-loop)
+llm [SPEC]          show/set + VALIDATE the LLM endpoint
+                    (ollama[:MODEL] | anthropic[:MODEL] |
+                    command:ARGV; seeded by the config dot file:
+                    $METIS_CONFIG | .metis.toml |
+                    ~/.config/metis/config.toml)
 narrate [SEED]      the session so far (or a seeded trace) as prose:
                     Foata beats + %% docs through the llm endpoint
 key                 canonical program_key of the serving catalog
+version             what is running: package, source+git, python,
+                    config dot file, llm endpoint
 quit                leave (also: exit, ctrl-d)
 
 Commands are bare words — no prefix; 'help' or '?' lists them.
@@ -94,12 +99,18 @@ class Repl(LoopVerbs, Cmd):
         self.fired = []
         self.loop = LoopState()
         self.fired_rows = []   # (kind, stage, ev) per fired event
-        self.llm = ""          # LLM endpoint spec (loop.llm)
+        from metis.loop import config
+        self.llm = config.get("llm", "endpoint", "")  # spec (loop.llm)
         self._load(initial=True)
+        flat = _fmt_counts(self.counts)
+        if len(flat) > 60:              # tragedy wraps 5 lines flat:
+            toks = sum(self.counts.values())
+            flat = (f"{len(self.counts)} atoms, {toks} tokens "
+                    f"— 'state' tabulates them")
         self.intro = (
             f"metis shell — {self.path.name} "
             f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
-            f"stage {self.stage} | {_fmt_counts(self.counts)}\n"
+            f"stage {self.stage} | {flat}\n"
             "type 'help' for commands, 'events' to see what can fire")
 
     # -- catalog / session plumbing ------------------------------------
@@ -466,13 +477,36 @@ class Repl(LoopVerbs, Cmd):
         lines += state_table(res["final"].items()) or ["  (empty)"]
         self._say("\n".join(lines))
 
-    def do_llm(self, arg):
-        """show/set the LLM endpoint (metis-loop's loop.llm):
-        ollama[:MODEL] | anthropic[:MODEL] | command:ARGV"""
+    def _llm_status(self, spec):
+        """One line on the endpoint, VALIDATED where that is cheap:
+        for ollama, the /api/tags URI says whether the server is up
+        and the model pulled — a 404 at narrate time is too late."""
         from metis.loop.llm import DEFAULT_SPEC, resolve
+        ep = resolve(spec or DEFAULT_SPEC)
+        shown = spec or f"(default: {DEFAULT_SPEC})"
+        if ep.backend != "ollama":
+            return f"llm: {shown}"
+        from metis.loop import ollama
+        host = ollama.default_host()
+        model = ep.arg or ollama.default_model()
+        try:
+            have = ollama.tags(host)
+        except OSError as e:
+            return (f"llm: {shown} — ollama UNREACHABLE at {host} "
+                    f"({getattr(e, 'reason', e)})")
+        ok = model in have or f"{model}:latest" in have
+        note = "" if ok else f" — '{model}' NOT pulled"
+        return (f"llm: {shown} @ {host} "
+                f"(installed: {', '.join(have) or 'none'}){note}")
+
+    def do_llm(self, arg):
+        """show/set the LLM endpoint (loop.llm): ollama[:MODEL] |
+        anthropic[:MODEL] | command:ARGV; seeded by [llm] endpoint
+        in the config dot file"""
+        from metis.loop.llm import resolve
         a = arg.strip()
         if not a:
-            self._say(f"llm: {self.llm or f'(default: {DEFAULT_SPEC})'}")
+            self._say(self._llm_status(self.llm))
             return
         try:
             resolve(a)
@@ -480,7 +514,7 @@ class Repl(LoopVerbs, Cmd):
             self._say(str(e))
             return
         self.llm = a
-        self._say(f"llm: {a}")
+        self._say(self._llm_status(a))
 
     def do_narrate(self, arg):
         """tell this session's fired events (or 'narrate SEED' for a
@@ -560,6 +594,36 @@ class Repl(LoopVerbs, Cmd):
         self._say("\n".join(f"  {k}. {n}"
                             for k, n in enumerate(self.fired, 1))
                   or "(nothing fired yet)")
+
+    def do_version(self, arg):
+        """version — what exactly is running: package, source
+        checkout (+ git), python, config dot file, llm endpoint"""
+        import platform
+        import metis as _m
+        from importlib import metadata
+        from metis.loop import config
+        try:
+            v = metadata.version("metispy")
+        except metadata.PackageNotFoundError:
+            v = "(not installed)"
+        src = Path(next(iter(_m.__path__))).resolve()
+        git = ""
+        try:
+            import subprocess
+            r = subprocess.run(
+                ["git", "-C", str(src), "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                git = f" (git {r.stdout.strip()})"
+        except OSError:
+            pass
+        cfg = config.path()
+        self._say("\n".join([
+            f"metispy {v} @ {src}{git}",
+            f"python {platform.python_version()} — {sys.executable}",
+            f"config {cfg}" if cfg else
+            "config (none: .metis.toml / ~/.config/metis/config.toml)",
+            self._llm_status(self.llm)]))
 
     def do_key(self, arg):
         """canonical program_key of the serving catalog"""

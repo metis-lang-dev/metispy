@@ -19,15 +19,30 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 
 
 def default_host() -> str:
-    return os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    from . import config
+    return os.environ.get("OLLAMA_HOST") \
+        or config.get("ollama", "host", "http://localhost:11434")
 
 
 def default_model() -> str:
-    return os.environ.get("OLLAMA_MODEL", "llama3.1")
+    from . import config
+    return os.environ.get("OLLAMA_MODEL") \
+        or config.get("ollama", "model", "llama3.1")
+
+
+def tags(host: str = None, timeout: int = 5):
+    """Installed model names at the server — the validation URI
+    (GET /api/tags); raises URLError when the server is down."""
+    with urllib.request.urlopen(
+            (host or default_host()).rstrip("/") + "/api/tags",
+            timeout=timeout) as r:
+        out = json.loads(r.read())
+    return [m.get("name", "?") for m in out.get("models", [])]
 
 
 _FENCE = re.compile(r"^\s*```[A-Za-z0-9_-]*\s*$")
@@ -50,8 +65,22 @@ def generate(prompt: str, model: str = None, host: str = None,
             "options": {"temperature": 0},
         }).encode(),
         headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        out = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            out = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:              # unknown model, not a dead server
+            m, h = model or default_model(), host or default_host()
+            try:
+                have = ", ".join(tags(h)) or "(none pulled)"
+            except OSError:
+                have = "(could not list)"
+            raise RuntimeError(
+                f"ollama: model '{m}' not found at {h} — installed: "
+                f"{have}. Pick one with `llm ollama:MODEL`, or set "
+                f"[ollama] model in .metis.toml / "
+                f"~/.config/metis/config.toml") from e
+        raise
     if "response" not in out:
         raise RuntimeError(f"ollama: no response field in {out!r}")
     return strip_fences(out["response"])
