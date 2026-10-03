@@ -135,6 +135,10 @@ simultaneous sentence. The quiescence link is the only "then" the
 story needs — hunt, settle, count. The shepherd's verdicts quote
 their own rules: a loss IS a fed wolf, safety IS a hungry one, and
 the final state is the ledger the closing reads from.
+
+The examples end here. Below is YOUR material — one run, the real
+one. Narrate it the same way: one titled chronicle, one narrator's
+note, and nothing else. Do not mention the examples.
 """
 
 FORMALIZE = """\
