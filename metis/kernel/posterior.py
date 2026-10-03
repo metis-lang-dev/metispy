@@ -145,23 +145,44 @@ def behavior_posterior(builders: Dict[object,
 
 @dataclass
 class MapResult:
-    prob: float
-    events: Tuple
+    prob: float                # exp(logp): may underflow to 0.0 on
+    events: Tuple              # very long horizons — logp is exact
     final: State
+    logp: float = 0.0
+
+
+def _map_tiekey(pr, s, e):
+    """Canonical order among equal-probability predecessors: the
+    event's LABEL (stage/name, stable under event-table reordering
+    and session history; quiesce sorts last), then the predecessor
+    state. Dict/insertion order is NOT canonical — the same scene
+    reached through different session histories enumerates it
+    differently, and the MAP must not depend on that."""
+    if e is None:
+        return ("￿(quiesce)", s)
+    _, stage, ev = pr.events[e]
+    return (f"{stage}/{getattr(ev, 'name', '?')}", s)
 
 
 def map_derivation(pr: ForwardProjection,
                    evidence: Optional[Evidence] = None) -> MapResult:
     """Viterbi: the most probable event sequence over the horizon,
-    optionally evidence-conditioned. Ties keep the first-found path
-    (deterministic: dict order is insertion order)."""
+    optionally evidence-conditioned. Log-space (a long horizon's
+    product underflows linear doubles near step ~1000 and every
+    candidate then ties at 0), back-pointers per step instead of a
+    path tuple per state (O(Σ support) total, not O(support·t²)),
+    and canonical tie-breaks (see _map_tiekey)."""
+    from math import exp, log
     init = pr.program.initial_state()
     if _passes(evidence, 0, init) <= 0:
         raise ValueError("evidence rejects the initial state")
-    delta: Dict[State, Tuple[float, Tuple]] = {init: (1.0, ())}
+    delta: Dict[State, float] = {init: 0.0}          # state -> logp
+    back: list = []            # per step: state -> (prev_state, e)
     for t in range(pr.steps):
-        nxt: Dict[State, Tuple[float, Tuple]] = {}
-        for s, (p, path) in delta.items():
+        nxt: Dict[State, float] = {}
+        par: Dict[State, Tuple[State, object]] = {}
+        for s in sorted(delta):
+            lp = delta[s]
             stage, kappa = s
             counts = dict(kappa)
             for e, pe in pr._choice(stage, counts):
@@ -169,15 +190,23 @@ def map_derivation(pr: ForwardProjection,
                 w = _passes(evidence, t + 1, s2)
                 if w <= 0:
                     continue
-                cand = (p * pe * w, path + (e,))
-                if s2 not in nxt or cand[0] > nxt[s2][0]:
-                    nxt[s2] = cand
+                cand = lp + log(pe) + (log(w) if w != 1.0 else 0.0)
+                if s2 not in nxt or cand > nxt[s2] or (
+                        cand == nxt[s2]
+                        and _map_tiekey(pr, s, e)
+                        < _map_tiekey(pr, *par[s2])):
+                    nxt[s2], par[s2] = cand, (s, e)
         if not nxt:
             raise ValueError("evidence has zero likelihood")
         delta = nxt
-    best_state = max(delta, key=lambda s: delta[s][0])
-    prob, path = delta[best_state]
-    return MapResult(prob, path, best_state)
+        back.append(par)
+    best_lp = max(delta.values())
+    best = min(s for s in delta if delta[s] == best_lp)
+    logp, path, s2 = delta[best], [], best
+    for par in reversed(back):
+        s2, e = par[s2]
+        path.append(e)
+    return MapResult(exp(logp), tuple(reversed(path)), best, logp)
 
 
 def surprise(pr: ForwardProjection, t: int, observed: State,
