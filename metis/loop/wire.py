@@ -61,9 +61,19 @@ def _op_trace(shell, arg):
 
 
 def _op_map(shell, arg):
-    from metis.kernel import ForwardProjection, map_derivation
-    pr = ForwardProjection(_scene_prog(shell),
-                           shell.case["steps"] or 6)
+    from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                              StateBudgetExceeded, map_derivation)
+    try:
+        steps = int(arg) if str(arg).strip() \
+            else (shell.case["steps"] or 6)
+    except ValueError:
+        return {"ok": False, "error": "usage: map [STEPS]"}
+    try:
+        pr = ForwardProjection(_scene_prog(shell), steps,
+                               max_states=STATE_BUDGET)
+    except StateBudgetExceeded as e:
+        return {"ok": False, "error":
+                f"{e} (try: map {max(1, e.step - 1)})"}
     m = map_derivation(pr)
 
     def lbl(e):
@@ -78,9 +88,14 @@ def _op_map(shell, arg):
 
 
 def _op_marginals(shell, arg):
-    from metis.kernel import ForwardProjection
-    pr = ForwardProjection(_scene_prog(shell),
-                           shell.case["steps"] or 6)
+    from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                              StateBudgetExceeded)
+    try:
+        pr = ForwardProjection(_scene_prog(shell),
+                               shell.case["steps"] or 6,
+                               max_states=STATE_BUDGET)
+    except StateBudgetExceeded as e:
+        return {"ok": False, "error": str(e)}
     marg: Dict[str, float] = {}
     for (_, kappa), p in pr.final.items():
         for a, n in kappa:

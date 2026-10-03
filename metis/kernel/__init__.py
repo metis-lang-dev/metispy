@@ -8,7 +8,8 @@ from .clause import Clause, Link                              # noqa: F401
 from .program import Program                                  # noqa: F401
 from .weight import (falling_factorial, transition_count,     # noqa: F401
                      choice_weight)
-from .filter import ForwardProjection                         # noqa: F401
+from .filter import (ForwardProjection, STATE_BUDGET,         # noqa: F401
+                     StateBudgetExceeded)
 from .sampler import sample_final, run_once, run_trace        # noqa: F401
 from .nets import (canonical, canonical_bytes,                # noqa: F401
                    program_key, run_key,

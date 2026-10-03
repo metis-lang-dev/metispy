@@ -41,11 +41,31 @@ def apply_event(events, stage: str, counts: Dict[str, int], e) -> State:
     return (ev.post if kind == "link" else stage, pack_counts(knew))
 
 
+STATE_BUDGET = 500_000     # the interactive default for max_states
+
+
+class StateBudgetExceeded(RuntimeError):
+    """The exact filter's support outgrew max_states — a structural
+    answer ('this horizon is out of exact-enumeration reach'), not
+    a crash; the caller lowers the horizon or factorizes."""
+
+    def __init__(self, step, steps, support, budget):
+        self.step, self.steps = step, steps
+        self.support, self.budget = support, budget
+        super().__init__(
+            f"exact filter support {support} exceeds the "
+            f"{budget}-state budget at step {step}/{steps} — "
+            f"lower the horizon, or this is clique-tree/factored "
+            f"territory")
+
+
 class ForwardProjection:
-    def __init__(self, program: Program, steps: int, policy=None):
+    def __init__(self, program: Program, steps: int, policy=None,
+                 max_states=None):
         self.program = program
         self.steps = steps
         self.policy = policy
+        self.max_states = max_states
         self.events = program.events()
         self.event_dists: List[List[float]] = []
 
@@ -79,7 +99,8 @@ class ForwardProjection:
 
         dist: Dict[State, float] = {program.initial_state(): 1.0}
         self.history = [dist]
-        for _ in range(steps):
+        for t in range(steps):
+            self._cur_step = t + 1
             dist = self._step(dist)
             self.history.append(dist)
         self.final = dist
@@ -112,12 +133,16 @@ class ForwardProjection:
     def _step(self, dist):
         out: Dict[State, float] = {}
         evd = [0.0] * (len(self.events) + 1)   # last slot: done/quiesce
+        budget = self.max_states
         for (stage, kappa), p in dist.items():
             counts = dict(kappa)
             for e, pe in self._choice(stage, counts):
                 nxt = apply_event(self.events, stage, counts, e)
                 evd[e if e is not None else len(self.events)] += p * pe
                 out[nxt] = out.get(nxt, 0.0) + p * pe
+            if budget and len(out) > budget:   # abort mid-expansion:
+                raise StateBudgetExceeded(     # don't finish a step
+                    self._cur_step, self.steps, len(out), budget)
         self.event_dists.append(evd)
         return out
 

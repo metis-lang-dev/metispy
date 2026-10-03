@@ -22,7 +22,8 @@ from cmd import Cmd
 from dataclasses import replace
 from pathlib import Path
 
-from metis.kernel import ForwardProjection, program_key
+from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                          StateBudgetExceeded, program_key)
 from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
                                     choice_weight, run_trace)
 from metis.lang import compile_catalog, parse, resolve_includes
@@ -47,7 +48,9 @@ trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
-map                 modal derivation (Viterbi) of the file scene
+map [STEPS]         modal derivation (Viterbi) of the file scene
+                    (exact; a blown state budget says so — lower
+                    the horizon rather than wait)
 
 the loop (text -> candidate -> gates -> world; one kernel REPL,
 every UI a wrapper):
@@ -325,7 +328,11 @@ class Repl(LoopVerbs, Cmd):
         here = replace(self.prog, init_stage=self.stage,
                        init=dict(self.counts))
         try:
-            pr = ForwardProjection(here, steps)
+            pr = ForwardProjection(here, steps,
+                                   max_states=STATE_BUDGET)
+        except StateBudgetExceeded as e:
+            self._say(f"{e} (try: query {atom} {max(1, e.step - 1)})")
+            return
         except Exception as e:
             self._say(f"filter failed: {e!r}")
             return
@@ -598,32 +605,8 @@ class Repl(LoopVerbs, Cmd):
     def do_version(self, arg):
         """version — what exactly is running: package, source
         checkout (+ git), python, config dot file, llm endpoint"""
-        import platform
-        import metis as _m
-        from importlib import metadata
-        from metis.loop import config
-        try:
-            v = metadata.version("metispy")
-        except metadata.PackageNotFoundError:
-            v = "(not installed)"
-        src = Path(next(iter(_m.__path__))).resolve()
-        git = ""
-        try:
-            import subprocess
-            r = subprocess.run(
-                ["git", "-C", str(src), "rev-parse", "--short", "HEAD"],
-                capture_output=True, text=True, timeout=5)
-            if r.returncode == 0:
-                git = f" (git {r.stdout.strip()})"
-        except OSError:
-            pass
-        cfg = config.path()
-        self._say("\n".join([
-            f"metispy {v} @ {src}{git}",
-            f"python {platform.python_version()} — {sys.executable}",
-            f"config {cfg}" if cfg else
-            "config (none: .metis.toml / ~/.config/metis/config.toml)",
-            self._llm_status(self.llm)]))
+        self._say("\n".join(version_lines()
+                            + [self._llm_status(self.llm)]))
 
     def do_key(self, arg):
         """canonical program_key of the serving catalog"""
@@ -758,20 +741,79 @@ def _history():
     return d / "history"
 
 
+def version_lines():
+    """Toolchain provenance — what exactly is running."""
+    import platform
+    import metis as _m
+    from importlib import metadata
+    from metis.loop import config
+    try:
+        v = metadata.version("metispy")
+    except metadata.PackageNotFoundError:
+        v = "(not installed)"
+    src = Path(next(iter(_m.__path__))).resolve()
+    git = ""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["git", "-C", str(src), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            git = f" (git {r.stdout.strip()})"
+    except OSError:
+        pass
+    cfg = config.path()
+    return [f"metispy {v} @ {src}{git}",
+            f"python {platform.python_version()} — {sys.executable}",
+            f"config {cfg}" if cfg else
+            "config (none: .metis.toml / ~/.config/metis/config.toml)"]
+
+
+# the tabula-rasa world (SPEC §4): served when no file is given;
+# `revise` + `accept` replace it, `save`/`export` keep the result.
+_SCRATCH = """\
+catalog scratch 1.
+layers (dyn).
+stages (z).
+stage z {
+}
+"""
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="metis",
         description="interactive shell over a .llp catalog "
                     "(line editing, history and tab completion via "
                     "readline)")
-    ap.add_argument("llp", help="the catalog to serve")
+    ap.add_argument("llp", nargs="?",
+                    help="the catalog to serve; none serves a blank "
+                         "scratch world — build it in-session "
+                         "(revise/accept, or load a candidate) and "
+                         "save/export what you keep")
     ap.add_argument("--seed", type=int, default=1,
                     help="sampler seed (default 1)")
+    ap.add_argument("--version", action="store_true",
+                    help="toolchain provenance (package, source+git, "
+                         "python, config), then exit")
     ap.add_argument("--json", action="store_true",
                     help="the JSON-lines wrapper wire: one {op, arg} "
                          "per stdin line, one JSON result per line "
                          "(the web console's channel)")
     args = ap.parse_args(argv)
+    if args.version:
+        print("\n".join(version_lines()))
+        return 0
+    if not args.llp:
+        import tempfile
+        fd, scratch = tempfile.mkstemp(suffix=".llp",
+                                       prefix="metis-scratch-")
+        os.write(fd, _SCRATCH.encode())
+        os.close(fd)
+        args.llp = scratch
+        print(f"no catalog given — serving a blank scratch world "
+              f"({scratch}); revise/accept to build it, save/export "
+              f"to keep it", file=sys.stderr)
     if args.json:
         from metis.loop.wire import serve_json
         try:
