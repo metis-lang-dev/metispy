@@ -70,7 +70,8 @@ def _op_map(shell, arg):
         return {"ok": False, "error": "usage: map [STEPS]"}
     try:
         pr = ForwardProjection(_scene_prog(shell), steps,
-                               max_states=STATE_BUDGET)
+                               max_states=STATE_BUDGET,
+                               keep_history=False)
     except StateBudgetExceeded as e:
         return {"ok": False, "error":
                 f"{e} (try: map {max(1, e.step - 1)})"}
@@ -93,7 +94,8 @@ def _op_marginals(shell, arg):
     try:
         pr = ForwardProjection(_scene_prog(shell),
                                shell.case["steps"] or 6,
-                               max_states=STATE_BUDGET)
+                               max_states=STATE_BUDGET,
+                               keep_history=False)
     except StateBudgetExceeded as e:
         return {"ok": False, "error": str(e)}
     marg: Dict[str, float] = {}

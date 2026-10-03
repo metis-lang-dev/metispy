@@ -13,7 +13,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from metis.kernel import ForwardProjection
+from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                          StateBudgetExceeded)
 from metis.kernel.record import recover
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.lang.ast import pretty
@@ -177,7 +178,12 @@ class LoopVerbs:
         out = self._gate_out(rep)
         out["revision"] = True
         if rep.ok:
-            out["diff_preview"] = self._revision_diff(rep)
+            try:
+                out["diff_preview"] = self._revision_diff(rep)
+            except StateBudgetExceeded as e:
+                out["diff_preview"] = []
+                out["diff_note"] = (f"scene too large for the exact "
+                                    f"before/after diff: {e}")
         return out
 
     def _gate_out(self, rep):
@@ -198,7 +204,9 @@ class LoopVerbs:
 
         def marg(cat):
             pr = ForwardProjection(cat.ground(dict(init)),
-                                   self._scene_steps())
+                                   self._scene_steps(),
+                                   max_states=STATE_BUDGET,
+                                   keep_history=False)
             m: Dict[str, float] = {}
             for (_, kappa), p in pr.final.items():
                 for a, n in kappa:
@@ -290,7 +298,11 @@ class LoopVerbs:
             return {"ok": False, "error": "no record — record first"}
         r = self.loop.records[self.loop.rec_idx]
         prog = self._world().ground(self._scene_init())
-        out = recover(r, prog, steps=r.get("steps"))
+        try:
+            out = recover(r, prog, steps=r.get("steps"),
+                          max_states=STATE_BUDGET)
+        except StateBudgetExceeded as e:
+            return {"ok": False, "error": str(e)}
         logged = r.get("likelihood", 0.0)
         now = out["likelihood"]
         return {"ok": True, "logged_likelihood": logged,

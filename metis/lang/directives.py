@@ -166,7 +166,8 @@ def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:
     for q, k in hits.items():
         line = f"Q {q} {k}/{seeds}"
         if q in exact:
-            line += f" exact={exact[q]:.6g}"
+            line += (f" exact={exact[q]:.6g}" if exact[q] is not None
+                     else " exact=(over state budget)")
         out.append(line)
     return "\n".join(out)
 
@@ -176,15 +177,20 @@ _EXACT_EVENT_CAP = 512
 
 def _exact_presence(prog, steps: int, queries: List[str]) -> Dict:
     """Presence marginals from the exact filter, where tractable —
-    best-effort: any failure (or a large grounding) just drops the
-    `exact=` annotation, never the run."""
+    best-effort, but never silent about WHY: over the state budget
+    (or out of memory) every query maps to None and the Q line says
+    so, instead of the annotation just vanishing."""
     if not queries or len(prog.events()) > _EXACT_EVENT_CAP:
         return {}
+    from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                              StateBudgetExceeded)
     try:
-        from metis.kernel import ForwardProjection
-        pr = ForwardProjection(prog, steps)
+        pr = ForwardProjection(prog, steps, max_states=STATE_BUDGET,
+                               keep_history=False)
         return {q: sum(p for (_, k), p in pr.final.items()
                        if any(a == q and n > 0 for a, n in k))
                 for q in queries}
+    except (StateBudgetExceeded, MemoryError):
+        return {q: None for q in queries}
     except Exception:
         return {}

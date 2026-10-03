@@ -7,7 +7,8 @@ UNTRUSTED and pluggable; this module is the verification loop."""
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from metis.kernel import ForwardProjection, program_key
+from metis.kernel import (STATE_BUDGET, ForwardProjection,
+                          StateBudgetExceeded, program_key)
 from metis.kernel.catalog import Catalog, CatalogError
 from metis.kernel.factorize import FactoredProgram, FactorizeError
 from metis.kernel.posterior import map_derivation
@@ -42,7 +43,8 @@ class Formalization:
 
 
 def _final_marginals(prog, steps) -> Tuple[Dict[str, float], int, list]:
-    pr = ForwardProjection(prog, steps)
+    pr = ForwardProjection(prog, steps, max_states=STATE_BUDGET,
+                           keep_history=False)
     marg: Dict[str, float] = {}
     for (_, kappa), p in pr.final.items():
         for atom, n in kappa:
@@ -151,17 +153,23 @@ def admit_text_pack(text: str, llp: str,
                                     "bindings)")
             except FactorizeError as e:
                 r.classification = f"counterexample: {e}"
-        marg, sc.support, sc.map_events = _final_marginals(prog,
-                                                           steps)
-        if base is not None:
-            base_prog = base.catalog.ground(dict(init))
-            base_marg, _, _ = _final_marginals(base_prog, steps)
-            atoms = sorted(set(marg) | set(base_marg))
-            sc.diffs = [
-                (a, base_marg.get(a, 0.0), marg.get(a, 0.0))
-                for a in atoms
-                if abs(base_marg.get(a, 0.0)
-                       - marg.get(a, 0.0)) > 1e-12]
+        try:
+            marg, sc.support, sc.map_events = _final_marginals(prog,
+                                                               steps)
+            if base is not None:
+                base_prog = base.catalog.ground(dict(init))
+                base_marg, _, _ = _final_marginals(base_prog, steps)
+                atoms = sorted(set(marg) | set(base_marg))
+                sc.diffs = [
+                    (a, base_marg.get(a, 0.0), marg.get(a, 0.0))
+                    for a in atoms
+                    if abs(base_marg.get(a, 0.0)
+                           - marg.get(a, 0.0)) > 1e-12]
+        except StateBudgetExceeded as e:
+            # semantics out of exact reach is a WARNING on the
+            # report, never a dead gate: the statics verdicts above
+            # stand, the scenario ships without measure numbers.
+            r.warnings.append(f"scenario {sc.key[:12]}…: {e}")
         r.scenarios.append(sc)
     if not scenarios:
         r.classification = "unclassified (no scenario provided)"

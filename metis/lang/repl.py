@@ -329,7 +329,8 @@ class Repl(LoopVerbs, Cmd):
                        init=dict(self.counts))
         try:
             pr = ForwardProjection(here, steps,
-                                   max_states=STATE_BUDGET)
+                                   max_states=STATE_BUDGET,
+                                   keep_history=False)
         except StateBudgetExceeded as e:
             self._say(f"{e} (try: query {atom} {max(1, e.step - 1)})")
             return

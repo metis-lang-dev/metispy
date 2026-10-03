@@ -45,27 +45,35 @@ STATE_BUDGET = 500_000     # the interactive default for max_states
 
 
 class StateBudgetExceeded(RuntimeError):
-    """The exact filter's support outgrew max_states — a structural
-    answer ('this horizon is out of exact-enumeration reach'), not
-    a crash; the caller lowers the horizon or factorizes."""
+    """The exact filter outgrew max_states — a structural answer
+    ('this horizon is out of exact-enumeration reach'), not a
+    crash; the caller lowers the horizon or factorizes. The budget
+    is CUMULATIVE retained states (Σ support over the steps), which
+    bounds both the memory of a kept history and the total work —
+    a per-step check lets a long flat horizon (road's unbounded
+    crash counter) grow quadratically without ever tripping."""
 
-    def __init__(self, step, steps, support, budget):
+    def __init__(self, step, steps, retained, budget):
         self.step, self.steps = step, steps
-        self.support, self.budget = support, budget
+        self.retained, self.budget = retained, budget
         super().__init__(
-            f"exact filter support {support} exceeds the "
-            f"{budget}-state budget at step {step}/{steps} — "
-            f"lower the horizon, or this is clique-tree/factored "
-            f"territory")
+            f"exact filter retained {retained} states (budget "
+            f"{budget}) at step {step}/{steps} — lower the horizon, "
+            f"or this is clique-tree/factored territory")
 
 
 class ForwardProjection:
     def __init__(self, program: Program, steps: int, policy=None,
-                 max_states=None):
+                 max_states=None, keep_history=True):
         self.program = program
         self.steps = steps
         self.policy = policy
         self.max_states = max_states
+        # keep_history=False drops the per-step dists (memory then
+        # stays two consecutive slices): for callers that read only
+        # .final — query/map/marginals instruments. Smoothing,
+        # surprise and the domain evaluators need the history.
+        self.keep_history = keep_history
         self.events = program.events()
         self.event_dists: List[List[float]] = []
 
@@ -99,10 +107,15 @@ class ForwardProjection:
 
         dist: Dict[State, float] = {program.initial_state(): 1.0}
         self.history = [dist]
+        self._retained = 1
         for t in range(steps):
             self._cur_step = t + 1
             dist = self._step(dist)
-            self.history.append(dist)
+            self._retained += len(dist)
+            if keep_history:
+                self.history.append(dist)
+        if not keep_history:
+            self.history = []
         self.final = dist
 
     # -- CHOICE ----------------------------------------------------------
@@ -140,9 +153,10 @@ class ForwardProjection:
                 nxt = apply_event(self.events, stage, counts, e)
                 evd[e if e is not None else len(self.events)] += p * pe
                 out[nxt] = out.get(nxt, 0.0) + p * pe
-            if budget and len(out) > budget:   # abort mid-expansion:
-                raise StateBudgetExceeded(     # don't finish a step
-                    self._cur_step, self.steps, len(out), budget)
+            if budget and self._retained + len(out) > budget:
+                raise StateBudgetExceeded(     # abort mid-expansion,
+                    self._cur_step, self.steps,  # not after a step
+                    self._retained + len(out), budget)
         self.event_dists.append(evd)
         return out
 

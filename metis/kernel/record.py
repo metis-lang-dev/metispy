@@ -35,12 +35,15 @@ def _evidence(observed: Dict[str, int], steps: int):
 
 def surprise_record(program, steps: int, observed: Dict[str, int],
                     policy=None, rare_ratio: float = 0.05,
-                    meta: Optional[dict] = None) -> dict:
+                    meta: Optional[dict] = None,
+                    max_states=None) -> dict:
     """Log an observed (partial) outcome against the deployed
     artifact. kind: 'unmodeled' (zero likelihood — the leg-1
     trigger), 'rare' (likelihood below rare_ratio of the modal
     matching mass... below rare_ratio outright), or None."""
-    pr = ForwardProjection(program, steps, policy=policy)
+    pr = ForwardProjection(program, steps, policy=policy,
+                           max_states=max_states,
+                           keep_history=False)   # only .final read
     like = sum(p for s, p in pr.final.items()
                if _evidence(observed, steps)[steps](s))
     kind = "unmodeled" if like == 0.0 else \
@@ -58,7 +61,7 @@ def surprise_record(program, steps: int, observed: Dict[str, int],
 
 
 def recover(record: dict, program, steps: Optional[int] = None,
-            policy=None) -> dict:
+            policy=None, max_states=None) -> dict:
     """Replay a record against a candidate artifact (offline). If the
     candidate is the RECORDED artifact, verify the key; a different
     key means a shadow candidate is being scored — allowed, that is
@@ -67,7 +70,8 @@ def recover(record: dict, program, steps: Optional[int] = None,
     either)."""
     steps = steps if steps is not None else record["steps"]
     evidence = _evidence(record["observed"], steps)
-    pr = ForwardProjection(program, steps, policy=policy)
+    pr = ForwardProjection(program, steps, policy=policy,
+                           max_states=max_states)
     try:
         cond = Conditioned(pr, evidence)
     except ValueError:
