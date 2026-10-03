@@ -95,17 +95,21 @@ def _pretty_trace(seed: int, rows) -> List[str]:
     return out
 
 
-def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
-    """The final multiset tabulated by predicate: one row per pred,
-    `(args)` terms (`:n` when n > 1), wrapped and aligned."""
+def state_table(kappa) -> List[str]:
+    """A multiset tabulated by predicate: one row per pred, `(args)`
+    terms (`:n` when n > 1, `·` for a bare 0-ary presence), wrapped
+    and aligned. The shared rendering of every state the shell shows
+    (trace finals, `state`, `map`); zero counts are not state."""
     by_pred: Dict[str, List[str]] = {}
     for atom, n in sorted(kappa):
+        if n <= 0:
+            continue
         pred, bra, rest = atom.partition("(")
         item = (bra + rest) if bra else ""
         if n > 1:
             item += f":{n}"
         by_pred.setdefault(pred, []).append(item if item else "·")
-    out = [f"F {seed} {stage}"]
+    out: List[str] = []
     if not by_pred:
         return out
     pred_w = max(len(p) for p in by_pred)
@@ -119,6 +123,10 @@ def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
             line += " " + it
         out.append(line.rstrip())
     return out
+
+
+def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
+    return [f"F {seed} {stage}"] + state_table(kappa)
 
 
 def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:

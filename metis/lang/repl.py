@@ -28,7 +28,7 @@ from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.loop.verbs import LoopState, LoopVerbs, fmt as _loop_fmt
 from metis.lang.directives import (DirectiveError, embedded_case,
-                                   render_run)
+                                   render_run, state_table)
 
 _HELP = """\
 events              enabled transitions of the firing tier, numbered
@@ -260,8 +260,10 @@ class Repl(LoopVerbs, Cmd):
         self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
 
     def do_state(self, arg):
-        """current stage + multiset"""
-        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
+        """current stage + multiset, tabulated by predicate"""
+        rows = state_table(self.counts.items())
+        self._say("\n".join([f"stage {self.stage}"]
+                            + (rows or ["  (empty)"])))
 
     def _adjust(self, arg, sign, usage):
         parts = arg.split()
@@ -453,7 +455,16 @@ class Repl(LoopVerbs, Cmd):
         """the modal derivation (Viterbi) + final state, from the
         file scene"""
         from metis.loop.wire import _op_map
-        self._loop_say(_op_map(self, arg))
+        res = _op_map(self, arg)
+        if not res.get("ok"):
+            return self._loop_say(res)
+        evs = res["events"]
+        w = len(str(len(evs)))
+        lines = [f"map p={res['prob']:g}"]
+        lines += [f"  {k:>{w}} | {e}" for k, e in enumerate(evs, 1)]
+        lines.append(f"final {res['final_stage']}")
+        lines += state_table(res["final"].items()) or ["  (empty)"]
+        self._say("\n".join(lines))
 
     def do_llm(self, arg):
         """show/set the LLM endpoint (metis-loop's loop.llm):
@@ -559,6 +570,14 @@ class Repl(LoopVerbs, Cmd):
             super().do_help(arg)
         else:
             self._say(_HELP)
+
+    def onecmd(self, line):
+        """Ctrl-C cancels the RUNNING command (a long `query`, a
+        stuck backend), never the shell — exit stays quit/ctrl-d."""
+        try:
+            return super().onecmd(line)
+        except KeyboardInterrupt:
+            self._say("(interrupted)")
 
     def do_quit(self, arg):
         """leave the shell"""
@@ -719,11 +738,14 @@ def main(argv=None):
         print("cannot serve %s:\n  %s"
               % (args.llp, "\n  ".join(findings)), file=sys.stderr)
         return 1
-    try:
-        repl.cmdloop()
-    except KeyboardInterrupt:
-        print()
-    return 0
+    while True:
+        try:
+            repl.cmdloop()
+            return 0
+        except KeyboardInterrupt:
+            # Ctrl-C at the prompt: drop the line, keep the session.
+            print("^C ('quit' or ctrl-d to leave)")
+            repl.intro = None
 
 
 if __name__ == "__main__":
