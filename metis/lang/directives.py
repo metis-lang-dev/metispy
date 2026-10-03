@@ -167,7 +167,7 @@ def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:
         line = f"Q {q} {k}/{seeds}"
         if q in exact:
             line += (f" exact={exact[q]:.6g}" if exact[q] is not None
-                     else " exact=(over state budget)")
+                     else " exact=(out of exact reach)")
         out.append(line)
     return "\n".join(out)
 
@@ -180,8 +180,10 @@ def _exact_presence(prog, steps: int, queries: List[str]) -> Dict:
     best-effort, but never silent about WHY: over the state budget
     (or out of memory) every query maps to None and the Q line says
     so, instead of the annotation just vanishing."""
-    if not queries or len(prog.events()) > _EXACT_EVENT_CAP:
+    if not queries:
         return {}
+    if len(prog.events()) > _EXACT_EVENT_CAP:
+        return {q: None for q in queries}   # say so, don't vanish
     from metis.kernel import (STATE_BUDGET, ForwardProjection,
                               StateBudgetExceeded)
     try:
