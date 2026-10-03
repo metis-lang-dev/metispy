@@ -38,9 +38,9 @@ def admit(text: str, llp: str, base_path=None,
 
 # ---- Formalizer (the LLM seam) -------------------------------------
 
-PROMPT = """You are a formalizer for LLP, a typed linear-logic \
-behavior-catalog language. Emit ONLY LLP source, no fences, no prose.
-
+# The SYSTEM half lives in loop.prompts (session- and file-
+# overridable per seat); this is the material half.
+USER_TEMPLATE = """\
 The base catalog vocabulary you may CONSUME (packs never produce
 base-namespace atoms — containment admission enforces it):
 
@@ -54,12 +54,16 @@ approved unit; your rules must carry %% docs quoting it):
 
 
 def render_prompt(text: str, vocabulary: str,
-                  findings: Sequence[str] = ()) -> str:
+                  findings: Sequence[str] = (),
+                  system: str = None) -> str:
+    from .prompts import resolve
     f = ""
     if findings:
         f = ("\nYour previous candidate FAILED these gates — repair "
              "and re-emit the full source:\n- " + "\n- ".join(findings))
-    return PROMPT.format(vocabulary=vocabulary, text=text, findings=f)
+    head, _ = resolve("formalize", system)
+    return head + "\n\n" + USER_TEMPLATE.format(
+        vocabulary=vocabulary, text=text, findings=f)
 
 
 def run_backend(command, prompt: str, timeout: int = 600) -> str:
@@ -86,13 +90,15 @@ class FormalizeResult:
 
 def formalize_loop(text: str, vocabulary: str, backend: Sequence[str],
                    base_path=None, scenarios=(), steps: int = 6,
-                   max_rounds: int = 4) -> FormalizeResult:
+                   max_rounds: int = 4,
+                   system: str = None) -> FormalizeResult:
     """text -> candidate -> gates -> findings -> repair, <= max_rounds.
     The candidate is UNTRUSTED; only the gate verdict is."""
     findings: List[str] = []
     history: List[Tuple[str, List[str]]] = []
     for n in range(1, max_rounds + 1):
-        llp = run_backend(backend, render_prompt(text, vocabulary, findings))
+        llp = run_backend(backend, render_prompt(text, vocabulary,
+                                                 findings, system))
         rep = admit(text, llp, base_path=base_path,
                     scenarios=scenarios, steps=steps)
         history.append((llp, list(rep.findings)))

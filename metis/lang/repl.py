@@ -73,8 +73,12 @@ llm [SPEC]          show/set + VALIDATE the LLM endpoint
                     ~/.config/metis/config.toml)
 narrate [SEED]      the session so far (or a seeded trace) as prose:
                     Foata beats + %% docs through the llm endpoint
-narrate system|user show the doctrine / the certified-material
-                    prompt instead (no model call; the UI halves)
+narrate system|user show the system / certified-material prompt
+                    (no model call; the UI halves). `narrate system
+                    <<EOF` sets a session override; the persistent
+                    home is ~/.config/metis/prompts/narrate.txt
+                    (likewise `formalize system [<<EOF]` /
+                    prompts/formalize.txt — narrators differ)
 key                 canonical program_key of the serving catalog
 version             what is running: package, source+git, python,
                     config dot file, llm endpoint
@@ -106,6 +110,7 @@ class Repl(LoopVerbs, Cmd):
         self.fired_rows = []   # (kind, stage, ev) per fired event
         from metis.loop import config
         self.llm = config.get("llm", "endpoint", "")  # spec (loop.llm)
+        self.sys_prompts = {}  # per-seat session overrides (prompts)
         self._load(initial=True)
         flat = _fmt_counts(self.counts)
         if len(flat) > 60:              # tragedy wraps 5 lines flat:
@@ -422,9 +427,33 @@ class Repl(LoopVerbs, Cmd):
         the text when none is set)"""
         self._loop_say(self.cmd_load(arg))
 
+    def _sys_prompt(self, kind, rest):
+        """Show or set a seat's system prompt. Bare: the active
+        prompt and where it came from (session | file | builtin).
+        `<<EOF`: a session override (empty heredoc clears it) — the
+        persistent home is ~/.config/metis/prompts/<kind>.txt."""
+        from metis.loop import prompts
+        if rest.strip():
+            text = self._heredoc(rest).strip()
+            if text:
+                self.sys_prompts[kind] = text
+            else:
+                self.sys_prompts.pop(kind, None)
+            src = "session" if text else "cleared"
+            self._say(f"{kind} system prompt: {src}"
+                      + (f" ({len(text)} chars)" if text else ""))
+            return
+        text, src = prompts.resolve(kind, self.sys_prompts.get(kind))
+        self._say(f"({src})\n{text}")
+
     def do_formalize(self, arg):
         """draft the candidate from the text via the llm endpoint
-        (repair loop; findings feed back)"""
+        (repair loop; findings feed back). `formalize system [<<EOF]`
+        shows/sets the formalizer's system prompt."""
+        parts = arg.split(None, 1)
+        if parts and parts[0] == "system":
+            return self._sys_prompt("formalize",
+                                    parts[1] if len(parts) > 1 else "")
         self._loop_say(self.cmd_formalize(arg))
 
     def do_gate(self, arg):
@@ -533,13 +562,12 @@ class Repl(LoopVerbs, Cmd):
         loop's narrate-out boundary. `narrate system` prints the
         doctrine prompt, `narrate user [SEED]` the certified
         material, neither calls the model."""
-        from metis.loop.narrate import SYSTEM, narrate, user_prompt
+        from metis.loop.narrate import narrate, user_prompt
         parts = arg.split()
         show = parts.pop(0) if parts and parts[0] in ("system",
                                                       "user") else None
         if show == "system":
-            self._say(SYSTEM)
-            return
+            return self._sys_prompt("narrate", " ".join(parts))
         a = " ".join(parts)
         if a:
             try:
@@ -567,7 +595,8 @@ class Repl(LoopVerbs, Cmd):
             return
         try:
             text = narrate(self.llm or "ollama", rows, stage, kappa,
-                           self.text, seed=seed)
+                           self.text, seed=seed,
+                           system=self.sys_prompts.get("narrate"))
         except Exception as e:
             self._say(f"narrate failed ({type(e).__name__}): {e}")
             return

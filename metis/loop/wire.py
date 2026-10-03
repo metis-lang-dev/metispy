@@ -151,12 +151,16 @@ def _op_llm(shell, arg):
 
 def _op_narrate(shell, arg):
     from metis.kernel.refsample import canonical_events, run_trace
-    from .narrate import SYSTEM, narrate, user_prompt
+    from . import prompts
+    from .narrate import narrate, user_prompt
+    override = getattr(shell, "sys_prompts", {}).get("narrate")
     parts = str(arg).split()
     show = parts.pop(0) if parts and parts[0] in ("system",
                                                   "user") else None
     if show == "system":           # the doctrine half, no model call
-        return {"ok": True, "role": "system", "prompt": SYSTEM}
+        text, src = prompts.resolve("narrate", override)
+        return {"ok": True, "role": "system", "source": src,
+                "prompt": text}
     prog = _scene_prog(shell)
     seed = int(parts[0]) if parts else 1
     idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
@@ -169,7 +173,7 @@ def _op_narrate(shell, arg):
                 "prompt": user_prompt(rows, stage, kappa,
                                       shell.text, seed=seed)}
     text = narrate(shell.llm or "ollama", rows, stage, kappa,
-                   shell.text, seed=seed)
+                   shell.text, seed=seed, system=override)
     return {"ok": True, "seed": seed, "events": len(rows),
             "llm": shell.llm or "ollama", "narration": text}
 

@@ -137,7 +137,9 @@ class LoopVerbs:
                 self.loop.text, self._base_src(), backend,
                 base_path=base_path,
                 scenarios=[init] if init else (),
-                steps=self._scene_steps())
+                steps=self._scene_steps(),
+                system=getattr(self, "sys_prompts",
+                               {}).get("formalize"))
         finally:
             if tmp is not None:
                 import os

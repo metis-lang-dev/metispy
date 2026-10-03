@@ -18,32 +18,12 @@ from typing import Dict, List, Tuple
 from . import llm
 
 # The two halves of the prompt, separately addressable (`narrate
-# system` / `narrate user` in the shell and on the wire — a UI
-# wrapper shows them in its own panes): SYSTEM is the fixed
-# concurrency-narration doctrine, USER_TEMPLATE carries the
-# certified material of one run. PROMPT joins them for the
-# single-prompt endpoints.
-SYSTEM = """\
-You narrate one certified run of a linear-logic story engine. Use
-ONLY the material below — never invent events, sentiments, places or
-motives that are not in it.
-
-The trace is given in beats (its Foata normal form). Events inside
-one beat are causally INDEPENDENT: simultaneous, and their listed
-order carries no information — never imply sequence inside a beat
-(use "meanwhile", "at the same time", or aggregate into one plural
-sentence). Order ACROSS beats is causal: "then"/"because" language is
-licensed there, but only claim a causal link the rule semantics
-supports (the rules and their doc comments are included). You may
-follow one causal thread over several beats, then rewind for a
-parallel thread ("while all this unfolded, ..."). Aggregate repeated
-similar events instead of enumerating them. The final state may
-inform the closing summary. Event bindings name the roles: C acts, D
-is acted on, Witness looks on, L/M are places.
-
-Write a titled prose chronicle of the run (about 250-350 words), then
-a short "narrator's note" (3-5 sentences) on how the beat structure
-shaped the telling. No markdown lists."""
+# system` / `narrate user` in the shell and on the wire): the
+# SYSTEM doctrine lives in loop.prompts (multishot by default,
+# session- and file-overridable per seat — narrators differ in
+# capability); USER_TEMPLATE carries the certified material of one
+# run.
+from .prompts import NARRATE as SYSTEM
 
 USER_TEMPLATE = """\
 == the run, in beats ==
@@ -79,6 +59,9 @@ def user_prompt(rows, final_stage, kappa, rules_src,
 
 
 def narrate(spec, rows, final_stage, kappa, rules_src,
-            seed: int = 1, timeout: int = 600) -> str:
-    m = material(rows, final_stage, kappa, rules_src, seed)
-    return llm.complete(spec, PROMPT.format(**m), timeout=timeout)
+            seed: int = 1, timeout: int = 600,
+            system: str = None) -> str:
+    from .prompts import resolve
+    head, _ = resolve("narrate", system)
+    body = user_prompt(rows, final_stage, kappa, rules_src, seed)
+    return llm.complete(spec, head + "\n\n" + body, timeout=timeout)
