@@ -151,13 +151,23 @@ def _op_llm(shell, arg):
 
 def _op_narrate(shell, arg):
     from metis.kernel.refsample import canonical_events, run_trace
-    from .narrate import narrate
+    from .narrate import SYSTEM, narrate, user_prompt
+    parts = str(arg).split()
+    show = parts.pop(0) if parts and parts[0] in ("system",
+                                                  "user") else None
+    if show == "system":           # the doctrine half, no model call
+        return {"ok": True, "role": "system", "prompt": SYSTEM}
     prog = _scene_prog(shell)
-    seed = int(arg) if arg.strip() else 1
+    seed = int(parts[0]) if parts else 1
     idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
                                     seed)
     events = canonical_events(prog)
     rows = [events[i] for i in idx]
+    if show == "user":             # the certified material, ditto
+        return {"ok": True, "role": "user", "seed": seed,
+                "events": len(rows),
+                "prompt": user_prompt(rows, stage, kappa,
+                                      shell.text, seed=seed)}
     text = narrate(shell.llm or "ollama", rows, stage, kappa,
                    shell.text, seed=seed)
     return {"ok": True, "seed": seed, "events": len(rows),

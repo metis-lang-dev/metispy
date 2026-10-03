@@ -17,7 +17,13 @@ from typing import Dict, List, Tuple
 
 from . import llm
 
-PROMPT = """\
+# The two halves of the prompt, separately addressable (`narrate
+# system` / `narrate user` in the shell and on the wire — a UI
+# wrapper shows them in its own panes): SYSTEM is the fixed
+# concurrency-narration doctrine, USER_TEMPLATE carries the
+# certified material of one run. PROMPT joins them for the
+# single-prompt endpoints.
+SYSTEM = """\
 You narrate one certified run of a linear-logic story engine. Use
 ONLY the material below — never invent events, sentiments, places or
 motives that are not in it.
@@ -37,8 +43,9 @@ is acted on, Witness looks on, L/M are places.
 
 Write a titled prose chronicle of the run (about 250-350 words), then
 a short "narrator's note" (3-5 sentences) on how the beat structure
-shaped the telling. No markdown lists.
+shaped the telling. No markdown lists."""
 
+USER_TEMPLATE = """\
 == the run, in beats ==
 {beats}
 
@@ -48,6 +55,8 @@ shaped the telling. No markdown lists.
 == the rules (with their approved doc comments) ==
 {rules}
 """
+
+PROMPT = SYSTEM + "\n\n" + USER_TEMPLATE
 
 
 def material(rows, final_stage: str,
@@ -60,6 +69,13 @@ def material(rows, final_stage: str,
             "state": "\n".join(_pretty_state(seed, final_stage,
                                              sorted(kappa))),
             "rules": rules_src.strip()}
+
+
+def user_prompt(rows, final_stage, kappa, rules_src,
+                seed: int = 1) -> str:
+    """The material half alone — what `narrate user` shows."""
+    return USER_TEMPLATE.format(
+        **material(rows, final_stage, kappa, rules_src, seed))
 
 
 def narrate(spec, rows, final_stage, kappa, rules_src,

@@ -73,6 +73,8 @@ llm [SPEC]          show/set + VALIDATE the LLM endpoint
                     ~/.config/metis/config.toml)
 narrate [SEED]      the session so far (or a seeded trace) as prose:
                     Foata beats + %% docs through the llm endpoint
+narrate system|user show the doctrine / the certified-material
+                    prompt instead (no model call; the UI halves)
 key                 canonical program_key of the serving catalog
 version             what is running: package, source+git, python,
                     config dot file, llm endpoint
@@ -528,14 +530,22 @@ class Repl(LoopVerbs, Cmd):
         """tell this session's fired events (or 'narrate SEED' for a
         fresh seeded trace) as prose: Foata beats + final state + the
         catalog's %% docs through the configured llm endpoint — the
-        loop's narrate-out boundary"""
-        from metis.loop.narrate import narrate
-        a = arg.strip()
+        loop's narrate-out boundary. `narrate system` prints the
+        doctrine prompt, `narrate user [SEED]` the certified
+        material, neither calls the model."""
+        from metis.loop.narrate import SYSTEM, narrate, user_prompt
+        parts = arg.split()
+        show = parts.pop(0) if parts and parts[0] in ("system",
+                                                      "user") else None
+        if show == "system":
+            self._say(SYSTEM)
+            return
+        a = " ".join(parts)
         if a:
             try:
                 seed = int(a)
             except ValueError:
-                self._say("usage: narrate [SEED]")
+                self._say("usage: narrate [system|user] [SEED]")
                 return
             idx, (stage, kappa) = run_trace(self.prog,
                                             self.case["steps"] or 6,
@@ -550,6 +560,10 @@ class Repl(LoopVerbs, Cmd):
         if not rows:
             self._say("nothing to narrate — step/run first, or "
                       "'narrate SEED' for a sampled trace")
+            return
+        if show == "user":
+            self._say(user_prompt(rows, stage, kappa, self.text,
+                                  seed=seed))
             return
         try:
             text = narrate(self.llm or "ollama", rows, stage, kappa,
