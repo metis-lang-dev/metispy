@@ -108,6 +108,9 @@ class Repl(LoopVerbs, Cmd):
         self.fired = []
         self.loop = LoopState()
         self.fired_rows = []   # (kind, stage, ev) per fired event
+        # runtime/loop diagnostics the instruments spoke this session
+        # (spec 08 step 3) — listed by `findings`
+        self.notes = []
         from metis.loop import config
         self.llm = config.get("llm", "endpoint", "")  # spec (loop.llm)
         self.sys_prompts = {}  # per-seat session overrides (prompts)
@@ -128,7 +131,7 @@ class Repl(LoopVerbs, Cmd):
 
     def _compile(self):
         text = self.path.read_text()
-        ast = parse(text)
+        ast = parse(text, file=str(self.path))
         doc = compile_catalog(resolve_includes(ast, self.path.parent))
         return text, doc, embedded_case(text)
 
@@ -345,7 +348,11 @@ class Repl(LoopVerbs, Cmd):
                                    max_states=STATE_BUDGET,
                                    keep_history=False)
         except StateBudgetExceeded as e:
-            self._say(f"{e} (try: query {atom} {max(1, e.step - 1)})")
+            from metis.kernel.diagnostics import budget_note
+            retry = f"query {atom} {max(1, e.step - 1)}"
+            self.notes.append(budget_note(e, "query",
+                                          f"query {atom} {steps}", retry))
+            self._say(f"{e} (try: {retry})")
             return
         except Exception as e:
             self._say(f"filter failed: {e!r}")
@@ -464,14 +471,54 @@ class Repl(LoopVerbs, Cmd):
                                     parts[1] if len(parts) > 1 else "")
         self._loop_say(self.cmd_formalize(arg))
 
+    def do_findings(self, arg):
+        """findings [N]: the serving world's current diagnostics, one
+        line each (catalog warnings, the last gate/revise report, the
+        session's runtime notes); `findings N` shows one in full —
+        subject, context, hint (spec 08)"""
+        from metis.kernel.diagnostics import render_text
+        from metis.loop.wire import session_findings
+        ds = session_findings(self)
+        a = arg.strip()
+        if a:
+            try:
+                k = int(a)
+            except ValueError:
+                self._say("usage: findings [N]")
+                return
+            if not 1 <= k <= len(ds):
+                self._say(f"no finding {k} (have {len(ds)})")
+                return
+            self._say(render_text(ds[k - 1]).rstrip("\n"))
+            return
+        if not ds:
+            self._say("no findings")
+            return
+        w = len(str(len(ds)))
+        self._say("\n".join(
+            f"{k:>{w}}. {render_text(d).splitlines()[0]}"
+            for k, d in enumerate(ds, 1)))
+
+    def _report_say(self, out):
+        """A gate/revise report: the report fields, then its diagnostics
+        through the SAME text renderer `findings` uses (spec 08 D4) —
+        the wire keeps the JSON objects."""
+        from metis.kernel.diagnostics import render_text
+        out = dict(out)
+        out.pop("diagnostics", None)
+        self._loop_say(out)
+        rep = self.loop.report
+        for d in (getattr(rep, "diagnostics", None) or []):
+            self._say(render_text(d).rstrip("\n"))
+
     def do_gate(self, arg):
         """gate the candidate as a PACK against the served world"""
-        self._loop_say(self.cmd_gate(arg))
+        self._report_say(self.cmd_gate(arg))
 
     def do_revise(self, arg):
         """gate the candidate as a BASE EDIT (accept then replaces
         the world; measure diff shown)"""
-        self._loop_say(self.cmd_revise(arg))
+        self._report_say(self.cmd_revise(arg))
 
     def do_accept(self, arg):
         """admitted candidate joins the served world — re-served
@@ -536,13 +583,25 @@ class Repl(LoopVerbs, Cmd):
         from metis.loop import ollama
         host = ollama.default_host()
         model = ep.arg or ollama.default_model()
+        from metis.kernel.diagnostics import note as dnote
+
+        def llm_note(text, problem):
+            self.notes.append(dnote(
+                "llm-endpoint", text, "llm", (f"llm {shown}",),
+                (("endpoint", str(shown)), ("host", host),
+                 ("problem", problem), ("model", model))))
         try:
             have = ollama.tags(host)
         except OSError as e:
-            return (f"llm: {shown} — ollama UNREACHABLE at {host} "
+            text = (f"llm: {shown} — ollama UNREACHABLE at {host} "
                     f"({getattr(e, 'reason', e)})")
+            llm_note(text, f"ollama unreachable at {host}")
+            return text
         ok = model in have or f"{model}:latest" in have
         note = "" if ok else f" — '{model}' NOT pulled"
+        if not ok:
+            llm_note(f"llm: {shown} @ {host}{note}",
+                     f"model {model} not pulled")
         return (f"llm: {shown} @ {host} "
                 f"(installed: {', '.join(have) or 'none'}){note}")
 
@@ -618,7 +677,7 @@ class Repl(LoopVerbs, Cmd):
             from metis.loop.wire import _scene_prog
             prog = _scene_prog(self)
             self._say(render_run(self.path.stem, self.case, prog,
-                                 pretty=True))
+                                 pretty=True, notes=self.notes))
         except DirectiveError as e:
             self._say(f"cannot trace: {e} — e.g. '#steps 6' in the "
                       "file or as a sent line")

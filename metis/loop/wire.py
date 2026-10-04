@@ -41,6 +41,42 @@ def parse_intent(line: str):
 
 # -- wire-only readouts of the runtime session ----------------------
 
+def _note(shell, d) -> None:
+    """Record a runtime diagnostic on the shell's session notes (spec 08
+    step 3; listed by `findings`)."""
+    shell.__dict__.setdefault("notes", []).append(d)
+
+
+def session_findings(shell) -> list:
+    """The serving world's current diagnostics, in listing order: the
+    served catalog's own (warnings), the last gate/revise report's, and
+    the runtime notes the instruments spoke this session."""
+    out = list(getattr(shell.doc, "diagnostics", []) or [])
+    rep = getattr(getattr(shell, "loop", None), "report", None)
+    if rep is not None:
+        out += list(getattr(rep, "diagnostics", []) or [])
+    return out + list(shell.__dict__.get("notes", []))
+
+
+def _op_findings(shell, arg):
+    """findings [N]: every current diagnostic as its JSON object, or the
+    N-th (1-based) alone."""
+    import json
+    from metis.kernel.diagnostics import to_json
+    ds = session_findings(shell)
+    if arg.strip():
+        try:
+            k = int(arg)
+        except ValueError:
+            return {"ok": False, "error": "usage: findings [N]"}
+        if not 1 <= k <= len(ds):
+            return {"ok": False, "error": f"no finding {k} "
+                                          f"(have {len(ds)})"}
+        ds = [ds[k - 1]]
+    return {"ok": True, "diagnostics": [json.loads(to_json(d))
+                                        for d in ds]}
+
+
 def _scene_prog(shell, init=None):
     """The scene's ground program, cached per (catalog object, init):
     the read-only instruments (map/marginals/trace) re-serve an
@@ -85,8 +121,10 @@ def _op_map(shell, arg):
                                max_states=STATE_BUDGET,
                                keep_history=False)
     except StateBudgetExceeded as e:
-        return {"ok": False, "error":
-                f"{e} (try: map {max(1, e.step - 1)})"}
+        from metis.kernel.diagnostics import budget_note
+        retry = f"map {max(1, e.step - 1)}"
+        _note(shell, budget_note(e, "map", f"map {steps}", retry))
+        return {"ok": False, "error": f"{e} (try: {retry})"}
     m = map_derivation(pr)
 
     def lbl(e):
@@ -109,6 +147,10 @@ def _op_marginals(shell, arg):
                                max_states=STATE_BUDGET,
                                keep_history=False)
     except StateBudgetExceeded as e:
+        from metis.kernel.diagnostics import budget_note
+        n = shell.case["steps"] or 6
+        _note(shell, budget_note(e, "marginals", f"marginals ({n} steps)",
+                                 f"#steps {max(1, e.step - 1)}"))
         return {"ok": False, "error": str(e)}
     marg: Dict[str, float] = {}
     for (_, kappa), p in pr.final.items():
@@ -197,7 +239,8 @@ def _op_help(shell, arg):
 _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "marginals": _op_marginals, "init": _op_init,
              "steps": _op_steps, "seed": _op_seed, "llm": _op_llm,
-             "narrate": _op_narrate, "help": _op_help}
+             "narrate": _op_narrate, "help": _op_help,
+             "findings": _op_findings}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:

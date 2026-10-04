@@ -79,7 +79,7 @@ def admit_text_pack(text: str, llp: str,
 
     # gate 1: parse + roundtrip
     try:
-        cat = parse(llp)
+        cat = parse(llp, file="<candidate>")   # names the slices' source
     except (ParseError, Exception) as e:
         r.findings.append(f"parse: {e}")
         return r
@@ -94,9 +94,15 @@ def admit_text_pack(text: str, llp: str,
 
     # discipline warnings (not gates): provenance + doc carriage
     if cat.provenance is None or cat.provenance[0] != "text":
-        r.warnings.append(
-            'provenance is not `text "<ref>" "<date>"` — the '
-            "formalization contract records its source")
+        from metis.kernel.diagnostics import note
+        text = ('provenance is not `text "<ref>" "<date>"` — the '
+                "formalization contract records its source")
+        r.warnings.append(text)
+        got = ("(no provenance declaration)" if cat.provenance is None
+               else 'provenance {} "{}" "{}".'.format(*cat.provenance))
+        r.diagnostics.append(note(
+            "provenance-shape", text, "provenance", (got,),
+            (("got", got),)))
 
     # gate 2: compile (against the base when given)
     try:
@@ -123,16 +129,22 @@ def admit_text_pack(text: str, llp: str,
     # (across layers, or within one catalog) makes the narration
     # ambiguous even though entry names stay layer-qualified.
     short_counts: Dict[str, int] = {}
+    last_entry = {}
     for ent in merged_cat.entries:
         if type(ent.payload).__name__ in ("ClauseSchema", "LinkSchema"):
             short = ent.name.rsplit("/", 1)[-1]
             short_counts[short] = short_counts.get(short, 0) + 1
+            last_entry[short] = ent      # the newcomer owns the slice
     for short, n in sorted(short_counts.items()):
         if n > 1:
-            r.warnings.append(
-                f"rule name '{short}' appears {n}x across layers — "
-                "trace events and the debug sidecar read short "
-                "names; rename to keep the read-back unambiguous")
+            from metis.kernel.diagnostics import make
+            text = (f"rule name '{short}' appears {n}x across layers — "
+                    "trace events and the debug sidecar read short "
+                    "names; rename to keep the read-back unambiguous")
+            r.warnings.append(text)
+            r.diagnostics.append(make(
+                "rule-name-collision", text, last_entry[short].src,
+                (("rule", short), ("count", str(n)))))
 
     # the approval units
     for d in cat.decls:
@@ -159,6 +171,8 @@ def admit_text_pack(text: str, llp: str,
                                     "bindings)")
             except FactorizeError as e:
                 r.classification = f"counterexample: {e}"
+                if getattr(e, "diagnostic", None) is not None:
+                    r.diagnostics.append(e.diagnostic)
         try:
             marg, sc.support, sc.map_events = _final_marginals(prog,
                                                                steps)
@@ -175,7 +189,11 @@ def admit_text_pack(text: str, llp: str,
             # semantics out of exact reach is a WARNING on the
             # report, never a dead gate: the statics verdicts above
             # stand, the scenario ships without measure numbers.
+            from metis.kernel.diagnostics import budget_note
             r.warnings.append(f"scenario {sc.key[:12]}…: {e}")
+            r.diagnostics.append(budget_note(
+                e, "scenario", f"scenario {sc.key[:12]} ({steps} steps)",
+                f"a scenario of {max(1, e.step - 1)} steps"))
         r.scenarios.append(sc)
     if not scenarios:
         r.classification = "unclassified (no scenario provided)"

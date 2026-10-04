@@ -83,7 +83,8 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     # loop / runtime (step 3)
     "rule-name-collision": ("warning", "loop"),
     "provenance-shape": ("warning", "loop"),
-    "reads-undeclared": ("warning", "runtime"),
+    # a read outside the declared scope RAISES (factorize): an error
+    "reads-undeclared": ("error", "runtime"),
     "state-budget": ("note", "runtime"),
     "horn-nonground": ("error", "runtime"),
     "exact-unreachable": ("note", "runtime"),
@@ -192,6 +193,28 @@ HINTS: Dict[str, str] = {
         "the pack declares",
     "pack-adds-stage":
         "a pack may not add stage {stage}: the stage set is the base's",
+    # loop (the gate cascade) — metispy only: metisc has no loop
+    "rule-name-collision":
+        "rename one of the {count} rules named {rule}: trace events and "
+        "the debug sidecar read SHORT names",
+    "provenance-shape":
+        "declare `provenance text \"<ref>\" \"<date>\".`: the "
+        "formalization contract records its source",
+    # runtime (instruments speaking)
+    "reads-undeclared":
+        "add {atom} to the port's reads scope, or stop reading it in the "
+        "binding: the declared scope is the contract",
+    "state-budget":
+        "lower the horizon (try: {retry}), or this is clique-tree / "
+        "factored territory",
+    "horn-nonground":
+        "guard the unbound variable with a predicate that enumerates it",
+    "exact-unreachable":
+        "the sampled counts stand; for exact numbers lower #steps or "
+        "shrink the scene ({reason})",
+    "llm-endpoint":
+        "{problem}: start the server or `ollama pull {model}`, or pick "
+        "another endpoint with `llm`",
 }
 
 
@@ -252,12 +275,37 @@ def make(code: str, text: str, src: Optional[Source],
                       tuple(data), hint, text)
 
 
+def note(code: str, text: str, decl: str, subject=(), data=()) \
+        -> Diagnostic:
+    """A runtime / loop diagnostic: no declaration owns it, so its slice
+    is named by the INSTRUMENT that spoke (decl = query | map | trace |
+    scenario | llm | factorize | horn | gate) and its subject is the
+    invocation itself."""
+    return make(code, text,
+                Source(Loc("", 0, 0, decl), tuple(subject), ()),
+                tuple(data))
+
+
+def budget_note(e, instrument: str, invocation: str,
+                retry: str) -> Diagnostic:
+    """state-budget from a StateBudgetExceeded: the exact filter
+    retained more states (cumulative, Σ support) than the budget — a
+    structural answer, not a crash."""
+    return note("state-budget", str(e), instrument, (invocation,),
+                (("step", str(e.step)), ("steps", str(e.steps)),
+                 ("retained", str(e.retained)),
+                 ("budget", str(e.budget)), ("retry", retry)))
+
+
 def render_text(d: Diagnostic) -> str:
     """The human rendering (REPL, metisc stderr) — byte-identical with
     metisc Diag.render_text."""
-    f = os.path.basename(d.loc.file) if d.loc.file else "<input>"
-    out = [f"{d.severity} {d.code} @ {f}:{d.loc.line}:{d.loc.col} "
-           f"({d.loc.decl})"]
+    if d.loc.line > 0:
+        f = os.path.basename(d.loc.file) if d.loc.file else "<input>"
+        out = [f"{d.severity} {d.code} @ {f}:{d.loc.line}:{d.loc.col} "
+               f"({d.loc.decl})"]
+    else:       # no source position (runtime notes, header-level)
+        out = [f"{d.severity} {d.code} ({d.loc.decl})"]
     out += [f"  {s}" for s in d.subject]
     out += [f"  | {c}" for c in d.context]
     if d.hint:

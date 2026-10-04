@@ -45,6 +45,15 @@ def fact(pred: str, *args: str) -> HornClause:
     return HornClause(f"{pred}({','.join(args)})", (pred, tuple(args)))
 
 
+class HornNonground(ValueError):
+    """A query left a quantified fact variable unbound (spec §5); the
+    structured diagnostic rides on .diagnostic (spec 08)."""
+
+    def __init__(self, text, diagnostic):
+        super().__init__(text)
+        self.diagnostic = diagnostic
+
+
 class HornDB:
     def __init__(self, clauses):
         self.by_pred: Dict[str, list] = {}
@@ -170,10 +179,15 @@ class HornDB:
                 # a quantified fact var answered the query without
                 # being pinned: enumerable only through its type,
                 # which the Horn world does not carry
-                raise ValueError(
-                    f"non-ground Horn solution for {list(goals)}: a "
-                    f"fact variable is left unbound — guard it with "
-                    f"a predicate that enumerates it")
+                from .diagnostics import note
+                goal_s = ", ".join(f"{p}({','.join(a)})" if a else p
+                                   for p, a in goals)
+                text = (f"non-ground Horn solution for {list(goals)}: a "
+                        f"fact variable is left unbound — guard it with "
+                        f"a predicate that enumerates it")
+                raise HornNonground(text, note(
+                    "horn-nonground", text, "horn", (goal_s,),
+                    (("goals", goal_s),)))
             if key in seen:
                 continue
             seen.add(key)

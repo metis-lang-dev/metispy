@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 
 from .clause import Clause, Link                     # noqa: F401
-from .diagnostics import Diagnostic, Source
+from .diagnostics import Diagnostic, Loc, Source
 from .ground import ground_program
 from .horn import HornClause, HornDB
 from .program import Program
@@ -165,7 +165,6 @@ class Catalog:
                       (("kind", "bwd predicate"), ("name", p)))
         for s in pack.stages:
             if s not in self.stages:
-                from .diagnostics import Loc, Source
                 _emit(f, d, "pack-adds-stage",
                       f"pack adds stage '{s}' — stage set is the kernel's",
                       Source(Loc("", 0, 0, "stages"),

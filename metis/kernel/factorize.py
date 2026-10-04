@@ -48,6 +48,15 @@ class FactorizeError(ValueError):
     pass
 
 
+class ScopeViolation(FactorizeError):
+    """A binding read outside its declared reads scope; the structured
+    diagnostic (reads-undeclared) rides on .diagnostic (spec 08)."""
+
+    def __init__(self, text, diagnostic):
+        super().__init__(text)
+        self.diagnostic = diagnostic
+
+
 class ScopedCounts(dict):
     """The binding's view of a synthesized snapshot: EXACTLY the
     declared read-scope. Present atoms map to 1 (multiset style);
@@ -58,8 +67,11 @@ class ScopedCounts(dict):
 
     def _check(self, k):
         if k not in self.scope:
-            raise FactorizeError(f"binding read outside its declared "
-                                 f"scope: '{k}'")
+            from .diagnostics import note
+            text = f"binding read outside its declared scope: '{k}'"
+            raise ScopeViolation(text, note(
+                "reads-undeclared", text, "factorize",
+                (f"read {k}",), (("atom", k),)))
 
     def __contains__(self, k):
         self._check(k)

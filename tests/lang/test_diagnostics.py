@@ -108,5 +108,31 @@ def test_gate_report_carries_diagnostics():
     finally:
         os.chdir(here)
     assert not r.ok
-    assert [d.code for d in r.diagnostics] == ["containment-produce"]
-    assert r.diagnostics[0].text == r.findings[0]
+    (cp,) = [d for d in r.diagnostics if d.code == "containment-produce"]
+    assert cp.text == r.findings[0] and cp.loc.decl == "note/obs"
+
+
+def test_failing_base_raises_not_listed_as_the_packs():
+    from metis.lang.compiler import LangError
+    here = os.getcwd()
+    os.chdir(CORPUS / "diag")
+    try:
+        with pytest.raises(LangError):
+            diagnose("diag_pack.llp", base="diag_compile.llp")
+    finally:
+        os.chdir(here)
+
+
+def test_diamond_include_is_not_a_cycle(tmp_path):
+    """a includes b and c; both include d: d is reached twice along
+    DIFFERENT paths — not a cycle (metisc resolve_in agrees)."""
+    from metis.lang.compiler import load_llp
+    (tmp_path / "d.llp").write_text("catalog d 1.\ntype t {x}.\n")
+    for n in ("b", "c"):
+        (tmp_path / f"{n}.llp").write_text(
+            f'catalog {n} 1.\ninclude "d.llp".\n')
+    (tmp_path / "a.llp").write_text(
+        'catalog a 1.\nlayers (s).\nstages (go).\n'
+        'include "b.llp".\ninclude "c.llp".\n')
+    assert not any(d.code == "include-cycle"
+                   for d in diagnose(tmp_path / "a.llp"))

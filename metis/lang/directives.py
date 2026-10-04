@@ -129,7 +129,8 @@ def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
     return [f"F {seed} {stage}"] + state_table(kappa)
 
 
-def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:
+def render_run(name: str, case: Dict, prog, pretty: bool = False,
+               notes=None) -> str:
     """The --run replay. Default (wire) mode mirrors metisc
     byte-for-byte on the shared lines (I/T/F: same reference sampler,
     same seeds) — the parity surface, pinned by tests. `pretty=True`
@@ -162,7 +163,15 @@ def render_run(name: str, case: Dict, prog, pretty: bool = False) -> str:
         for q in hits:
             if any(a == q and n > 0 for a, n in kappa):
                 hits[q] += 1
-    exact = _exact_presence(prog, steps, list(hits))
+    exact, why = _exact_presence(prog, steps, list(hits))
+    if why is not None and notes is not None:
+        from metis.kernel.diagnostics import note
+        qs = ", ".join(hits)
+        notes.append(note(
+            "exact-unreachable",
+            f"exact presence out of reach for {qs} at {steps} steps: {why}",
+            "trace", (f"trace ({steps} steps; #query {qs})",),
+            (("queries", qs), ("reason", why))))
     for q, k in hits.items():
         line = f"Q {q} {k}/{seeds}"
         if q in exact:
@@ -179,20 +188,26 @@ def _exact_presence(prog, steps: int, queries: List[str]) -> Dict:
     """Presence marginals from the exact filter, where tractable —
     best-effort, but never silent about WHY: over the state budget
     (or out of memory) every query maps to None and the Q line says
-    so, instead of the annotation just vanishing."""
+    so, instead of the annotation just vanishing. Returns (marginals,
+    reason): reason names why exact numbers are missing, else None."""
     if not queries:
-        return {}
+        return {}, None
     if len(prog.events()) > _EXACT_EVENT_CAP:
-        return {q: None for q in queries}   # say so, don't vanish
+        # say so, don't vanish
+        return ({q: None for q in queries},
+                f"grounding of {len(prog.events())} events exceeds the "
+                f"exact cap of {_EXACT_EVENT_CAP}")
     from metis.kernel import (STATE_BUDGET, ForwardProjection,
                               StateBudgetExceeded)
     try:
         pr = ForwardProjection(prog, steps, max_states=STATE_BUDGET,
                                keep_history=False)
-        return {q: sum(p for (_, k), p in pr.final.items()
-                       if any(a == q and n > 0 for a, n in k))
-                for q in queries}
-    except (StateBudgetExceeded, MemoryError):
-        return {q: None for q in queries}
+        return ({q: sum(p for (_, k), p in pr.final.items()
+                        if any(a == q and n > 0 for a, n in k))
+                 for q in queries}, None)
+    except StateBudgetExceeded as e:
+        return {q: None for q in queries}, f"state budget: {e}"
+    except MemoryError:
+        return {q: None for q in queries}, "out of memory"
     except Exception:
-        return {}
+        return {}, None

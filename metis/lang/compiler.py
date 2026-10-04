@@ -127,11 +127,6 @@ def _check_consts(where, atoms, sigs, types, findings,
                     findings.append(text)
 
 
-def decl_line_(d) -> str:
-    from .ast import decl_line
-    return decl_line(d)
-
-
 class _Vocab:
     """The declarations a diagnostic's CONTEXT may cite: own decls and,
     for a pack, the base source's (spec 08 D0)."""
@@ -183,7 +178,7 @@ class _Vocab:
         what it references (a pred's namespace, its arg types)."""
         ctx = []
         if isinstance(d, ast.PredDecl) and d.namespace in self.spaces:
-            ctx.append(decl_line_(self.spaces[d.namespace]))
+            ctx.append(ast.decl_line(self.spaces[d.namespace]))
         if isinstance(d, (ast.PredDecl, ast.BwdDecl)):
             seen = []
             for ty in d.args:
@@ -191,7 +186,7 @@ class _Vocab:
                     seen.append(ty)
                     ctx.append(f"type {ty}: "
                                f"{len(self.types[ty].consts)} constants")
-        return self._mk(d, decl, (decl_line_(d),), ctx)
+        return self._mk(d, decl, (ast.decl_line(d),), ctx)
 
     def _mk(self, node, decl, subject, ctx):
         from metis.kernel.diagnostics import Loc, Source
@@ -240,7 +235,7 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                 decls.append(d)
                 continue
             path = (Path(base) / d.path).resolve()
-            if str(path) in seen:
+            if str(path) in seen:     # seen = THIS include path only
                 from metis.kernel.diagnostics import Loc, Source, make
                 text = f"include cycle at {d.path}"
                 raise LangError([text], [make(
@@ -249,9 +244,11 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                                f"include/{d.path}"),
                            (ast.decl_line(d),), ()),
                     (("path", d.path),))])
-            seen = seen | {str(path)}
+            # extend `seen` along the recursion path only (metisc
+            # resolve_in): a diamond — one file included by two
+            # siblings — is not a cycle
             inc = parse_file(path)
-            inc = resolve(inc, path.parent, seen)
+            inc = resolve(inc, path.parent, seen | {str(path)})
             decls.extend(inc.decls)
             layers = layers or inc.layers
             stages = stages or inc.stages
