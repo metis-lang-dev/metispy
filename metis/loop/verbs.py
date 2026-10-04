@@ -189,9 +189,15 @@ class LoopVerbs:
         return out
 
     def _gate_out(self, rep):
+        import json
+        from metis.kernel.diagnostics import to_json
         out = {"ok": rep.ok, "classification": rep.classification,
                "findings": rep.findings, "warnings": rep.warnings,
-               "rules": [list(r) for r in rep.rules]}
+               "rules": [list(r) for r in rep.rules],
+               # spec 08: the structured slices behind the findings
+               # (findings stay the text rendering)
+               "diagnostics": [json.loads(to_json(d))
+                               for d in rep.diagnostics]}
         if rep.scenarios:
             out["scenarios"] = [
                 {"key": s.key, "support": s.support,

@@ -379,9 +379,10 @@ def _parse(text: str) -> ast.Catalog:
             p.err(f"expected declaration, got {v!r}")
         if v == "include":
             p.next()
+            at = p._here()
             path = p.expect("string")
             p.punct(".")
-            decls.append(ast.IncludeDecl(path))
+            decls.append(ast.IncludeDecl(path, *at))
         elif v == "extends":
             p.next()
             extends = p.expect("ident")
@@ -424,6 +425,7 @@ def _parse(text: str) -> ast.Catalog:
             decls.append(ast.TypeDecl(tname, tuple(consts), *at))
         elif v == "namespace":
             p.next()
+            at = p._here()
             nname = p.expect("ident")
             p.expect("ident", "produce")
             produce = p.name_list_paren()
@@ -432,7 +434,7 @@ def _parse(text: str) -> ast.Catalog:
                 p.next()
                 consume = p.name_list_paren()
             p.punct(".")
-            decls.append(ast.NamespaceDecl(nname, produce, consume))
+            decls.append(ast.NamespaceDecl(nname, produce, consume, *at))
         elif v == "pred":
             p.next()
             at = p._here()
@@ -451,6 +453,7 @@ def _parse(text: str) -> ast.Catalog:
             decls.append(ast.BwdDecl(bname, args, *at))
         elif v in ("weight", "guard", "input", "output"):
             p.next()
+            at = p._here()
             oname = p.expect("ident")
             args = p.sig_args()
             reads = None
@@ -461,7 +464,7 @@ def _parse(text: str) -> ast.Catalog:
                 p.next()
                 reads = p.reads_block()
             p.punct(".")
-            decls.append(ast.PortDecl(v, oname, args, reads=reads))
+            decls.append(ast.PortDecl(v, oname, args, reads, *at))
         elif v == "stage":
             p.next()
             decls.append(p.stage())

@@ -33,6 +33,9 @@ class Formalization:
     ok: bool = False
     findings: List[str] = field(default_factory=list)   # gate fails
     warnings: List[str] = field(default_factory=list)   # discipline
+    # structured diagnostics (spec 08) of the compile/admission gates:
+    # the slices behind the findings, for every seat to read
+    diagnostics: List = field(default_factory=list)
     rules: List[Tuple[str, str]] = field(
         default_factory=list)           # (name, doc) — approval units
     classification: str = "unclassified"
@@ -100,7 +103,9 @@ def admit_text_pack(text: str, llp: str,
         r.doc = compile_catalog(cat, base=base)
     except (LangError, CatalogError) as e:
         r.findings.extend(getattr(e, "findings", [str(e)]))
+        r.diagnostics.extend(getattr(e, "diagnostics", []))
         return r
+    r.diagnostics.extend(r.doc.diagnostics)
 
     # gate 3: containment admission
     merged_cat = r.doc.catalog
@@ -109,6 +114,7 @@ def admit_text_pack(text: str, llp: str,
             merged_cat = base.catalog.admit(r.doc.catalog)
         except CatalogError as e:
             r.findings.extend(getattr(e, "findings", [str(e)]))
+            r.diagnostics.extend(getattr(e, "diagnostics", []))
             return r
     r.merged = merged_cat
 

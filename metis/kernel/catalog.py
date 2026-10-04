@@ -53,6 +53,12 @@ class Entry:
                                   repr=False)
 
 
+def _layer_order(space) -> List[str]:
+    """A namespace's layers in a deterministic order (sorted — the
+    frozensets keep no declaration order; metisc sorts identically)."""
+    return sorted(space.produce | space.consume)
+
+
 class CatalogError(ValueError):
     def __init__(self, findings: List[str],
                  diagnostics: Optional[List[Diagnostic]] = None):
@@ -75,26 +81,41 @@ class Catalog:
     preds: Dict[str, str]                    # predicate -> namespace
     bwd: FrozenSet[str] = frozenset()
     entries: List[Entry] = field(default_factory=list)
+    # decl slices for catalog-level / admission diagnostics (spec 08),
+    # keyed "pred/x", "bwd/x", "namespace/y", "type/t"; filled by the
+    # compiler, never compared
+    srcs: Dict[str, Source] = field(default_factory=dict, compare=False,
+                                    repr=False)
 
     # -- typecheck -------------------------------------------------------
 
     def typecheck(self, diags: Optional[List[Diagnostic]] = None) \
             -> List[str]:
+        from .typing import _emit
         f: List[str] = []
         for p, space in self.preds.items():
             if space not in self.namespaces:
-                f.append(f"predicate '{p}': unknown namespace '{space}'")
+                _emit(f, diags, "pred-namespace-unknown",
+                      f"predicate '{p}': unknown namespace '{space}'",
+                      self.srcs.get(f"pred/{p}"),
+                      (("pred", p), ("namespace", space)))
             if p in self.bwd:
-                f.append(f"predicate '{p}' declared both resource and "
-                         f"bwd")
+                _emit(f, diags, "pred-resource-and-bwd",
+                      f"predicate '{p}' declared both resource and bwd",
+                      self.srcs.get(f"pred/{p}"), (("pred", p),))
         for space in self.namespaces.values():
-            for layer in space.produce | space.consume:
+            for layer in _layer_order(space):
                 if layer not in self.layers:
-                    f.append(f"namespace '{space.name}': unknown layer "
-                             f"'{layer}'")
+                    _emit(f, diags, "namespace-layer-unknown",
+                          f"namespace '{space.name}': unknown layer "
+                          f"'{layer}'",
+                          self.srcs.get(f"namespace/{space.name}"),
+                          (("namespace", space.name), ("layer", layer)))
         for e in self.entries:
             if e.kind not in KINDS:
-                f.append(f"{e.name}: unknown kind '{e.kind}'")
+                _emit(f, diags, "kind-unknown",
+                      f"{e.name}: unknown kind '{e.kind}'", e.src,
+                      (("kind", e.kind),))
                 continue
             f.extend(check_entry(e, self.layers, self.stages,
                                  self.namespaces, self.preds, self.bwd,
@@ -111,28 +132,47 @@ class Catalog:
     # -- admission (containment by construction) -------------------------
 
     def admit(self, pack: "Catalog") -> "Catalog":
+        from .typing import _emit
         f: List[str] = []
+        d: List[Diagnostic] = []
+        src = pack.srcs.get
         for t in pack.sig.types:
             if t in self.sig.types:
-                f.append(f"pack redeclares type '{t}'")
+                _emit(f, d, "pack-redeclares",
+                      f"pack redeclares type '{t}'", src(f"type/{t}"),
+                      (("kind", "type"), ("name", t)))
         for n in pack.namespaces:
             if n in self.namespaces:
-                f.append(f"pack redeclares namespace '{n}'")
+                _emit(f, d, "pack-redeclares",
+                      f"pack redeclares namespace '{n}'",
+                      src(f"namespace/{n}"),
+                      (("kind", "namespace"), ("name", n)))
         for p, space in pack.preds.items():
             if p in self.preds or p in self.bwd:
-                f.append(f"pack redeclares predicate '{p}'")
+                _emit(f, d, "pack-redeclares",
+                      f"pack redeclares predicate '{p}'", src(f"pred/{p}"),
+                      (("kind", "predicate"), ("name", p)))
             elif space in self.namespaces:
-                f.append(f"pack claims base namespace '{space}' for "
-                         f"'{p}' — packs own only their namespaces")
+                _emit(f, d, "pack-claims-base-namespace",
+                      f"pack claims base namespace '{space}' for '{p}' — "
+                      f"packs own only their namespaces", src(f"pred/{p}"),
+                      (("pred", p), ("namespace", space)))
         for p in pack.bwd:
             if p in self.bwd or p in self.preds:
-                f.append(f"pack redeclares bwd predicate '{p}'")
+                _emit(f, d, "pack-redeclares",
+                      f"pack redeclares bwd predicate '{p}'",
+                      src(f"bwd/{p}"),
+                      (("kind", "bwd predicate"), ("name", p)))
         for s in pack.stages:
             if s not in self.stages:
-                f.append(f"pack adds stage '{s}' — stage set is the "
-                         f"kernel's")
+                from .diagnostics import Loc, Source
+                _emit(f, d, "pack-adds-stage",
+                      f"pack adds stage '{s}' — stage set is the kernel's",
+                      Source(Loc("", 0, 0, "stages"),
+                             (f"stages ({' '.join(pack.stages)}).",), ()),
+                      (("stage", s),))
         if f:
-            raise CatalogError(f)
+            raise CatalogError(f, d)
         merged = Catalog(
             name=f"{self.name}+{pack.name}",
             version=self.version,
@@ -142,7 +182,8 @@ class Catalog:
             namespaces={**self.namespaces, **pack.namespaces},
             preds={**self.preds, **pack.preds},
             bwd=self.bwd | pack.bwd,
-            entries=self.entries + pack.entries)
+            entries=self.entries + pack.entries,
+            srcs={**self.srcs, **pack.srcs})
         return merged.checked()
 
     # -- grounding -------------------------------------------------------

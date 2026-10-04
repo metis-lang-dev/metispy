@@ -71,31 +71,40 @@ def _pattern(a: ast.Atom):
     return (a.pred, tuple(t.value for t in a.terms))
 
 
-def _infer_vars(name, atoms, sigs, findings, conflicts=None) \
-        -> Dict[str, str]:
+def _infer_vars(name, atoms, sigs, findings, emit=None,
+                conflict_code="var-type-conflict") -> Dict[str, str]:
     vars_: Dict[str, str] = {}
     for a in atoms:
         sig = sigs.get(a.pred)
         if sig is None:
             continue          # kernel typecheck reports undeclared preds
         if len(sig) != len(a.terms):
-            findings.append(f"{name}: {a.pred} arity "
-                            f"{len(a.terms)} != declared {len(sig)}")
+            text = (f"{name}: {a.pred} arity "
+                    f"{len(a.terms)} != declared {len(sig)}")
+            if emit is not None:
+                emit("arity-mismatch", text,
+                     (("pred", a.pred), ("expected", str(len(sig))),
+                      ("got", str(len(a.terms)))))
+            else:
+                findings.append(text)
             continue
         for t, ty in zip(a.terms, sig):
             if t.kind != "var":
                 continue
             if vars_.setdefault(t.value, ty) != ty:
-                findings.append(
-                    f"{name}: var {t.value} typed both "
-                    f"{vars_[t.value]} and {ty}")
-                if conflicts is not None:
-                    conflicts.append((findings[-1], t.value,
-                                      vars_[t.value], ty))
+                text = (f"{name}: var {t.value} typed both "
+                        f"{vars_[t.value]} and {ty}")
+                if emit is not None:
+                    emit(conflict_code, text,
+                         (("var", t.value), ("type1", vars_[t.value]),
+                          ("type2", ty)))
+                else:
+                    findings.append(text)
     return vars_
 
 
-def _check_consts(where, atoms, sigs, types, findings) -> None:
+def _check_consts(where, atoms, sigs, types, findings,
+                  emit=None) -> None:
     """A CONSTANT in an argument position must be a member of the type
     that position declares (`eq(red,n7)` with eq(nat,nat): finding).
     Positions whose type is not declared here are skipped — the kernel
@@ -108,8 +117,19 @@ def _check_consts(where, atoms, sigs, types, findings) -> None:
             if t.kind == "var" or ty not in types:
                 continue
             if t.value not in types[ty]:
-                findings.append(f"{where}: constant '{t.value}' is not "
-                                f"a {ty} ({a.pred} argument {k})")
+                text = (f"{where}: constant '{t.value}' is not "
+                        f"a {ty} ({a.pred} argument {k})")
+                if emit is not None:
+                    emit("const-not-in-type", text,
+                         (("const", t.value), ("type", ty),
+                          ("pred", a.pred), ("arg", str(k))))
+                else:
+                    findings.append(text)
+
+
+def decl_line_(d) -> str:
+    from .ast import decl_line
+    return decl_line(d)
 
 
 class _Vocab:
@@ -155,6 +175,26 @@ class _Vocab:
                     seen_ty.append(ty)
                     ctx.append(f"type {ty}: "
                                f"{len(self.types[ty].consts)} constants")
+        return self._mk(node, decl, subject, ctx)
+
+    def decl_source(self, d, decl: str):
+        """The slice of a vocabulary declaration (catalog-level and
+        admission diagnostics): subject = the decl itself; context =
+        what it references (a pred's namespace, its arg types)."""
+        ctx = []
+        if isinstance(d, ast.PredDecl) and d.namespace in self.spaces:
+            ctx.append(decl_line_(self.spaces[d.namespace]))
+        if isinstance(d, (ast.PredDecl, ast.BwdDecl)):
+            seen = []
+            for ty in d.args:
+                if ty not in seen and ty in self.types:
+                    seen.append(ty)
+                    ctx.append(f"type {ty}: "
+                               f"{len(self.types[ty].consts)} constants")
+        return self._mk(d, decl, (decl_line_(d),), ctx)
+
+    def _mk(self, node, decl, subject, ctx):
+        from metis.kernel.diagnostics import Loc, Source
         lay = f"layers ({' '.join(self.layers)})." if self.layers else ""
         return Source(Loc(getattr(node, "file", ""),
                           getattr(node, "line", 0),
@@ -162,7 +202,7 @@ class _Vocab:
                       subject, tuple(ctx), lay)
 
 
-def _singleton_fact_vars(atom, sigs) -> List[str]:
+def _singleton_fact_vars(atom, sigs) -> List[Tuple[str, str, str]]:
     """A var occurring ONCE in a fact is almost always a typo
     (`plus(n0,N,M).` meant N twice): it silently means 'every value'.
     A deliberate don't-care is named Any or Any<Name> (the Ceptre
@@ -176,9 +216,9 @@ def _singleton_fact_vars(atom, sigs) -> List[str]:
         if t.kind != "var" or names.count(v) != 1 or v.startswith("Any"):
             continue
         ty = sig[i] if i < len(sig) else "value"
-        out.append(f"fact {atom}: var {v} occurs once, so the fact holds "
-                   f"for every {ty} — if intended, name it Any{v} (a "
-                   f"leading Any marks a don't-care)")
+        out.append((f"fact {atom}: var {v} occurs once, so the fact "
+                    f"holds for every {ty} — if intended, name it "
+                    f"Any{v} (a leading Any marks a don't-care)", v, ty))
     return out
 
 
@@ -201,7 +241,14 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                 continue
             path = (Path(base) / d.path).resolve()
             if str(path) in seen:
-                raise LangError([f"include cycle at {d.path}"])
+                from metis.kernel.diagnostics import Loc, Source, make
+                text = f"include cycle at {d.path}"
+                raise LangError([text], [make(
+                    "include-cycle", text,
+                    Source(Loc(d.file, d.line, d.col,
+                               f"include/{d.path}"),
+                           (ast.decl_line(d),), ()),
+                    (("path", d.path),))])
             seen = seen | {str(path)}
             inc = parse_file(path)
             inc = resolve(inc, path.parent, seen)
@@ -229,8 +276,14 @@ def compile_catalog(cat: ast.Catalog,
         raise LangError(["unresolved include — call resolve_includes "
                          "(or load_llp, which does)"])
     if cat.extends and base is None:
-        raise LangError([f"catalog extends '{cat.extends}' but no base "
-                         f"catalog was provided"])
+        from metis.kernel.diagnostics import Loc, Source, make
+        text = (f"catalog extends '{cat.extends}' but no base catalog "
+                f"was provided")
+        raise LangError([text], [make(
+            "extends-no-base", text,
+            Source(Loc("", 0, 0, f"catalog/{cat.name}"),
+                   (f"extends {cat.extends}.",), ()),
+            (("base", cat.extends),))])
     prov = Provenance(*cat.provenance) if cat.provenance else \
         Provenance("hand", f"catalog {cat.name}", "unknown")
 
@@ -256,6 +309,20 @@ def compile_catalog(cat: ast.Catalog,
                                       if base is not None
                                       and base.source is not None
                                       else []), layers)
+    from metis.kernel.diagnostics import make as _make
+
+    def emitter(src, prefix=""):
+        """emit(code, text, data): the legacy finding (with metispy's
+        location prefix) + the structured diagnostic (location-free
+        text), appended at the same point so the two stay in step."""
+        def emit(code, text, data):
+            d = _make(code, text, src, data)
+            diags.append(d)
+            if d.severity == "error":
+                findings.append(prefix + text)
+            else:
+                warnings.append(text)
+        return emit
     ports = Ports()
     entries: List[Entry] = []
     horn_entries: List[Entry] = []
@@ -292,82 +359,97 @@ def compile_catalog(cat: ast.Catalog,
     if base is not None:
         known_preds.update(base.catalog.preds)
     all_bwd = set(bwd) | set(inherited_bwd)
+    port_decls = {d.name: d for d in cat.decls
+                  if isinstance(d, ast.PortDecl)}
     for factor, pats in ports.reads.items():
+        pd = port_decls[factor]
+        emit = emitter(vocab.source(
+            pd, f"weight/{factor}", "", ast.decl_line(pd),
+            [a for pat in pats for a in (pat.atom,) + pat.guards]))
         formals = ports.weights[factor]
         bad = [a for a in formals if not a[0].isupper()]
         if bad:
-            findings.append(f"weight {factor}: reads needs var formals,"
-                            f" got {','.join(bad)}")
+            emit("reads-formal-not-var",
+                 f"weight {factor}: reads needs var formals, got "
+                 f"{','.join(bad)}",
+                 (("port", factor), ("formals", ",".join(bad))))
         for pat in pats:
             for a in (pat.atom,) + pat.guards:
                 if a.persist:
-                    findings.append(f"weight {factor}: $ marker in "
-                                    f"reads {a}")
+                    emit("reads-persist-marker",
+                         f"weight {factor}: $ marker in reads {a}",
+                         (("port", factor), ("atom", str(a))))
                 sig = sigs.get(a.pred)
                 if sig is not None and len(sig) != len(a.terms):
-                    findings.append(f"weight {factor}: {a.pred} arity "
-                                    f"{len(a.terms)} != declared "
-                                    f"{len(sig)}")
+                    emit("arity-mismatch",
+                         f"weight {factor}: {a.pred} arity "
+                         f"{len(a.terms)} != declared {len(sig)}",
+                         (("pred", a.pred), ("expected", str(len(sig))),
+                          ("got", str(len(a.terms)))))
             if pat.atom.pred not in known_preds:
-                findings.append(f"weight {factor}: reads atom "
-                                f"'{pat.atom.pred}' is not a declared "
-                                f"resource predicate")
+                emit("reads-not-resource",
+                     f"weight {factor}: reads atom '{pat.atom.pred}' is "
+                     f"not a declared resource predicate",
+                     (("port", factor), ("pred", pat.atom.pred)))
             for g in pat.guards:
                 if g.pred not in all_bwd:
-                    findings.append(f"weight {factor}: reads guard "
-                                    f"'{g.pred}' is not declared bwd")
+                    emit("reads-guard-not-bwd",
+                         f"weight {factor}: reads guard '{g.pred}' is "
+                         f"not declared bwd",
+                         (("port", factor), ("pred", g.pred)))
             bound = set(formals) | {t.value for g in pat.guards
                                     for t in g.terms if t.kind == "var"}
             for t in pat.atom.terms:
                 if t.kind == "var" and t.value not in bound:
-                    findings.append(f"weight {factor}: reads var "
-                                    f"{t.value} unbound (not a formal, "
-                                    f"not guard-enumerated)")
+                    emit("reads-var-unbound",
+                         f"weight {factor}: reads var {t.value} unbound "
+                         f"(not a formal, not guard-enumerated)",
+                         (("port", factor), ("var", t.value)))
 
-    def horn_entry(payload, doc):
+    def horn_entry(payload, doc, src=None):
         horn_entries.append(Entry(
             name=f"horn/{payload.name}", layer=cat.layers[0]
             if cat.layers else "horn", kind="horn",
             comment=doc or "Horn clause.", provenance=prov,
-            payload=payload))
+            payload=payload, src=src))
 
     for d in cat.decls:
         if isinstance(d, ast.Fact):
+            fsrc = vocab.source(d, f"fact/{d.atom.pred}", "",
+                                ast.decl_line(d), [d.atom])
+            emit = emitter(fsrc)
             if d.atom.pred not in bwd:
-                findings.append(f"fact {d.atom}: predicate not "
-                                f"declared bwd")
+                emit("fact-not-bwd",
+                     f"fact {d.atom}: predicate not declared bwd",
+                     (("pred", d.atom.pred),))
                 continue
             # a var in a fact is universally quantified over the type
             # its position declares (`plus(n0,N,N).` = Π N:nat) — the
             # Ceptre/Twelf reading of a bodiless clause; typed like a
             # rule var, so one var at two differently-typed positions
             # is a finding
-            conflicts: List = []
             _infer_vars(f"fact {d.atom}", [d.atom], sigs, findings,
-                        conflicts)
-            if conflicts:
-                from metis.kernel.diagnostics import make
-                src = vocab.source(d, f"fact/{d.atom.pred}", "",
-                                   ast.decl_line(d), [d.atom])
-                for text, v, t1, t2 in conflicts:
-                    diags.append(make("fact-var-conflict", text, src,
-                                      (("var", v), ("type1", t1),
-                                       ("type2", t2))))
+                        emit, "fact-var-conflict")
             _check_consts(f"fact {d.atom}", [d.atom], sigs,
-                          {**base_types, **types}, findings)
-            warnings.extend(_singleton_fact_vars(d.atom, sigs))
+                          {**base_types, **types}, findings, emit)
+            for text, v, ty in _singleton_fact_vars(d.atom, sigs):
+                emit("fact-var-singleton", text,
+                     (("var", v), ("type", ty)))
             vs = tuple(sorted({t.value for t in d.atom.terms
                                if t.kind == "var"}))
             horn_entry(HornClause(str(d.atom), _pattern(d.atom),
-                                  vars=vs), "")
+                                  vars=vs), "", fsrc)
         elif isinstance(d, ast.HornRule):
+            hsrc = vocab.source(d, f"horn/{d.head.pred}", "",
+                                ast.decl_line(d), (d.head,) + d.body)
             _check_consts(f"horn {d.head}", (d.head,) + d.body, sigs,
-                          {**base_types, **types}, findings)
+                          {**base_types, **types}, findings,
+                          emitter(hsrc))
             vs = tuple(sorted({t.value for a in (d.head,) + d.body
                                for t in a.terms if t.kind == "var"}))
             horn_entry(HornClause(str(d.head), _pattern(d.head),
                                   tuple(_pattern(b) for b in d.body),
-                                  vars=vs), "")
+                                  vars=vs), "", hsrc)
         elif isinstance(d, ast.Stage):
             for r in d.rules:
                 rloc = f"line {r.line}: " if r.line else ""
@@ -376,21 +458,20 @@ def compile_catalog(cat: ast.Catalog,
                 rsrc = vocab.source(r, f"{d.name}/{r.name}", r.doc,
                                     ast.rule_line(r),
                                     [a for a in atoms if a.pred != "one"])
+                emit = emitter(rsrc, rloc)
                 if not r.doc.strip():
-                    from metis.kernel.diagnostics import make
-                    text = f"{r.name}: missing %% doc (mandatory)"
-                    findings.append(f"{rloc}{text}")
-                    diags.append(make("doc-missing", text, rsrc,
-                                      (("rule", r.name),)))
-                vars_ = _infer_vars(f"{rloc}{r.name}", atoms, sigs,
-                                    findings)
-                _check_consts(f"{rloc}{r.name}", atoms, sigs,
-                              {**base_types, **types}, findings)
+                    emit("doc-missing",
+                         f"{r.name}: missing %% doc (mandatory)",
+                         (("rule", r.name),))
+                vars_ = _infer_vars(r.name, atoms, sigs, findings, emit)
+                _check_consts(r.name, atoms, sigs,
+                              {**base_types, **types}, findings, emit)
                 for a in atoms:
                     for t in a.terms:
                         if t.kind == "var" and t.value not in vars_:
-                            findings.append(f"{rloc}{r.name}: var "
-                                            f"{t.value} untypable")
+                            emit("var-untypable",
+                                 f"{r.name}: var {t.value} untypable",
+                                 (("var", t.value),))
                 consume, persist, guards = [], [], []
                 for a in r.body:
                     if isinstance(a, ast.Distinct):
@@ -406,23 +487,25 @@ def compile_catalog(cat: ast.Catalog,
                     if r.weight.factor is None:
                         weight = r.weight.value
                     else:
-                        if r.weight.factor not in ports.weights:
-                            findings.append(
-                                f"{rloc}{r.name}: weight port "
-                                f"'{r.weight.factor}' not declared")
+                        wf = r.weight.factor
+                        if wf not in ports.weights:
+                            emit("weight-port-undeclared",
+                                 f"{r.name}: weight port '{wf}' not "
+                                 f"declared", (("port", wf),))
                         for t in r.weight.args:
                             if t.kind == "var" and t.value not in vars_:
-                                findings.append(
-                                    f"{rloc}{r.name}: weight arg "
-                                    f"{t.value} is not a rule var")
-                        if r.weight.factor in ports.reads and \
-                                len(r.weight.args) != \
-                                len(ports.weights[r.weight.factor]):
-                            findings.append(
-                                f"{rloc}{r.name}: weight "
-                                f"{r.weight.factor} takes "
-                                f"{len(ports.weights[r.weight.factor])}"
-                                f" args, got {len(r.weight.args)}")
+                                emit("weight-arg-not-var",
+                                     f"{r.name}: weight arg {t.value} is "
+                                     f"not a rule var",
+                                     (("port", wf), ("arg", t.value)))
+                        if wf in ports.reads and len(r.weight.args) != \
+                                len(ports.weights[wf]):
+                            n = len(ports.weights[wf])
+                            emit("arity-mismatch",
+                                 f"{r.name}: weight {wf} takes {n} args, "
+                                 f"got {len(r.weight.args)}",
+                                 (("pred", wf), ("expected", str(n)),
+                                  ("got", str(len(r.weight.args)))))
                         ports.weight_refs[r.name] = WeightRef(
                             r.weight.factor,
                             tuple(t.value for t in r.weight.args),
@@ -445,16 +528,13 @@ def compile_catalog(cat: ast.Catalog,
             atoms = list(d.pre_atoms) + list(d.post_atoms)
             lsrc = vocab.source(d, f"qui/{d.name}", d.doc,
                                 ast.decl_line(d), atoms)
+            emit = emitter(lsrc, dloc)
             if not d.doc.strip():
-                from metis.kernel.diagnostics import make
-                text = f"{d.name}: missing %% doc (mandatory)"
-                findings.append(f"{dloc}{text}")
-                diags.append(make("doc-missing", text, lsrc,
-                                  (("rule", d.name),)))
-            vars_ = _infer_vars(f"{dloc}{d.name}", atoms, sigs,
-                                findings)
-            _check_consts(f"{dloc}{d.name}", atoms, sigs,
-                          {**base_types, **types}, findings)
+                emit("doc-missing", f"{d.name}: missing %% doc (mandatory)",
+                     (("rule", d.name),))
+            vars_ = _infer_vars(d.name, atoms, sigs, findings, emit)
+            _check_consts(d.name, atoms, sigs, {**base_types, **types},
+                          findings, emit)
             # bwd atoms in the pre are Horn GUARDS, exactly as on
             # clauses (the grounding machinery already supports them)
             # — what makes chain-end links liftable (lastidx(I));
@@ -470,8 +550,9 @@ def compile_catalog(cat: ast.Catalog,
                     lconsume.append(_pattern(a))
             for a in d.post_atoms:
                 if a.pred in bwd or a.pred in inherited_bwd:
-                    findings.append(f"{dloc}{d.name}: bwd '{a.pred}' "
-                                    f"in link post")
+                    emit("link-post-bwd",
+                         f"{d.name}: bwd '{a.pred}' in link post",
+                         (("pred", a.pred),))
             entries.append(Entry(
                 name=f"{d.layer}/{d.name}", layer=d.layer, kind="link",
                 comment=d.doc, provenance=prov, src=lsrc,
@@ -488,6 +569,13 @@ def compile_catalog(cat: ast.Catalog,
                    sig=Signature(types), namespaces=namespaces,
                    preds=preds, bwd=frozenset(bwd),
                    entries=entries + horn_entries)
+    for d in cat.decls:                 # decl slices (spec 08)
+        key = {ast.PredDecl: "pred", ast.BwdDecl: "bwd",
+               ast.NamespaceDecl: "namespace",
+               ast.TypeDecl: "type"}.get(type(d))
+        if key is not None:
+            kcat.srcs.setdefault(f"{key}/{d.name}",
+                                 vocab.decl_source(d, f"{key}/{d.name}"))
     if cat.extends is None:
         kdiags: List = []
         f = kcat.typecheck(kdiags)
@@ -497,14 +585,25 @@ def compile_catalog(cat: ast.Catalog,
                       diagnostics=diags)
 
 
-def diagnose(path, base: Optional[CatalogDoc] = None) -> List:
+def diagnose(path, base=None) -> List:
     """Every structured diagnostic (spec 08) of compiling one file —
-    the mirror of `metisc --diagnostics`: a failing compile's errors
-    (LangError / CatalogError) or a clean compile's diagnostics."""
+    the mirror of `metisc --diagnostics FILE [--base BASE]`: a failing
+    compile's errors (LangError / CatalogError) or a clean compile's
+    diagnostics; with a base (a path or a CatalogDoc) the file is
+    compiled as a pack AND admitted, so admission diagnostics join."""
+    if base is not None and not isinstance(base, CatalogDoc):
+        base = load_llp(base)
     try:
-        return list(load_llp(path, base=base).diagnostics)
+        doc = load_llp(path, base=base)
     except (LangError, CatalogError) as e:
         return list(e.diagnostics)
+    out = list(doc.diagnostics)
+    if base is not None:
+        try:
+            base.catalog.admit(doc.catalog)
+        except CatalogError as e:
+            out += e.diagnostics
+    return out
 
 
 def load_llp(path, base: Optional[CatalogDoc] = None) -> CatalogDoc:

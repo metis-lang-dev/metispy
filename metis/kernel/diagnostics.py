@@ -31,28 +31,75 @@ from typing import Dict, Optional, Tuple
 
 CONTEXT_CAP = 12
 
-# code -> (severity, migrated). `migrated` marks codes emitted as
-# diagnostics end to end; the parity gate requires a fixture row for
-# every migrated code. (Step-1 scaffolding: removed when step 2 lands.)
-REGISTRY: Dict[str, Tuple[str, bool]] = {
-    "doc-missing": ("error", True),
-    "containment-produce": ("error", True),
-    "containment-consume": ("error", True),
-    "fact-var-conflict": ("error", True),
-    "fact-not-bwd": ("error", False),
-    "var-untypable": ("error", False),
-    "fact-var-singleton": ("warning", False),
-    "const-not-in-type": ("error", False),
-    "rule-name-collision": ("warning", False),
-    "provenance-shape": ("warning", False),
-    "reads-undeclared": ("warning", False),
-    "state-budget": ("note", False),
-    "horn-nonground": ("error", False),
-    "exact-unreachable": ("note", False),
-    "llm-endpoint": ("note", False),
+# code -> (severity, phase). phase says WHERE a code fires:
+#   compile | kernel | admission  — from a .llp; the D2 gate requires a
+#                                   fixture row for every one of these
+#   loop | runtime                — the gate cascade / instruments
+#                                   (fixtures with the REPL surface)
+#   internal                      — defensive kernel invariants
+#                                   unreachable from source (hand-built
+#                                   catalogs only)
+REGISTRY: Dict[str, Tuple[str, str]] = {
+    # compile
+    "doc-missing": ("error", "compile"),
+    # fact-var-conflict / var-type-conflict: SIBLINGS — the same
+    # inexactness on facts vs rules/links. Kept apart on purpose (codes
+    # are API; step 1 froze fact-var-conflict in goldens): don't unify.
+    "fact-var-conflict": ("error", "compile"),
+    "var-type-conflict": ("error", "compile"),
+    "var-untypable": ("error", "compile"),
+    "arity-mismatch": ("error", "compile"),
+    "fact-not-bwd": ("error", "compile"),
+    "link-post-bwd": ("error", "compile"),
+    "const-not-in-type": ("error", "compile"),
+    "fact-var-singleton": ("warning", "compile"),
+    "weight-port-undeclared": ("error", "compile"),
+    "weight-arg-not-var": ("error", "compile"),
+    "reads-formal-not-var": ("error", "compile"),
+    "reads-persist-marker": ("error", "compile"),
+    "reads-not-resource": ("error", "compile"),
+    "reads-guard-not-bwd": ("error", "compile"),
+    "reads-var-unbound": ("error", "compile"),
+    "include-cycle": ("error", "compile"),
+    "extends-no-base": ("error", "compile"),
+    # kernel
+    "containment-produce": ("error", "kernel"),
+    "containment-consume": ("error", "kernel"),
+    "pred-undeclared": ("error", "kernel"),
+    "bwd-as-resource": ("error", "kernel"),
+    "layer-unknown": ("error", "kernel"),
+    "var-type-unknown": ("error", "kernel"),
+    "stage-unknown": ("error", "kernel"),
+    "link-stage-unknown": ("error", "kernel"),
+    "horn-head-not-bwd": ("error", "kernel"),
+    "horn-body-not-bwd": ("error", "kernel"),
+    "pred-namespace-unknown": ("error", "kernel"),
+    "pred-resource-and-bwd": ("error", "kernel"),
+    "namespace-layer-unknown": ("error", "kernel"),
+    # admission
+    "pack-redeclares": ("error", "admission"),
+    "pack-claims-base-namespace": ("error", "admission"),
+    "pack-adds-stage": ("error", "admission"),
+    # loop / runtime (step 3)
+    "rule-name-collision": ("warning", "loop"),
+    "provenance-shape": ("warning", "loop"),
+    "reads-undeclared": ("warning", "runtime"),
+    "state-budget": ("note", "runtime"),
+    "horn-nonground": ("error", "runtime"),
+    "exact-unreachable": ("note", "runtime"),
+    "llm-endpoint": ("note", "runtime"),
+    # internal (defensive invariants, unreachable from source)
+    "guard-not-bwd": ("error", "internal"),
+    "guard-var-undeclared": ("error", "internal"),
+    "comment-missing": ("error", "internal"),
+    "var-untyped": ("error", "internal"),
+    "kind-unknown": ("error", "internal"),
 }
 
-# code -> hint template over the code's data keys
+GATED_PHASES = ("compile", "kernel", "admission")
+
+# code -> hint template over the code's data keys (data key order is
+# fixed per code at the emission site)
 HINTS: Dict[str, str] = {
     "doc-missing":
         "add a %% doc line above {rule}: the doc is the approved text "
@@ -67,6 +114,84 @@ HINTS: Dict[str, str] = {
     "fact-var-conflict":
         "{var} sits at a {type1} and a {type2} position: rename one "
         "occurrence, or fix the predicate signature",
+    "var-type-conflict":
+        "{var} sits at a {type1} and a {type2} position: rename one "
+        "occurrence, or fix the predicate signature",
+    "var-untypable":
+        "{var} occurs in no typed position: use it in an atom whose "
+        "signature types it, or drop it",
+    "arity-mismatch":
+        "{pred} takes {expected} argument(s), got {got}: match the "
+        "declared signature",
+    "fact-not-bwd":
+        "a fact is Horn knowledge: declare {pred} with `bwd`, or make it "
+        "an #init resource",
+    "link-post-bwd":
+        "a link may not produce the Horn atom {pred}: bwd predicates are "
+        "knowledge, not state",
+    "const-not-in-type":
+        "'{const}' is not a constant of {type}: add it to the type, or "
+        "fix argument {arg} of {pred}",
+    "fact-var-singleton":
+        "if intended, name it Any{var} (a leading Any marks a "
+        "don't-care); otherwise repeat the variable where it belongs",
+    "weight-port-undeclared":
+        "declare the port (`weight {port}(...) reads {{...}}.`), or drop "
+        "the @w reference",
+    "weight-arg-not-var":
+        "pass rule variables to {port}: {arg} is not a variable of this "
+        "rule",
+    "reads-formal-not-var":
+        "the formals of weight {port} must be variables (got {formals})",
+    "reads-persist-marker":
+        "drop the $ in {atom}: a reads scope is already read-only",
+    "reads-not-resource":
+        "a reads scope names resource predicates only: declare {pred} "
+        "with `pred`, or drop it from the scope of {port}",
+    "reads-guard-not-bwd":
+        "a reads guard must be a bwd predicate: declare {pred} with "
+        "`bwd`",
+    "reads-var-unbound":
+        "bind {var}: make it a formal of {port}, or enumerate it with a "
+        "guard",
+    "include-cycle":
+        "break the include cycle at {path}",
+    "extends-no-base":
+        "compile this pack against its base catalog {base}",
+    "pred-undeclared":
+        "declare {pred}: `pred {pred}(...) : <namespace>.`",
+    "bwd-as-resource":
+        "{pred} is a bwd predicate: use it as a guard premise only, "
+        "never as a resource ({mode})",
+    "layer-unknown":
+        "add {layer} to the catalog's layers (...), or tag the rule with "
+        "a declared layer",
+    "var-type-unknown":
+        "declare type {type}, or fix the signature that names it",
+    "stage-unknown":
+        "add {stage} to stages (...)",
+    "link-stage-unknown":
+        "declare both link stages ({pre}, {post}) in stages (...)",
+    "horn-head-not-bwd":
+        "a Horn rule may only derive bwd predicates: declare {pred} with "
+        "`bwd`",
+    "horn-body-not-bwd":
+        "the Horn world is closed: {pred} must be a bwd predicate",
+    "pred-namespace-unknown":
+        "declare namespace {namespace}, or move {pred} into a declared "
+        "one",
+    "pred-resource-and-bwd":
+        "{pred} is declared both `pred` and `bwd`: keep one",
+    "namespace-layer-unknown":
+        "add {layer} to layers (...), or drop it from namespace "
+        "{namespace}",
+    "pack-redeclares":
+        "a pack may only add: rename the pack's {kind} {name}",
+    "pack-claims-base-namespace":
+        "a pack owns only its own namespaces: put {pred} in a namespace "
+        "the pack declares",
+    "pack-adds-stage":
+        "a pack may not add stage {stage}: the stage set is the base's",
 }
 
 
@@ -104,7 +229,8 @@ class DiagnosticDefect(ValueError):
     context over the cap) — a bug in the emitter, never silent."""
 
 
-_LAYER_CODES = {"containment-produce", "containment-consume"}
+_LAYER_CODES = {"containment-produce", "containment-consume",
+                "layer-unknown", "namespace-layer-unknown"}
 
 
 def make(code: str, text: str, src: Optional[Source],

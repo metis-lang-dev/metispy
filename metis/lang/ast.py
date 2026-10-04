@@ -103,6 +103,9 @@ class NamespaceDecl:
     name: str
     produce: Tuple[str, ...]
     consume: Optional[Tuple[str, ...]] = None    # None -> same as produce
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -147,11 +150,17 @@ class PortDecl:
     # possibly empty — is the CONTRACT: the binding reads exactly these
     # atoms. The factored evaluator admits only declared ports.
     reads: Optional[Tuple[ReadPattern, ...]] = None
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
 class IncludeDecl:
     path: str
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
