@@ -202,6 +202,50 @@ def _head(atoms) -> str:
     return _atoms(atoms)
 
 
+def rule_line(r: Rule) -> str:
+    """One clause, canonical, no doc and no indent (the pretty() body
+    of a stage line; the diagnostic SUBJECT of a rule)."""
+    w = f"  {r.weight}" if r.weight else ""
+    return (f"{r.name} [{r.layer}] : {_atoms(r.body)} -o "
+            f"{_head(r.head)}{w}.")
+
+
+def decl_line(d) -> str:
+    """One top-level declaration on one canonical line, no doc (stages
+    are multi-line: use rule_line per clause)."""
+    if isinstance(d, IncludeDecl):
+        return f'include "{d.path}".'
+    if isinstance(d, TypeDecl):
+        return f"type {d.name} {{{' '.join(d.consts)}}}."
+    if isinstance(d, NamespaceDecl):
+        line = f"namespace {d.name} produce ({' '.join(d.produce)})"
+        if d.consume is not None:
+            line += f" consume ({' '.join(d.consume)})"
+        return line + "."
+    if isinstance(d, PredDecl):
+        a = "" if not d.args else f"({','.join(d.args)})"
+        return f"pred {d.name}{a} : {d.namespace}."
+    if isinstance(d, BwdDecl):
+        a = "" if not d.args else f"({','.join(d.args)})"
+        return f"bwd {d.name}{a}."
+    if isinstance(d, PortDecl):
+        a = "" if not d.args else f"({','.join(d.args)})"
+        r = "" if d.reads is None else \
+            f" reads {{{', '.join(map(str, d.reads))}}}"
+        return f"{d.kind} {d.name}{a}{r}."
+    if isinstance(d, Fact):
+        return f"{d.atom}."
+    if isinstance(d, HornRule):
+        return f"{d.head} :- {', '.join(str(b) for b in d.body)}."
+    if isinstance(d, LinkDecl):
+        pre = d.pre if not d.pre_atoms else \
+            f"{d.pre} * {_atoms(d.pre_atoms)}"
+        post = d.post if not d.post_atoms else \
+            f"{d.post} * {_atoms(d.post_atoms)}"
+        return f"qui {d.name} [{d.layer}] : {pre} -o {post}."
+    raise TypeError(f"decl_line: {type(d).__name__}")
+
+
 def pretty(cat: Catalog) -> str:
     out = [f"catalog {cat.name} {cat.version}."]
     if cat.extends:
@@ -214,43 +258,13 @@ def pretty(cat: Catalog) -> str:
     if cat.stages:
         out.append(f"stages ({' '.join(cat.stages)}).")
     for d in cat.decls:
-        if isinstance(d, IncludeDecl):
-            out.append(f'include "{d.path}".')
-        elif isinstance(d, TypeDecl):
-            out.append(f"type {d.name} {{{' '.join(d.consts)}}}.")
-        elif isinstance(d, NamespaceDecl):
-            line = f"namespace {d.name} produce ({' '.join(d.produce)})"
-            if d.consume is not None:
-                line += f" consume ({' '.join(d.consume)})"
-            out.append(line + ".")
-        elif isinstance(d, PredDecl):
-            a = "" if not d.args else f"({','.join(d.args)})"
-            out.append(f"pred {d.name}{a} : {d.namespace}.")
-        elif isinstance(d, BwdDecl):
-            a = "" if not d.args else f"({','.join(d.args)})"
-            out.append(f"bwd {d.name}{a}.")
-        elif isinstance(d, PortDecl):
-            a = "" if not d.args else f"({','.join(d.args)})"
-            r = "" if d.reads is None else \
-                f" reads {{{', '.join(map(str, d.reads))}}}"
-            out.append(f"{d.kind} {d.name}{a}{r}.")
-        elif isinstance(d, Fact):
-            out.append(f"{d.atom}.")
-        elif isinstance(d, HornRule):
-            out.append(f"{d.head} :- "
-                       f"{', '.join(str(b) for b in d.body)}.")
-        elif isinstance(d, LinkDecl):
-            pre = d.pre if not d.pre_atoms else \
-                f"{d.pre} * {_atoms(d.pre_atoms)}"
-            post = d.post if not d.post_atoms else \
-                f"{d.post} * {_atoms(d.post_atoms)}"
-            out.append(f"{_doc(d.doc)}qui {d.name} [{d.layer}] : "
-                       f"{pre} -o {post}.")
-        elif isinstance(d, Stage):
+        if isinstance(d, Stage):
             out.append(f"stage {d.name} {{")
             for r in d.rules:
-                w = f"  {r.weight}" if r.weight else ""
-                out.append(f"{_doc(r.doc)}  {r.name} [{r.layer}] : "
-                           f"{_atoms(r.body)} -o {_head(r.head)}{w}.")
+                out.append(f"{_doc(r.doc)}  {rule_line(r)}")
             out.append("}")
+        elif isinstance(d, LinkDecl):
+            out.append(f"{_doc(d.doc)}{decl_line(d)}")
+        else:
+            out.append(decl_line(d))
     return "\n".join(out) + "\n"

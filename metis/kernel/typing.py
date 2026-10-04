@@ -32,7 +32,7 @@ def ns(name: str, produce, consume=None) -> Namespace:
 
 
 def _check_patterns(entry, schema, patterns, mode, preds, namespaces,
-                    bwd, findings):
+                    bwd, findings, diags=None):
     for pred, args in patterns:
         if pred in bwd:
             findings.append(f"{entry.name}: bwd predicate '{pred}' used "
@@ -43,14 +43,18 @@ def _check_patterns(entry, schema, patterns, mode, preds, namespaces,
                             f"'{pred}' ({mode})")
             continue
         space = namespaces[preds[pred]]
-        if mode == "produce" and entry.layer not in space.produce:
-            findings.append(
-                f"{entry.name}: layer '{entry.layer}' may not produce "
-                f"'{pred}' (namespace '{space.name}')")
-        if mode == "consume" and entry.layer not in space.consume:
-            findings.append(
-                f"{entry.name}: layer '{entry.layer}' may not consume "
-                f"'{pred}' (namespace '{space.name}')")
+        for m in ("produce", "consume"):
+            allowed = space.produce if m == "produce" else space.consume
+            if mode == m and entry.layer not in allowed:
+                text = (f"{entry.name}: layer '{entry.layer}' may not "
+                        f"{m} '{pred}' (namespace '{space.name}')")
+                findings.append(text)
+                if diags is not None:
+                    from .diagnostics import make
+                    diags.append(make(
+                        f"containment-{m}", text, entry.src,
+                        (("layer", entry.layer), ("pred", pred),
+                         ("namespace", space.name))))
         for a in args:
             if a in schema.vars and schema.vars[a] is None:
                 findings.append(f"{entry.name}: untyped var '{a}'")
@@ -58,7 +62,7 @@ def _check_patterns(entry, schema, patterns, mode, preds, namespaces,
 
 def check_entry(entry, layers, stages, namespaces: Dict[str, Namespace],
                 preds: Dict[str, str], bwd: FrozenSet[str],
-                types: Dict[str, list]) -> List[str]:
+                types: Dict[str, list], diags=None) -> List[str]:
     """Findings for one catalog entry (empty = well-typed)."""
     f: List[str] = []
     if not entry.comment.strip():
@@ -92,9 +96,9 @@ def check_entry(entry, layers, stages, namespaces: Dict[str, Namespace],
         f.append(f"{entry.name}: link stage(s) '{sc.pre}'->'{sc.post}' "
                  f"unknown")
     _check_patterns(entry, sc, sc.consume, "consume", preds, namespaces,
-                    bwd, f)
+                    bwd, f, diags)
     _check_patterns(entry, sc, sc.produce, "produce", preds, namespaces,
-                    bwd, f)
+                    bwd, f, diags)
     _check_patterns(entry, sc, sc.persist, "read", preds, namespaces,
                     bwd, f)
     for pred, args in sc.guards:

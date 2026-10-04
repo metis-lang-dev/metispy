@@ -25,10 +25,13 @@ from .parser import parse_file
 
 
 class LangError(ValueError):
-    def __init__(self, findings):
+    def __init__(self, findings, diagnostics=None):
         super().__init__("catalog compilation failed:\n  "
                          + "\n  ".join(findings))
         self.findings = findings
+        # the migrated structured findings (spec 08); the strings above
+        # stay the text rendering
+        self.diagnostics = list(diagnostics or [])
 
 
 @dataclass(frozen=True)
@@ -59,13 +62,17 @@ class CatalogDoc:
     source: Optional[ast.Catalog] = None
     # advisory, never gating (e.g. a singleton var in a Horn fact)
     warnings: List[str] = field(default_factory=list)
+    # structured findings of a SUCCESSFUL compile (spec 08; warnings and
+    # notes once migrated — errors travel on LangError/CatalogError)
+    diagnostics: List = field(default_factory=list)
 
 
 def _pattern(a: ast.Atom):
     return (a.pred, tuple(t.value for t in a.terms))
 
 
-def _infer_vars(name, atoms, sigs, findings) -> Dict[str, str]:
+def _infer_vars(name, atoms, sigs, findings, conflicts=None) \
+        -> Dict[str, str]:
     vars_: Dict[str, str] = {}
     for a in atoms:
         sig = sigs.get(a.pred)
@@ -82,6 +89,9 @@ def _infer_vars(name, atoms, sigs, findings) -> Dict[str, str]:
                 findings.append(
                     f"{name}: var {t.value} typed both "
                     f"{vars_[t.value]} and {ty}")
+                if conflicts is not None:
+                    conflicts.append((findings[-1], t.value,
+                                      vars_[t.value], ty))
     return vars_
 
 
@@ -100,6 +110,56 @@ def _check_consts(where, atoms, sigs, types, findings) -> None:
             if t.value not in types[ty]:
                 findings.append(f"{where}: constant '{t.value}' is not "
                                 f"a {ty} ({a.pred} argument {k})")
+
+
+class _Vocab:
+    """The declarations a diagnostic's CONTEXT may cite: own decls and,
+    for a pack, the base source's (spec 08 D0)."""
+
+    def __init__(self, decls, layers):
+        self.preds, self.spaces, self.types = {}, {}, {}
+        for d in decls:
+            if isinstance(d, (ast.PredDecl, ast.BwdDecl)):
+                self.preds.setdefault(d.name, d)
+            elif isinstance(d, ast.NamespaceDecl):
+                self.spaces.setdefault(d.name, d)
+            elif isinstance(d, ast.TypeDecl):
+                self.types.setdefault(d.name, d)
+        self.layers = layers
+
+    def source(self, node, decl: str, doc: str, line_txt: str, atoms):
+        """The precomputed slice of one declaration: loc + subject +
+        context (preds in source order, first occurrence -> their
+        namespaces -> their types as name + cardinality) + layers."""
+        from metis.kernel.diagnostics import Loc, Source
+        from .ast import decl_line
+        subject = tuple(f"%% {ln}" for ln in doc.split("\n")) \
+            if doc else ()
+        subject += (line_txt,)
+        pdecls = []
+        for a in atoms:
+            d = self.preds.get(a.pred)
+            if d is not None and d not in pdecls:
+                pdecls.append(d)
+        ctx = [decl_line(d) for d in pdecls]
+        seen_ns = []
+        for d in pdecls:
+            if isinstance(d, ast.PredDecl) and d.namespace not in seen_ns \
+                    and d.namespace in self.spaces:
+                seen_ns.append(d.namespace)
+                ctx.append(decl_line(self.spaces[d.namespace]))
+        seen_ty = []
+        for d in pdecls:
+            for ty in d.args:
+                if ty not in seen_ty and ty in self.types:
+                    seen_ty.append(ty)
+                    ctx.append(f"type {ty}: "
+                               f"{len(self.types[ty].consts)} constants")
+        lay = f"layers ({' '.join(self.layers)})." if self.layers else ""
+        return Source(Loc(getattr(node, "file", ""),
+                          getattr(node, "line", 0),
+                          getattr(node, "col", 0), decl),
+                      subject, tuple(ctx), lay)
 
 
 def _singleton_fact_vars(atom, sigs) -> List[str]:
@@ -164,6 +224,7 @@ def compile_catalog(cat: ast.Catalog,
     standalone)."""
     findings: List[str] = []
     warnings: List[str] = []
+    diags: List = []
     if any(isinstance(d, ast.IncludeDecl) for d in cat.decls):
         raise LangError(["unresolved include — call resolve_includes "
                          "(or load_llp, which does)"])
@@ -191,6 +252,10 @@ def compile_catalog(cat: ast.Catalog,
         layers = layers or b.layers
         stages = stages or b.stages
     base_types = dict(base.catalog.sig.types) if base is not None else {}
+    vocab = _Vocab(list(cat.decls) + (list(base.source.decls)
+                                      if base is not None
+                                      and base.source is not None
+                                      else []), layers)
     ports = Ports()
     entries: List[Entry] = []
     horn_entries: List[Entry] = []
@@ -277,7 +342,17 @@ def compile_catalog(cat: ast.Catalog,
             # Ceptre/Twelf reading of a bodiless clause; typed like a
             # rule var, so one var at two differently-typed positions
             # is a finding
-            _infer_vars(f"fact {d.atom}", [d.atom], sigs, findings)
+            conflicts: List = []
+            _infer_vars(f"fact {d.atom}", [d.atom], sigs, findings,
+                        conflicts)
+            if conflicts:
+                from metis.kernel.diagnostics import make
+                src = vocab.source(d, f"fact/{d.atom.pred}", "",
+                                   ast.decl_line(d), [d.atom])
+                for text, v, t1, t2 in conflicts:
+                    diags.append(make("fact-var-conflict", text, src,
+                                      (("var", v), ("type1", t1),
+                                       ("type2", t2))))
             _check_consts(f"fact {d.atom}", [d.atom], sigs,
                           {**base_types, **types}, findings)
             warnings.extend(_singleton_fact_vars(d.atom, sigs))
@@ -296,11 +371,17 @@ def compile_catalog(cat: ast.Catalog,
         elif isinstance(d, ast.Stage):
             for r in d.rules:
                 rloc = f"line {r.line}: " if r.line else ""
-                if not r.doc.strip():
-                    findings.append(f"{rloc}{r.name}: missing %% doc "
-                                    f"(mandatory)")
                 atoms = [a for a in r.body
                          if isinstance(a, ast.Atom)] + list(r.head)
+                rsrc = vocab.source(r, f"{d.name}/{r.name}", r.doc,
+                                    ast.rule_line(r),
+                                    [a for a in atoms if a.pred != "one"])
+                if not r.doc.strip():
+                    from metis.kernel.diagnostics import make
+                    text = f"{r.name}: missing %% doc (mandatory)"
+                    findings.append(f"{rloc}{text}")
+                    diags.append(make("doc-missing", text, rsrc,
+                                      (("rule", r.name),)))
                 vars_ = _infer_vars(f"{rloc}{r.name}", atoms, sigs,
                                     findings)
                 _check_consts(f"{rloc}{r.name}", atoms, sigs,
@@ -349,6 +430,7 @@ def compile_catalog(cat: ast.Catalog,
                 entries.append(Entry(
                     name=f"{r.layer}/{r.name}", layer=r.layer,
                     kind="schema", comment=r.doc, provenance=prov,
+                    src=rsrc,
                     payload=ClauseSchema(
                         r.name, stage=d.name, vars=vars_,
                         consume=consume,
@@ -360,10 +442,15 @@ def compile_catalog(cat: ast.Catalog,
                         weight=weight)))
         elif isinstance(d, ast.LinkDecl):
             dloc = f"line {d.line}: " if d.line else ""
-            if not d.doc.strip():
-                findings.append(f"{dloc}{d.name}: missing %% doc "
-                                f"(mandatory)")
             atoms = list(d.pre_atoms) + list(d.post_atoms)
+            lsrc = vocab.source(d, f"qui/{d.name}", d.doc,
+                                ast.decl_line(d), atoms)
+            if not d.doc.strip():
+                from metis.kernel.diagnostics import make
+                text = f"{d.name}: missing %% doc (mandatory)"
+                findings.append(f"{dloc}{text}")
+                diags.append(make("doc-missing", text, lsrc,
+                                  (("rule", d.name),)))
             vars_ = _infer_vars(f"{dloc}{d.name}", atoms, sigs,
                                 findings)
             _check_consts(f"{dloc}{d.name}", atoms, sigs,
@@ -387,14 +474,14 @@ def compile_catalog(cat: ast.Catalog,
                                     f"in link post")
             entries.append(Entry(
                 name=f"{d.layer}/{d.name}", layer=d.layer, kind="link",
-                comment=d.doc, provenance=prov,
+                comment=d.doc, provenance=prov, src=lsrc,
                 payload=LinkSchema(
                     d.name, pre=d.pre, post=d.post, vars=vars_,
                     consume=lconsume, guards=lguards, persist=lpersist,
                     produce=[_pattern(a) for a in d.post_atoms])))
 
     if findings:
-        raise LangError(findings)
+        raise LangError(findings, diags)
 
     kcat = Catalog(name=cat.name, version=cat.version,
                    layers=layers, stages=stages,
@@ -402,10 +489,22 @@ def compile_catalog(cat: ast.Catalog,
                    preds=preds, bwd=frozenset(bwd),
                    entries=entries + horn_entries)
     if cat.extends is None:
-        f = kcat.typecheck()
+        kdiags: List = []
+        f = kcat.typecheck(kdiags)
         if f:
-            raise CatalogError(f)
-    return CatalogDoc(kcat, ports, source=cat, warnings=warnings)
+            raise CatalogError(f, kdiags)
+    return CatalogDoc(kcat, ports, source=cat, warnings=warnings,
+                      diagnostics=diags)
+
+
+def diagnose(path, base: Optional[CatalogDoc] = None) -> List:
+    """Every structured diagnostic (spec 08) of compiling one file —
+    the mirror of `metisc --diagnostics`: a failing compile's errors
+    (LangError / CatalogError) or a clean compile's diagnostics."""
+    try:
+        return list(load_llp(path, base=base).diagnostics)
+    except (LangError, CatalogError) as e:
+        return list(e.diagnostics)
 
 
 def load_llp(path, base: Optional[CatalogDoc] = None) -> CatalogDoc:

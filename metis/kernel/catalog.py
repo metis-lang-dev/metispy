@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 
 from .clause import Clause, Link                     # noqa: F401
+from .diagnostics import Diagnostic, Source
 from .ground import ground_program
 from .horn import HornClause, HornDB
 from .program import Program
@@ -46,13 +47,21 @@ class Entry:
     provenance: Provenance
     payload: Union[ClauseSchema, LinkSchema, HornClause, dict, None] \
         = None
+    # the declaration's precomputed diagnostic slice (loc + subject +
+    # context, spec 08): kernel checks far from the AST copy it
+    src: Optional[Source] = field(default=None, compare=False,
+                                  repr=False)
 
 
 class CatalogError(ValueError):
-    def __init__(self, findings: List[str]):
+    def __init__(self, findings: List[str],
+                 diagnostics: Optional[List[Diagnostic]] = None):
         super().__init__("catalog failed checks:\n  "
                          + "\n  ".join(findings))
         self.findings = findings
+        # the structured findings that are migrated (spec 08); the
+        # strings above stay the text rendering
+        self.diagnostics = list(diagnostics or [])
 
 
 @dataclass
@@ -69,7 +78,8 @@ class Catalog:
 
     # -- typecheck -------------------------------------------------------
 
-    def typecheck(self) -> List[str]:
+    def typecheck(self, diags: Optional[List[Diagnostic]] = None) \
+            -> List[str]:
         f: List[str] = []
         for p, space in self.preds.items():
             if space not in self.namespaces:
@@ -88,13 +98,14 @@ class Catalog:
                 continue
             f.extend(check_entry(e, self.layers, self.stages,
                                  self.namespaces, self.preds, self.bwd,
-                                 self.sig.types))
+                                 self.sig.types, diags))
         return f
 
     def checked(self) -> "Catalog":
-        f = self.typecheck()
+        diags: List[Diagnostic] = []
+        f = self.typecheck(diags)
         if f:
-            raise CatalogError(f)
+            raise CatalogError(f, diags)
         return self
 
     # -- admission (containment by construction) -------------------------
