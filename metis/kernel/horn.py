@@ -105,6 +105,14 @@ class HornDB:
         seen = set()
         for s in self._solve(tuple(goals), {}, _DEPTH):
             key = tuple(self._walk(v, s) for v in vs)
+            if any(c.startswith("?") for c in key):
+                # a quantified fact var answered the query without
+                # being pinned: enumerable only through its type,
+                # which the Horn world does not carry
+                raise ValueError(
+                    f"non-ground Horn solution for {list(goals)}: a "
+                    f"fact variable is left unbound — guard it with "
+                    f"a predicate that enumerates it")
             if key in seen:
                 continue
             seen.add(key)

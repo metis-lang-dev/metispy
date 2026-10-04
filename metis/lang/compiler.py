@@ -231,7 +231,16 @@ def compile_catalog(cat: ast.Catalog,
                 findings.append(f"fact {d.atom}: predicate not "
                                 f"declared bwd")
                 continue
-            horn_entry(HornClause(str(d.atom), _pattern(d.atom)), "")
+            # a var in a fact is universally quantified over the type
+            # its position declares (`plus(n0,N,N).` = Π N:nat) — the
+            # Ceptre/Twelf reading of a bodiless clause; typed like a
+            # rule var, so one var at two differently-typed positions
+            # is a finding
+            _infer_vars(f"fact {d.atom}", [d.atom], sigs, findings)
+            vs = tuple(sorted({t.value for t in d.atom.terms
+                               if t.kind == "var"}))
+            horn_entry(HornClause(str(d.atom), _pattern(d.atom),
+                                  vars=vs), "")
         elif isinstance(d, ast.HornRule):
             vs = tuple(sorted({t.value for a in (d.head,) + d.body
                                for t in a.terms if t.kind == "var"}))
