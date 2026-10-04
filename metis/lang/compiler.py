@@ -57,6 +57,8 @@ class CatalogDoc:
     catalog: Catalog
     ports: Ports
     source: Optional[ast.Catalog] = None
+    # advisory, never gating (e.g. a singleton var in a Horn fact)
+    warnings: List[str] = field(default_factory=list)
 
 
 def _pattern(a: ast.Atom):
@@ -81,6 +83,43 @@ def _infer_vars(name, atoms, sigs, findings) -> Dict[str, str]:
                     f"{name}: var {t.value} typed both "
                     f"{vars_[t.value]} and {ty}")
     return vars_
+
+
+def _check_consts(where, atoms, sigs, types, findings) -> None:
+    """A CONSTANT in an argument position must be a member of the type
+    that position declares (`eq(red,n7)` with eq(nat,nat): finding).
+    Positions whose type is not declared here are skipped — the kernel
+    typecheck reports undeclared types."""
+    for a in atoms:
+        sig = sigs.get(a.pred)
+        if sig is None or len(sig) != len(a.terms):
+            continue          # undeclared pred / arity: reported elsewhere
+        for k, (t, ty) in enumerate(zip(a.terms, sig), 1):
+            if t.kind == "var" or ty not in types:
+                continue
+            if t.value not in types[ty]:
+                findings.append(f"{where}: constant '{t.value}' is not "
+                                f"a {ty} ({a.pred} argument {k})")
+
+
+def _singleton_fact_vars(atom, sigs) -> List[str]:
+    """A var occurring ONCE in a fact is almost always a typo
+    (`plus(n0,N,M).` meant N twice): it silently means 'every value'.
+    A deliberate don't-care is named Any or Any<Name> (the Ceptre
+    corpus's own spelling, talespin's `solves_problem Any thirst
+    water`) and stays silent. Advisory — never a finding."""
+    sig = sigs.get(atom.pred) or ()
+    names = [t.value for t in atom.terms if t.kind == "var"]
+    out = []
+    for i, t in enumerate(atom.terms):
+        v = t.value
+        if t.kind != "var" or names.count(v) != 1 or v.startswith("Any"):
+            continue
+        ty = sig[i] if i < len(sig) else "value"
+        out.append(f"fact {atom}: var {v} occurs once, so the fact holds "
+                   f"for every {ty} — if intended, name it Any{v} (a "
+                   f"leading Any marks a don't-care)")
+    return out
 
 
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
@@ -124,6 +163,7 @@ def compile_catalog(cat: ast.Catalog,
     admission (a pack referencing base vocabulary cannot typecheck
     standalone)."""
     findings: List[str] = []
+    warnings: List[str] = []
     if any(isinstance(d, ast.IncludeDecl) for d in cat.decls):
         raise LangError(["unresolved include — call resolve_includes "
                          "(or load_llp, which does)"])
@@ -150,6 +190,7 @@ def compile_catalog(cat: ast.Catalog,
         inherited_bwd = b.bwd
         layers = layers or b.layers
         stages = stages or b.stages
+    base_types = dict(base.catalog.sig.types) if base is not None else {}
     ports = Ports()
     entries: List[Entry] = []
     horn_entries: List[Entry] = []
@@ -237,11 +278,16 @@ def compile_catalog(cat: ast.Catalog,
             # rule var, so one var at two differently-typed positions
             # is a finding
             _infer_vars(f"fact {d.atom}", [d.atom], sigs, findings)
+            _check_consts(f"fact {d.atom}", [d.atom], sigs,
+                          {**base_types, **types}, findings)
+            warnings.extend(_singleton_fact_vars(d.atom, sigs))
             vs = tuple(sorted({t.value for t in d.atom.terms
                                if t.kind == "var"}))
             horn_entry(HornClause(str(d.atom), _pattern(d.atom),
                                   vars=vs), "")
         elif isinstance(d, ast.HornRule):
+            _check_consts(f"horn {d.head}", (d.head,) + d.body, sigs,
+                          {**base_types, **types}, findings)
             vs = tuple(sorted({t.value for a in (d.head,) + d.body
                                for t in a.terms if t.kind == "var"}))
             horn_entry(HornClause(str(d.head), _pattern(d.head),
@@ -257,6 +303,8 @@ def compile_catalog(cat: ast.Catalog,
                          if isinstance(a, ast.Atom)] + list(r.head)
                 vars_ = _infer_vars(f"{rloc}{r.name}", atoms, sigs,
                                     findings)
+                _check_consts(f"{rloc}{r.name}", atoms, sigs,
+                              {**base_types, **types}, findings)
                 for a in atoms:
                     for t in a.terms:
                         if t.kind == "var" and t.value not in vars_:
@@ -318,6 +366,8 @@ def compile_catalog(cat: ast.Catalog,
             atoms = list(d.pre_atoms) + list(d.post_atoms)
             vars_ = _infer_vars(f"{dloc}{d.name}", atoms, sigs,
                                 findings)
+            _check_consts(f"{dloc}{d.name}", atoms, sigs,
+                          {**base_types, **types}, findings)
             # bwd atoms in the pre are Horn GUARDS, exactly as on
             # clauses (the grounding machinery already supports them)
             # — what makes chain-end links liftable (lastidx(I));
@@ -355,7 +405,7 @@ def compile_catalog(cat: ast.Catalog,
         f = kcat.typecheck()
         if f:
             raise CatalogError(f)
-    return CatalogDoc(kcat, ports, source=cat)
+    return CatalogDoc(kcat, ports, source=cat, warnings=warnings)
 
 
 def load_llp(path, base: Optional[CatalogDoc] = None) -> CatalogDoc:

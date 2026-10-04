@@ -243,13 +243,17 @@ class _P:
             return (ast.Atom("one"),)
         return self.atoms_star(self.atom)
 
+    def _here(self) -> Tuple[int, int]:
+        """(line, col) of the current token; (0, 0) at end of input."""
+        return self.pos[self.i] if self.i < len(self.pos) else (0, 0)
+
     def rule(self) -> List[ast.Rule]:
         """One or more clauses: the alternative-head sugar
         '-o ( head @w w | head @w w ... )' expands here (spec 07 P1),
         exactly as in metisc — one clause per branch, named
         <name>-1 .. <name>-k, sharing the body (one CHOICE site)."""
         doc = self.take_docs()
-        line = self.pos[self.i][0] if self.i < len(self.pos) else 0
+        line, col = self._here()
         name = self.expect("ident")
         self.punct("[")
         layer = self.expect("ident")
@@ -279,7 +283,7 @@ class _P:
                          f"(rule {name})")
             self.punct(".")
             return [ast.Rule(f"{name}-{k + 1}", layer, doc, body,
-                             h, w, line=line)
+                             h, w, line=line, col=col)
                     for k, (h, w) in enumerate(branches)]
         head = self.head_atoms()
         w = None
@@ -287,7 +291,8 @@ class _P:
             self.next()
             w = self.weight()
         self.punct(".")
-        return [ast.Rule(name, layer, doc, body, head, w, line=line)]
+        return [ast.Rule(name, layer, doc, body, head, w, line=line,
+                         col=col)]
 
     def stage(self) -> ast.Stage:
         name = self.expect("ident")
@@ -310,7 +315,7 @@ class _P:
 
     def link(self) -> ast.LinkDecl:
         doc = self.take_docs()
-        line = self.pos[self.i][0] if self.i < len(self.pos) else 0
+        line, col = self._here()
         name = self.expect("ident")
         self.punct("[")
         layer = self.expect("ident")
@@ -329,10 +334,29 @@ class _P:
             post_atoms = self.atoms_star(self.atom)
         self.punct(".")
         return ast.LinkDecl(name, layer, doc, pre, pre_atoms, post,
-                            post_atoms, line=line)
+                            post_atoms, line=line, col=col)
 
 
-def parse(text: str) -> ast.Catalog:
+def parse(text: str, file: str = "") -> ast.Catalog:
+    cat = _parse(text)
+    return _stamp_file(cat, file) if file else cat
+
+
+def _stamp_file(cat: ast.Catalog, file: str) -> ast.Catalog:
+    """Name the source in every positioned decl (diagnostics only)."""
+    from dataclasses import replace
+    out = []
+    for d in cat.decls:
+        if isinstance(d, ast.Stage):
+            d = replace(d, rules=tuple(replace(r, file=file)
+                                       for r in d.rules))
+        elif hasattr(d, "file"):
+            d = replace(d, file=file)
+        out.append(d)
+    return replace(cat, decls=tuple(out))
+
+
+def _parse(text: str) -> ast.Catalog:
     p = _P(*_tokens(text))
     p.drain_docs()
     p.expect("ident", "catalog")
@@ -349,6 +373,8 @@ def parse(text: str) -> ast.Catalog:
         k, v = p.peek()
         if k == "eof":
             break
+        at = p._here()  # loc = the DECLARED NAME's token (re-taken below
+                        # for keyword decls: type/pred/bwd point at the name)
         if k != "ident":
             p.err(f"expected declaration, got {v!r}")
         if v == "include":
@@ -377,6 +403,7 @@ def parse(text: str) -> ast.Catalog:
             p.punct(".")
         elif v == "type":
             p.next()
+            at = p._here()
             tname = p.expect("ident")
             p.punct("{")
             consts = []
@@ -394,7 +421,7 @@ def parse(text: str) -> ast.Catalog:
                     consts.append(v2)
             p.next()
             p.punct(".")
-            decls.append(ast.TypeDecl(tname, tuple(consts)))
+            decls.append(ast.TypeDecl(tname, tuple(consts), *at))
         elif v == "namespace":
             p.next()
             nname = p.expect("ident")
@@ -408,18 +435,20 @@ def parse(text: str) -> ast.Catalog:
             decls.append(ast.NamespaceDecl(nname, produce, consume))
         elif v == "pred":
             p.next()
+            at = p._here()
             pname = p.expect("ident")
             args = p.sig_args()
             p.punct(":")
             space = p.expect("ident")
             p.punct(".")
-            decls.append(ast.PredDecl(pname, args, space))
+            decls.append(ast.PredDecl(pname, args, space, *at))
         elif v == "bwd":
             p.next()
+            at = p._here()
             bname = p.expect("ident")
             args = p.sig_args()
             p.punct(".")
-            decls.append(ast.BwdDecl(bname, args))
+            decls.append(ast.BwdDecl(bname, args, *at))
         elif v in ("weight", "guard", "input", "output"):
             p.next()
             oname = p.expect("ident")
@@ -449,14 +478,14 @@ def parse(text: str) -> ast.Catalog:
                     p.next()
                     body.append(p.atom())
                 p.punct(".")
-                decls.append(ast.HornRule(head, tuple(body)))
+                decls.append(ast.HornRule(head, tuple(body), *at))
             else:
                 p.punct(".")
-                decls.append(ast.Fact(head))
+                decls.append(ast.Fact(head, *at))
     return ast.Catalog(name, version, provenance, layers, stages,
                        extends=extends, decls=tuple(decls))
 
 
 def parse_file(path) -> ast.Catalog:
     with open(path) as f:
-        return parse(f.read())
+        return parse(f.read(), file=str(path))

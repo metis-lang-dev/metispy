@@ -180,7 +180,12 @@ def gen_instance(state: RoadState, ticks: int,
     names = [c.name for c in state.cars]
     others = [n for n in names if n != "ego"]
     ghosts = bool(frontiers)
-    car_consts = list(names) + (["ghost"] if ghosts else [])
+    # ghost is ALWAYS car vocabulary: the domain's occlusion rules
+    # (gapp/gabsent/ghit) name it unconditionally, and a constant must
+    # be a member of its declared type (spec §5). Without frontiers
+    # those rules stay dead (no maybe/occ, no pos(ghost)); only the
+    # ghost's facts and turn token below remain frontier-gated.
+    car_consts = list(names) + ["ghost"]
     lines = [
         "% GENERATED instance — grid tables from geometry.",
         "catalog road-scene-grid 1.",

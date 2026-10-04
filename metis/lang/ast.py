@@ -65,6 +65,8 @@ class Rule:
     # source line (diagnostics only: excluded from equality/hash, so
     # the round-trip contract parse(pretty(ast)) == ast is untouched)
     line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -83,12 +85,17 @@ class LinkDecl:
     post: str
     post_atoms: Tuple[Atom, ...]
     line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
 class TypeDecl:
     name: str
     consts: Tuple[str, ...]
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -103,12 +110,18 @@ class PredDecl:
     name: str
     args: Tuple[str, ...]        # argument TYPES
     namespace: str
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
 class BwdDecl:
     name: str
     args: Tuple[str, ...]
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -144,12 +157,18 @@ class IncludeDecl:
 @dataclass(frozen=True)
 class Fact:
     atom: Atom
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)
 class HornRule:
     head: Atom
     body: Tuple[Atom, ...]
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
 
 
 @dataclass(frozen=True)

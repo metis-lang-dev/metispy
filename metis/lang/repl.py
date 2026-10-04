@@ -117,7 +117,8 @@ class Repl(LoopVerbs, Cmd):
             toks = sum(self.counts.values())
             flat = (f"{len(self.counts)} atoms, {toks} tokens "
                     f"— 'state' tabulates them")
-        self.intro = (
+        warn = "".join(f"warning: {w}\n" for w in self.doc.warnings)
+        self.intro = warn + (
             f"metis shell — {self.path.name} "
             f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
             f"stage {self.stage} | {flat}\n"
@@ -135,6 +136,11 @@ class Repl(LoopVerbs, Cmd):
         text, doc, case = self._compile()
         self.text, self.doc, self.case = text, doc, case
         self.prog = doc.catalog.ground(dict(case["init"]))
+        # seed the read-only scene cache (wire._scene_prog) with the
+        # program just grounded: the first map/trace costs no ground
+        self._scene_cache = (doc.catalog,
+                             tuple(sorted(dict(case["init"]).items())),
+                             self.prog)
         self.events_tbl = canonical_events(self.prog)
         self.key = program_key(self.prog)
         if initial or self.stage not in (
@@ -389,6 +395,8 @@ class Repl(LoopVerbs, Cmd):
             self.loop.base_src = ""
             self._say("note: accepted packs/revision dropped — the "
                       "re-read file is the world now")
+        for w in self.doc.warnings:
+            self._say(f"warning: {w}")
         what = "unchanged" if self.key == old_key else "NEW key"
         self._say(f"reloaded {self.path.name} ({what} "
                   f"{self.key[:12]}…); "
@@ -607,7 +615,8 @@ class Repl(LoopVerbs, Cmd):
         fresh ground from #init, seeded I/T/F/Q lines + exact= where
         tractable. Leaves the interactive session untouched."""
         try:
-            prog = self.doc.catalog.ground(dict(self.case["init"]))
+            from metis.loop.wire import _scene_prog
+            prog = _scene_prog(self)
             self._say(render_run(self.path.stem, self.case, prog,
                                  pretty=True))
         except DirectiveError as e:

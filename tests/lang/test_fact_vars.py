@@ -2,6 +2,8 @@
 position declares — `plus(n0,N,N).` = Π N:nat — the Ceptre/Twelf
 reading of a bodiless clause (metisc agrees: metis-lang compile.ml)."""
 
+from pathlib import Path
+
 import pytest
 
 from metis.kernel import ForwardProjection, program_key
@@ -58,3 +60,36 @@ def test_unpinned_fact_var_in_solutions_is_loud():
     cat, _ = _prog("bwd eq(nat,nat).\neq(X,X).\n")
     with pytest.raises(ValueError, match="non-ground Horn solution"):
         list(cat.horn_db().solutions([("eq", ("?A", "?B"))]))
+
+
+# -- singleton-var warning (advisory), byte-identical with metisc -------
+
+CORPUS = Path(__file__).resolve().parents[3] / "metis-lang/corpus"
+
+
+def test_singleton_fact_var_warns_like_metisc():
+    doc = compile_catalog(parse((CORPUS / "fact_vars.llp").read_text()))
+    golden = (CORPUS / "goldens/warn_goldens.txt").read_text()
+    assert "".join(f"warning: {w}\n" for w in doc.warnings) == golden
+
+
+def test_doubled_and_any_vars_stay_silent():
+    doc = compile_catalog(parse(
+        HEAD + "bwd eq(nat,nat).\nbwd top(nat).\neq(X,X).\ntop(AnyN).\n"
+        + RULE))
+    assert doc.warnings == []
+
+
+# -- constants are members of the declared type, identical with metisc --
+
+def test_out_of_type_constants_are_findings_like_metisc():
+    import re
+    with pytest.raises(LangError) as e:
+        compile_catalog(parse((CORPUS / "const_check_bad.llp").read_text()))
+    got = [re.sub(r"^line \d+: ", "", m) for m in e.value.findings]
+    golden = (CORPUS / "goldens/const_check_goldens.txt").read_text()
+    assert "".join(f"error: {m}\n" for m in got) == golden
+
+
+def test_in_type_constants_pass():
+    compile_catalog(parse(HEAD + "bwd eq(nat,nat).\neq(n0,n0).\n" + RULE))
