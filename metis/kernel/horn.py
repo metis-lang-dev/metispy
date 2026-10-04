@@ -12,7 +12,16 @@ the MORPHISM §C′ GUARD rule:
     rθ ∈ ground(r),  with the g's deleted
 
 The solver is standard SLD resolution with unification (clause bodies
-may chain through variables), depth-bounded. Domains encode relations —
+may chain through variables), depth-bounded, with VARIANT TABLING: the
+distinct answers of each call pattern (constants kept, variables
+abstracted by first occurrence) are computed once, in SLD order, and
+replayed. Observable results are SLD's — `derivable` is existence and
+`solutions` dedups first-wins, so per-call dedup in first-found order
+preserves both the answer set and its order — while recomputation of
+shared subgoals (plus/mult over unary nats: ~n^6 before) disappears.
+A call that re-enters a variant still being tabled falls back to plain
+SLD; a tabled call gets its own depth budget (the bound is per call,
+not per whole derivation — indistinguishable short of 256-deep proofs). Domains encode relations —
 arithmetic included — as fact tables (e.g. adv(c1,v2,c3)); no builtin
 evaluation lives in the kernel."""
 
@@ -42,6 +51,8 @@ class HornDB:
         for c in clauses:
             self.by_pred.setdefault(c.head[0], []).append(c)
         self._fresh = 0
+        self._table: Dict[Pattern, list] = {}   # complete variants
+        self._active: set = set()                # variants being tabled
 
     # -- unification over renamed-apart variables ("?v@k") ---------------
 
@@ -78,6 +89,46 @@ class HornDB:
                 return None
         return s
 
+    def _resolve(self, g, rest, subst, depth):
+        """Plain SLD step on goal g: one branch per matching clause."""
+        for cl in self.by_pred.get(g[0], ()):
+            r = self._rename(cl)
+            s2 = self._unify(r.head, g, subst)
+            if s2 is None:
+                continue
+            yield from self._solve(r.body + rest, s2, depth - 1)
+
+    @staticmethod
+    def _variant(args) -> Tuple[Tuple[str, ...], Dict[str, str]]:
+        """Abstract variables by first occurrence: ?#0, ?#1, …"""
+        m: Dict[str, str] = {}
+        out = []
+        for a in args:
+            if a.startswith("?"):
+                a = m.setdefault(a, f"?#{len(m)}")
+            out.append(a)
+        return tuple(out), m
+
+    def _complete(self, g, key) -> list:
+        """All distinct answers (g's args, instantiated, variables
+        canonicalized) in SLD order — the first only, for a ground g."""
+        self._active.add(key)
+        answers, seen = [], set()
+        try:
+            for s3 in self._resolve(g, (), {}, _DEPTH):
+                ans, _ = self._variant(
+                    tuple(self._walk(a, s3) for a in g[1]))
+                if ans not in seen:
+                    seen.add(ans)
+                    answers.append(ans)
+                    if not key[1] or all(not a.startswith("?")
+                                         for a in key[1]):
+                        break              # ground: existence suffices
+        finally:
+            self._active.discard(key)
+        self._table[key] = answers
+        return answers
+
     def _solve(self, goals, subst, depth) -> Iterator[Dict[str, str]]:
         if not goals:
             yield subst
@@ -86,13 +137,23 @@ class HornDB:
             return
         g0 = goals[0]
         g = (g0[0], tuple(self._walk(a, subst) for a in g0[1]))
-        for cl in self.by_pred.get(g[0], ()):
-            r = self._rename(cl)
-            s2 = self._unify(r.head, g, subst)
+        rest = tuple(goals[1:])
+        cargs, _ = self._variant(g[1])
+        key = (g[0], cargs)
+        answers = self._table.get(key)
+        if answers is None:
+            if key in self._active:          # re-entrant: plain SLD
+                yield from self._resolve(g, rest, subst, depth)
+                return
+            answers = self._complete(g, key)
+        for ans in answers:
+            self._fresh += 1
+            inst = tuple(f"{a}@{self._fresh}" if a.startswith("?")
+                         else a for a in ans)
+            s2 = self._unify((g[0], inst), g, subst)
             if s2 is None:
                 continue
-            yield from self._solve(r.body + tuple(goals[1:]), s2,
-                                   depth - 1)
+            yield from self._solve(rest, s2, depth - 1)
 
     def derivable(self, goal: Pattern) -> bool:
         return next(self._solve((goal,), {}, _DEPTH), None) is not None

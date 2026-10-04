@@ -136,9 +136,20 @@ class Catalog:
 
     # -- grounding -------------------------------------------------------
 
+    # A catalog is never mutated after construction (packs and
+    # revisions build NEW catalogs), so its Horn world is cached on the
+    # instance and keeps its variant tables across groundings. The
+    # GROUND PROGRAM is not cached here: callers may treat it as a
+    # fresh mutable value (e.g. planting clause weights) — read-only
+    # callers cache it themselves (metis.loop.wire._scene_prog).
+
     def horn_db(self) -> HornDB:
-        return HornDB([e.payload for e in self.entries
-                       if e.kind == "horn"])
+        db = self.__dict__.get("_horn_db")
+        if db is None:
+            db = HornDB([e.payload for e in self.entries
+                         if e.kind == "horn"])
+            self.__dict__["_horn_db"] = db
+        return db
 
     def ground(self, init_atoms, init_stage: Optional[str] = None) \
             -> Program:

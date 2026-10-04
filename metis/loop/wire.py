@@ -42,8 +42,20 @@ def parse_intent(line: str):
 # -- wire-only readouts of the runtime session ----------------------
 
 def _scene_prog(shell, init=None):
-    return shell.doc.catalog.ground(
-        dict(init if init is not None else shell.case["init"]))
+    """The scene's ground program, cached per (catalog object, init):
+    the read-only instruments (map/marginals/trace) re-serve an
+    unchanged scene without re-grounding. reload/accept/revise swap
+    the catalog OBJECT, so the cache cannot go stale. (Catalog.ground
+    itself stays uncached: its callers may mutate what it returns.)"""
+    init = dict(init if init is not None else shell.case["init"])
+    cat = shell.doc.catalog
+    key = tuple(sorted(init.items()))
+    hit = shell.__dict__.get("_scene_cache")
+    if hit is not None and hit[0] is cat and hit[1] == key:
+        return hit[2]
+    prog = cat.ground(init)
+    shell.__dict__["_scene_cache"] = (cat, key, prog)
+    return prog
 
 
 def _op_trace(shell, arg):
