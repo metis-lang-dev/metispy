@@ -38,8 +38,13 @@ step [k|name]       fire candidate k (or by name); no arg = sampled
 run N               sample N steps (stops at quiescence)
 state               current stage + multiset
 list                file, frame (stage, steps, state) and the
-                    current stage's rules with source lines
-                    (* = enabled now)
+                    current stage's rules with source lines:
+                    * enabled now · ◂ the present rests on it (#k,
+                    why's cone) · · fired, no longer matters
+                    (presence-only, like why) · ? waiting on atoms
+                    some rule here makes (* = enabled) · – spent:
+                    an atom nothing here makes; then other stages'
+                    rules the present rests on
 assert ATOM [N]     add N (default 1) tokens          [alias: +]
 retract ATOM [N]    remove N (default 1) tokens       [alias: -]
 query ATOM [STEPS]  exact presence marginal from HERE (filter)
@@ -492,7 +497,10 @@ class Repl(LoopVerbs, Cmd):
 
     def do_list(self, arg):
         """the current file, frame (stage, steps, state) and the
-        rules of the current stage with source lines; * = enabled now"""
+        rules of the current stage with source lines, marked: * enabled
+        now, ◂ the present rests on it (why's cone), · fired but no
+        longer matters, ? waiting (on what); then the rules of other
+        stages the present rests on"""
         self._say(f"file   {self.path}  (catalog "
                   f"{self.doc.catalog.name}, key {self.key[:12]}…)")
         last = self.fired[-1] if self.fired else "—"
@@ -500,38 +508,151 @@ class Repl(LoopVerbs, Cmd):
                   f"fired, last {last}")
         for row in state_table(self.counts.items()) or ["  (empty)"]:
             self._say("     " + row)
-        if self.stage == DONE:
-            self._say("rules  none — the run is done ('reset' to "
-                      "start over)")
-            return
-        enabled = {}
-        spans = self._rule_spans()
-        for i, _ in self._candidates():
-            base = _source_name(
-                self.events_tbl[i][2].name.partition("[")[0], spans)
-            enabled[base] = enabled.get(base, 0) + 1
-        spans = self._rule_spans()
-        names = []
-        for kind, s, ev in self.events_tbl:
-            base = _source_name(ev.name.partition("[")[0], spans)
-            if s == self.stage and base not in names:
-                names.append(base)
-        lines = self.text.splitlines()
-        self._say(f"rules  of stage {self.stage} (* enabled now, "
-                  f"×N ground instances)")
+        rel = self._relevance()
+        spans, lines = self._rule_spans(), self.text.splitlines()
         width = len(str(len(lines)))
-        for name in sorted(names, key=lambda r: spans.get(r, (1e9,))[0]):
-            mark = "*" if name in enabled else " "
-            count = f" ×{enabled[name]}" if enabled.get(name, 0) > 1 \
-                else ""
+        if self.stage == DONE:
+            self._say("rules  none can fire — the run is done ('reset' "
+                      "to start over)")
+        else:
+            self._say(f"rules  of stage {self.stage}  (* enabled now ×N "
+                      "· ◂ the present rests on #k · · fired, no longer "
+                      "matters · ? waiting on ← maker · – spent: no X "
+                      "and nothing here makes it)")
+        for name in sorted(rel["stage"],
+                           key=lambda r: spans.get(r, (1e9,))[0]):
+            mark, tail = self._list_marks(name, rel)
             if name not in spans:
-                self._say(f"  {mark} {'?':>{width}}  {name}{count}")
+                self._say(f"  {mark} {'?':>{width}}  {name}{tail}")
                 continue
             a, head, b = spans[name]
             for k in range(a, b + 1):
                 lead = f"  {mark if k == head else ' '} {k:>{width}}  "
-                tail = count if k == head else ""
-                self._say(f"{lead}{lines[k - 1]}{tail}")
+                self._say(f"{lead}{lines[k - 1]}"
+                          f"{tail if k == head else ''}")
+        if rel["elsewhere"]:
+            self._say("rests on  (rules of other stages the present "
+                      "depends on)")
+            for stage, items in rel["elsewhere"]:
+                self._say(f"  ◂ {stage}: " + " · ".join(
+                    f"{n} {' '.join(f'#{i}' for i in occ)}"
+                    for n, occ in items))
+        if rel["pruned_elsewhere"]:
+            self._say(f"  · {rel['pruned_elsewhere']} more fired "
+                      "event(s) in other stages no longer matter")
+
+    def _relevance(self):
+        """list's relevance (spec 09 D3 follow-up): per rule, enabled
+        now (×N), the occurrences in the current-state cone (what the
+        present rests on — `why`'s cone) and the fired-but-pruned ones
+        since the graph base; for the current stage's idle rules, what
+        they wait on. Presence-only like `why`: pruned = nothing it
+        touched is still present, not 'caused nothing'."""
+        from metis.kernel.nets import cone, live_roots
+        spans = self._rule_spans()
+
+        def src(name):
+            return _source_name(name.partition("[")[0], spans)
+        enabled = {}
+        for i, _ in self._candidates():
+            n = src(self.events_tbl[i][2].name)
+            enabled[n] = enabled.get(n, 0) + 1
+        g, _ = self.causal()
+        k0, base_stage, base_counts = self._base
+        stage = None if self.stage == DONE else self.stage
+        keep = set(cone(g, live_roots(self.fired_rows[k0:], base_counts,
+                                      base_stage, self.counts, stage,
+                                      first=k0 + 1)))
+        in_cone, pruned, where = {}, {}, {}
+        for nd in g.nodes:
+            if nd.kind == "init":
+                continue
+            n = src(nd.name)
+            (in_cone if nd.i in keep else pruned).setdefault(n, []) \
+                .append(nd.i)
+            where.setdefault(n, "links" if nd.kind == "link"
+                             else nd.stage)
+        names = []
+        for kind, s, ev in self.events_tbl:
+            n = src(ev.name)
+            if s == self.stage and n not in names:
+                names.append(n)
+        elsewhere = {}
+        for n, occ in in_cone.items():
+            if n not in names:
+                elsewhere.setdefault(where[n], []).append((n, occ))
+        order = {s: k for k, s in enumerate(self.prog.stages)}
+        return {
+            "stage": names, "enabled": enabled, "cone": in_cone,
+            "pruned": pruned,
+            "elsewhere": sorted(elsewhere.items(),
+                                key=lambda kv: order.get(kv[0], 1e9)),
+            "pruned_elsewhere": sum(len(o) for n, o in pruned.items()
+                                    if n not in names),
+        }
+
+    def _waiting_on(self, name):
+        """What an idle rule of the current stage lacks, from its
+        nearest ground instance: `? atom ← maker` when every missing
+        atom has a producer in the stage (`rule*` = enabled now), else
+        `– no atom` — spent: nothing in this stage makes it again."""
+        spans = self._rule_spans()
+        best = None
+        for kind, s, ev in self.events_tbl:
+            if s != self.stage or _source_name(
+                    ev.name.partition("[")[0], spans) != name:
+                continue
+            need = dict(ev.consume)
+            for a, n in ev.persist.items():
+                need[a] = need.get(a, 0) + n
+            miss = sorted(a for a, n in need.items()
+                          if self.counts.get(a, 0) < n)
+            if best is None or len(miss) < len(best[1]):
+                best = (kind, miss)
+        if best is None:
+            return ""
+        kind, miss = best
+        if not miss:
+            return ("? quiescence (fires when no clause can)"
+                    if kind == "link" else "? nothing — weight 0 here")
+        cand = [self.events_tbl[i][2] for i, _ in self._candidates()]
+
+        def maker(a):
+            for ev in cand:
+                if a in ev.produce:
+                    return _source_name(ev.name.partition("[")[0],
+                                        spans) + "*"
+            for _, s, ev in self.events_tbl:
+                if s == self.stage and a in ev.produce:
+                    return _source_name(ev.name.partition("[")[0], spans)
+            return None
+        makers = {a: maker(a) for a in miss}
+        dead = [a for a in miss if makers[a] is None]
+        if dead:          # spent: nothing in this stage makes it again
+            more = f" (+{len(dead) - 3})" if len(dead) > 3 else ""
+            return "– no " + ", ".join(dead[:3]) + more
+        more = f" (+{len(miss) - 3})" if len(miss) > 3 else ""
+        return "? " + "; ".join(f"{a} ← {makers[a]}"
+                                for a in miss[:3]) + more
+
+    def _list_marks(self, name, rel):
+        """(mark, tail) for one rule of the current stage."""
+        en = rel["enabled"].get(name, 0)
+        occ, gone = rel["cone"].get(name, []), rel["pruned"].get(name, [])
+        tail = []
+        if en > 1:
+            tail.append(f"×{en}")
+        if occ:
+            tail.append("◂ " + " ".join(f"#{i}" for i in occ))
+        if gone:
+            tail.append("· " + " ".join(f"#{i}" for i in gone))
+        wait = self._waiting_on(name) \
+            if not en and self.stage != DONE else ""
+        if wait:
+            tail.append(wait)
+        mark = ("*" if en else "◂" if occ else "·" if gone
+                else wait[:1] if wait else " ")
+        return mark, ("   " + "  ".join(tail) if tail else "")
 
     def do_edit(self, arg):
         """open the file in your editor: in a VS Code terminal `code`,

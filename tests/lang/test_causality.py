@@ -364,3 +364,61 @@ def test_json_mirror_carries_the_episode():
                                         "act4": None}
     assert nodes[0]["episode"] == 0 and nodes[-1]["episode"] == 3
     assert {"i", "name", "kind", "stage", "beat"} <= set(nodes[0])
+
+
+# -- step 5: list's relevance from the cone (spec 09 D3 follow-up) ----
+
+def _list_heads(r):
+    """rule name -> its marked head line in `list`."""
+    out = _run(r, "list")
+    heads = {}
+    for line in out.splitlines():
+        for name in ("build_straw", "build_stick", "build_brick",
+                     "blow_straw", "blow_stick", "blow_brick"):
+            if f" {name} [story]" in line:
+                heads[name] = line
+    return out, heads
+
+
+def test_list_marks_enabled_cone_pruned_waiting_and_spent():
+    """3lp seed 1 after run 3 (1 build_stick, 2 build_straw, 3
+    blow_straw; state bricks pig stickhouse wolf): the builds that
+    made the present are ◂ (and spent — their material is gone),
+    blow_straw fired but no longer matters (·), build_brick and
+    blow_stick are enabled (*), blow_brick waits on a brickhouse an
+    enabled rule makes (?)."""
+    r = _shell("3lp.llp")
+    _run(r, "run 3")
+    out, h = _list_heads(r)
+    mark = {n: line.lstrip()[0] for n, line in h.items()}
+    assert mark == {"build_straw": "◂", "build_stick": "◂",
+                    "build_brick": "*", "blow_straw": "·",
+                    "blow_stick": "*", "blow_brick": "?"}
+    assert h["build_stick"].endswith("◂ #1  – no sticks")
+    assert h["blow_straw"].endswith("· #3  ? strawhouse ← build_straw")
+    assert h["blow_brick"].endswith("? brickhouse ← build_brick*")
+    assert "\nrests on  (" not in out         # one stage: nothing else
+
+
+def test_list_shows_other_stages_the_present_rests_on():
+    """herstory in its tragedy act: the earlier acts' rules (and the
+    act links) the present depends on are listed by stage; the act4
+    link waits for quiescence."""
+    r = _shell("herstory.llp")
+    _run(r, "run 12")
+    out = _run(r, "list")
+    assert "\nrests on  (" in out
+    assert "◂ beginning: eve_hannah_birth #1 · hannah_eve_meet #2 · " \
+           "florence_dies #3" in out
+    assert "◂ courtship: date_carl #5" in out
+    assert "◂ links: act2 #4 · act3 #9" in out
+    act4 = next(l for l in out.splitlines() if "qui act4" in l)
+    assert act4.lstrip().startswith("?") and "quiescence" in act4
+
+
+def test_list_after_the_run_is_done_still_shows_what_it_rests_on():
+    r = _shell("herstory.llp")
+    _run(r, "run 40")
+    out = _run(r, "list")
+    assert "none can fire" in out and "\nrests on  (" in out
+    assert "betrayal: " in out and "hannah_kill_simon #23" in out
