@@ -122,8 +122,8 @@ def test_buffer_lines_apply_to_the_live_session():
 def test_rule_text_gets_the_reload_hint_not_noise():
     """A selection of RULE source sent to the REPL (the user's
     shift+enter on the jealousy block) points at save+reload; `-o`
-    never falls into the '-ATOM' retract shorthand; `edit` aliases
-    reload; unknown commands say bare-words."""
+    never falls into the '-ATOM' retract shorthand; unknown commands
+    say bare-words."""
     r = shell()
     out = run(r, "jealousy [story] : $eros(A,B) * $eros(C,A) * C <> A",
               "  -o anger(C,A) * anger(C,B).",
@@ -137,7 +137,44 @@ def test_rule_text_gets_the_reload_hint_not_noise():
     assert "bare words" in out
     out = run(r, "-anger(hermia,helena)")       # shorthand still works
     assert "only 0 present" in out
-    assert "reloaded" in run(r, "edit")
+    assert "reloaded" in run(r, "reload")
+
+
+def test_list_shows_file_frame_and_stage_rules():
+    """`list`: the file, the frame (stage, fired count, state) and
+    the current stage's rules with source lines, * on enabled heads."""
+    r = shell()
+    out = run(r, "list")
+    assert "file" in out and "frame  stage go | 0 fired" in out
+    heads = [l for l in out.splitlines() if "jealousy [story]" in l]
+    assert len(heads) == 1 and heads[0].lstrip().startswith("*")
+    assert "move_on [story]" in out and "%%" in out
+
+
+def test_edit_runs_the_editor_at_the_rule(monkeypatch, tmp_path):
+    """`edit RULE` hands the editor +LINE FILE; outside VS Code a
+    terminal editor blocks and a changed file reloads on exit."""
+    log = tmp_path / "argv"
+    ed = tmp_path / "ed"
+    ed.write_text(f'#!/bin/sh\necho "$@" > {log}\n')
+    ed.chmod(0o755)
+    for v in ("TERM_PROGRAM", "VSCODE_IPC_HOOK_CLI", "EDITOR"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("VISUAL", str(ed))
+    r = shell()
+    assert "no rule" in run(r, "edit nope")
+    run(r, "edit move_on")
+    argv = log.read_text().split()
+    assert argv[0].startswith("+") and argv[1] == str(r.path.resolve())
+    assert r.text.splitlines()[int(argv[0][1:]) - 1].lstrip() \
+        .startswith("move_on")
+
+
+def test_empty_load_is_a_usage_hint_not_a_crash():
+    """Bare `load` (meaning `reload`) used to read '.' and kill the
+    shell; it now points at reload."""
+    r = shell()
+    assert "reload" in run(r, "load")
 
 
 def test_trace_replays_the_case_without_touching_the_session():

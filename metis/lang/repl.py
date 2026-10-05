@@ -28,6 +28,7 @@ from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
                                     choice_weight, run_trace)
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.loop.verbs import LoopState, LoopVerbs, fmt as _loop_fmt
+from metis.loop.wire import _note
 from metis.lang.directives import (DirectiveError, embedded_case,
                                    render_run, state_table)
 
@@ -36,6 +37,9 @@ events              enabled transitions of the firing tier, numbered
 step [k|name]       fire candidate k (or by name); no arg = sampled
 run N               sample N steps (stops at quiescence)
 state               current stage + multiset
+list                file, frame (stage, steps, state) and the
+                    current stage's rules with source lines
+                    (* = enabled now)
 assert ATOM [N]     add N (default 1) tokens          [alias: +]
 retract ATOM [N]    remove N (default 1) tokens       [alias: -]
 query ATOM [STEPS]  exact presence marginal from HERE (filter)
@@ -43,11 +47,20 @@ seed N              reseed the sampler
 undo                back one mutating command
 reset               back to the file's #init directives
 reload              re-read + recompile the file; state carries over
-                    (alias: edit — rule changes go file -> reload)
+edit [RULE]         open the file (VS Code terminal: `code`; else
+                    $VISUAL/$EDITOR, reloading on exit; else
+                    xdg-open), at RULE's line if given
 trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
+
+causality (spec 09) — the run as a partial order, since the last
+reset/assert/retract/#init (node #0 is the state then):
+graph [F.dot|F.json] beats: each event with its covering parents
+                    (i<j, flow atoms in parens), * = frontier
+                    ("where we are"); or write DOT (`dot -Tsvg`)
+                    / JSON
 map [STEPS]         modal derivation (Viterbi) of the file scene
                     (exact; a blown state budget says so — lower
                     the horizon rather than wait)
@@ -97,6 +110,20 @@ def _fmt_counts(counts):
         or "(empty)"
 
 
+_RULE_HEAD = re.compile(r"^\s*(?:qui\s+)?([\w-]+)\s*\[")
+_NOT_RULES = frozenset(["catalog", "provenance", "type", "pred",
+                        "stage", "stages", "layers", "namespace"])
+
+
+def _source_name(name, spans):
+    """An event's rule as written in the source: alternative-head
+    branches (`blow_stick-1`, `-2`) belong to `blow_stick`."""
+    if name in spans:
+        return name
+    base = re.sub(r"-\d+$", "", name)
+    return base if base in spans else name
+
+
 class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
@@ -108,6 +135,10 @@ class Repl(LoopVerbs, Cmd):
         self.fired = []
         self.loop = LoopState()
         self.fired_rows = []   # (kind, stage, ev) per fired event
+        # the causality graph's base (spec 09): (log length, stage,
+        # counts) at the last edit no event explains — start, reset,
+        # assert/retract, #init; the graph covers fired_rows after it
+        self._base = (0, "", {})
         # runtime/loop diagnostics the instruments spoke this session
         # (spec 08 step 3) — listed by `findings`
         self.notes = []
@@ -137,6 +168,8 @@ class Repl(LoopVerbs, Cmd):
 
     def _load(self, initial=False):
         text, doc, case = self._compile()
+        # a new world: the old world's runtime notes no longer speak
+        self.__dict__["notes"] = []
         self.text, self.doc, self.case = text, doc, case
         self.prog = doc.catalog.ground(dict(case["init"]))
         # seed the read-only scene cache (wire._scene_prog) with the
@@ -150,6 +183,7 @@ class Repl(LoopVerbs, Cmd):
                 list(self.prog.stages) + [DONE]):
             self.stage = self.prog.init_stage
             self.counts = dict(case["init"])
+            self._rebase()
         self.atoms = set(self.case["init"])
         for _, _, ev in self.events_tbl:
             self.atoms |= set(ev.consume) | set(ev.produce) \
@@ -160,19 +194,36 @@ class Repl(LoopVerbs, Cmd):
         new ground, events, key, atoms; counts and stage carry over
         exactly as `reload` does."""
         self.doc = replace(self.doc, catalog=catalog)
+        self.__dict__["notes"] = []     # a new world: old notes retire
         self.prog = catalog.ground(dict(self.case["init"]))
         self.events_tbl = canonical_events(self.prog)
         self.key = program_key(self.prog)
         if self.stage not in (list(self.prog.stages) + [DONE]):
             self.stage = self.prog.init_stage
             self.counts = dict(self.case["init"])
+            self._rebase()
         for _, _, ev in self.events_tbl:
             self.atoms |= set(ev.consume) | set(ev.produce) \
                 | set(ev.persist)
 
     def _mark(self):
         self.undo_stack.append(
-            (self.stage, dict(self.counts), len(self.fired)))
+            (self.stage, dict(self.counts), len(self.fired), self._base))
+
+    def _rebase(self):
+        """The current state becomes the causality graph's base: an
+        edit no fired event explains (spec 09 — the graph is a pure
+        function of base + the rows fired since)."""
+        self._base = (len(self.fired), self.stage, dict(self.counts))
+
+    def causal(self):
+        """(graph, events since base) — spec 09's object over the
+        session, derived on demand: nothing persists, so undo/reset/
+        reload stay correct."""
+        from metis.kernel.nets import causal_graph
+        k, stage, counts = self._base
+        rows = self.fired_rows[k:]
+        return causal_graph(rows, counts, stage, first=k + 1), len(rows)
 
     def _candidates(self):
         """The firing tier, exactly as the reference sampler sees it:
@@ -318,6 +369,7 @@ class Repl(LoopVerbs, Cmd):
         self.counts[atom] = c
         if c == 0:
             self.counts.pop(atom, None)
+        self._rebase()
         self._say(f"{atom}:{c}")
 
     def do_assert(self, arg):
@@ -350,7 +402,7 @@ class Repl(LoopVerbs, Cmd):
         except StateBudgetExceeded as e:
             from metis.kernel.diagnostics import budget_note
             retry = f"query {atom} {max(1, e.step - 1)}"
-            self.notes.append(budget_note(e, "query",
+            _note(self, budget_note(e, "query",
                                           f"query {atom} {steps}", retry))
             self._say(f"{e} (try: {retry})")
             return
@@ -374,7 +426,7 @@ class Repl(LoopVerbs, Cmd):
         if not self.undo_stack:
             self._say("nothing to undo")
             return
-        self.stage, self.counts, k = self.undo_stack.pop()
+        self.stage, self.counts, k, self._base = self.undo_stack.pop()
         del self.fired[k:]
         del self.fired_rows[k:]
         self.do_state("")
@@ -384,6 +436,7 @@ class Repl(LoopVerbs, Cmd):
         self._mark()
         self.stage = self.prog.init_stage
         self.counts = dict(self.case["init"])
+        self._rebase()
         self.do_state("")
 
     def do_reload(self, arg):
@@ -409,7 +462,118 @@ class Repl(LoopVerbs, Cmd):
                   f"{self.key[:12]}…); "
                   f"stage {self.stage} | {_fmt_counts(self.counts)}")
 
-    do_edit = do_reload                 # the sketch's name, kept
+    def _rule_spans(self):
+        """rule name -> (first, head, last) 1-based source lines, the
+        %% doc block above the head included; a rule ends at the first line
+        whose code (comment stripped) ends with '.'."""
+        lines = self.text.splitlines()
+        spans = {}
+        for n, l in enumerate(lines):
+            m = _RULE_HEAD.match(l)
+            if not m or m.group(1) in _NOT_RULES:
+                continue
+            first = n
+            while first > 0 and lines[first - 1].lstrip().startswith("%%"):
+                first -= 1
+            last = n
+            while (last < len(lines) - 1
+                   and not lines[last].split("%", 1)[0].rstrip()
+                   .endswith(".")):
+                last += 1
+            spans.setdefault(m.group(1), (first + 1, n + 1, last + 1))
+        return spans
+
+    def do_list(self, arg):
+        """the current file, frame (stage, steps, state) and the
+        rules of the current stage with source lines; * = enabled now"""
+        self._say(f"file   {self.path}  (catalog "
+                  f"{self.doc.catalog.name}, key {self.key[:12]}…)")
+        last = self.fired[-1] if self.fired else "—"
+        self._say(f"frame  stage {self.stage} | {len(self.fired)} "
+                  f"fired, last {last}")
+        for row in state_table(self.counts.items()) or ["  (empty)"]:
+            self._say("     " + row)
+        if self.stage == DONE:
+            self._say("rules  none — the run is done ('reset' to "
+                      "start over)")
+            return
+        enabled = {}
+        spans = self._rule_spans()
+        for i, _ in self._candidates():
+            base = _source_name(
+                self.events_tbl[i][2].name.partition("[")[0], spans)
+            enabled[base] = enabled.get(base, 0) + 1
+        spans = self._rule_spans()
+        names = []
+        for kind, s, ev in self.events_tbl:
+            base = _source_name(ev.name.partition("[")[0], spans)
+            if s == self.stage and base not in names:
+                names.append(base)
+        lines = self.text.splitlines()
+        self._say(f"rules  of stage {self.stage} (* enabled now, "
+                  f"×N ground instances)")
+        width = len(str(len(lines)))
+        for name in sorted(names, key=lambda r: spans.get(r, (1e9,))[0]):
+            mark = "*" if name in enabled else " "
+            count = f" ×{enabled[name]}" if enabled.get(name, 0) > 1 \
+                else ""
+            if name not in spans:
+                self._say(f"  {mark} {'?':>{width}}  {name}{count}")
+                continue
+            a, head, b = spans[name]
+            for k in range(a, b + 1):
+                lead = f"  {mark if k == head else ' '} {k:>{width}}  "
+                tail = count if k == head else ""
+                self._say(f"{lead}{lines[k - 1]}{tail}")
+
+    def do_edit(self, arg):
+        """open the file in your editor: in a VS Code terminal `code`,
+        else $VISUAL/$EDITOR, else xdg-open. edit RULE jumps to the
+        rule. A terminal editor blocks; a changed file reloads on
+        exit."""
+        import shlex
+        import shutil
+        import subprocess
+        line = None
+        if arg.strip():
+            span = self._rule_spans().get(arg.strip())
+            if span is None:
+                self._say(f"no rule {arg.strip()!r} in {self.path.name}"
+                          " — 'list' shows the current stage's rules")
+                return
+            line = span[1]
+        f = str(self.path.resolve())
+        ed = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+        in_vscode = (os.environ.get("TERM_PROGRAM") == "vscode"
+                     or "VSCODE_IPC_HOOK_CLI" in os.environ)
+        if in_vscode and shutil.which("code"):
+            # the file is already a VS Code buffer: open it there, not
+            # in a second editor inside the REPL terminal
+            cmd = ["code", "-g", f"{f}:{line}"] if line else ["code", f]
+            blocking = False
+        elif ed:
+            cmd = shlex.split(ed) + ([f"+{line}", f] if line else [f])
+            blocking = True
+        elif shutil.which("xdg-open"):
+            cmd, blocking = ["xdg-open", f], False
+        else:
+            self._say("no editor — set $EDITOR (or $VISUAL)")
+            return
+        before = self.path.stat().st_mtime_ns
+        try:
+            if blocking:
+                subprocess.call(cmd)
+            else:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        except OSError as e:
+            self._say(f"cannot start editor {cmd[0]!r}: {e.strerror}")
+            return
+        if blocking and self.path.stat().st_mtime_ns != before:
+            self.do_reload("")
+        elif not blocking:
+            self._say(f"opened {self.path.name} in {cmd[0]} — save, "
+                      "then 'reload' here")
 
     def _heredoc(self, arg):
         """`text <<EOF` convention: read lines from stdin until the
@@ -586,7 +750,7 @@ class Repl(LoopVerbs, Cmd):
         from metis.kernel.diagnostics import note as dnote
 
         def llm_note(text, problem):
-            self.notes.append(dnote(
+            _note(self, dnote(
                 "llm-endpoint", text, "llm", (f"llm {shown}",),
                 (("endpoint", str(shown)), ("host", host),
                  ("problem", problem), ("model", model))))
@@ -676,8 +840,11 @@ class Repl(LoopVerbs, Cmd):
         try:
             from metis.loop.wire import _scene_prog
             prog = _scene_prog(self)
+            spoke = []
             self._say(render_run(self.path.stem, self.case, prog,
-                                 pretty=True, notes=self.notes))
+                                 pretty=True, notes=spoke))
+            for d in spoke:
+                _note(self, d)
         except DirectiveError as e:
             self._say(f"cannot trace: {e} — e.g. '#steps 6' in the "
                       "file or as a sent line")
@@ -714,6 +881,35 @@ class Repl(LoopVerbs, Cmd):
                             for k, n in enumerate(self.fired, 1))
                   or "(nothing fired yet)")
 
+    def do_graph(self, arg):
+        """the causality graph (spec 09) since the last reset/assert/
+        retract/#init: beats with covering parents, * = frontier;
+        graph F.dot / F.json writes the DOT / JSON mirror"""
+        from metis.lang.causality import as_json, beats_text, dot, \
+            header
+        g, n = self.causal()
+        k = self._base[0]
+        title = header(self.path.name, self.key, self.stage, n) + (
+            f" (since #{k}: base #0 = the state then)" if k else "")
+        a = arg.strip()
+        if not a:
+            self._say("\n".join(beats_text(g, title)))
+            return
+        if a.endswith(".dot"):
+            text = dot(g, title)
+        elif a.endswith(".json"):
+            text = as_json(g, self.stage, self.key)
+        else:
+            self._say("usage: graph [FILE.dot | FILE.json]")
+            return
+        try:
+            Path(a).expanduser().write_text(text)
+        except OSError as e:
+            self._say(f"cannot write {a}: {e.strerror}")
+            return
+        self._say(f"wrote {a} ({len(g.nodes)} nodes, {len(g.edges)} "
+                  f"edges, frontier {' '.join(map(str, g.frontier))})")
+
     def do_version(self, arg):
         """version — what exactly is running: package, source
         checkout (+ git), python, config dot file, llm endpoint"""
@@ -732,11 +928,14 @@ class Repl(LoopVerbs, Cmd):
 
     def onecmd(self, line):
         """Ctrl-C cancels the RUNNING command (a long `query`, a
-        stuck backend), never the shell — exit stays quit/ctrl-d."""
+        stuck backend), never the shell — exit stays quit/ctrl-d. A
+        command that raises is reported, and the session survives."""
         try:
             return super().onecmd(line)
         except KeyboardInterrupt:
             self._say("(interrupted)")
+        except Exception as e:
+            self._say(f"error ({type(e).__name__}): {e}")
 
     def do_quit(self, arg):
         """leave the shell"""
@@ -803,6 +1002,7 @@ class Repl(LoopVerbs, Cmd):
                     self.counts[atom] = n
                 else:
                     self.counts.pop(atom, None)
+                self._rebase()
                 self.case["init"][atom] = n
                 self._say(f"{atom}:{n}")
             elif key == "steps" and len(args) == 1:

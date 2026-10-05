@@ -34,7 +34,7 @@ projection's `.program` (the canonical presentation). Policies are
 cacheable only under an explicit `policy_key` naming their identity."""
 
 import hashlib
-from typing import List, Tuple
+from typing import List, NamedTuple, Tuple
 
 from .filter import ForwardProjection
 from .program import Program
@@ -178,6 +178,112 @@ def run_key(program: Program, events: List[int]) -> str:
         layers[l].append(keys[i])
     payload = tuple(tuple(sorted(layer, key=repr)) for layer in layers)
     return _digest(payload)
+
+
+# -- the causality graph (spec 09 P1) ----------------------------------
+
+class CausalNode(NamedTuple):
+    i: int            # occurrence number (log numbering; 0 = the base)
+    name: str
+    kind: str         # "init" | "clause" | "link"
+    stage: str
+    beat: int         # Foata level; the base is beat 0
+    key: str          # repr of the content key (canonical ordering)
+
+
+class CausalEdge(NamedTuple):
+    src: int
+    dst: int
+    atoms: Tuple[str, ...]   # the conflicting atoms of this class
+    kind: str                # "flow" | "read" | "order"
+
+
+class CausalGraph(NamedTuple):
+    nodes: Tuple[CausalNode, ...]
+    edges: Tuple[CausalEdge, ...]
+    frontier: Tuple[int, ...]
+
+
+def _atom_str(a) -> str:
+    return f"{a[0]} {a[1]}" if isinstance(a, tuple) else a
+
+
+def causal_graph(rows, init, init_stage: str,
+                 first: int = 1) -> CausalGraph:
+    """The causality graph of a trace (spec 09 P1): a pure function of
+    (init, init_stage, rows). Occurrence 0 is the base — it writes the
+    initial multiset and ("@stage", init_stage), reads nothing; rows
+    (firing order) are occurrences first, first+1, ... Dependence is
+    the footprint conflict run_key quotients by — never a new
+    relation. Edges are the Hasse diagram of the causal order (D1):
+    covering pairs only, each a direct conflict, classed by
+    precedence flow (produce ∩ consume) > read (produce ∩ persist) >
+    order (any other write conflict: competition, stage switches).
+    Beats are Foata levels; maximal nodes are the frontier."""
+    base = {a: n for a, n in dict(init).items() if n > 0}
+    fps = [(frozenset(), frozenset(base) | {("@stage", init_stage)})]
+    prod, cons, pers = [set(base)], [set()], [set()]
+    for kind, stage, ev in rows:
+        fps.append(_footprint(kind, stage, ev))
+        prod.append(set(ev.produce))
+        cons.append(set(ev.consume))
+        pers.append(set(ev.persist))
+    n = len(fps)
+    anc = [0] * n                     # strict ancestors, as bitsets
+    beat = [0] * n
+    parents: List[List[int]] = []
+    for j in range(n):
+        rj, wj = fps[j]
+        direct = [i for i in range(j)
+                  if (wj & (fps[i][0] | fps[i][1]))
+                  or (fps[i][1] & rj)]
+        reach = covered = 0
+        for i in direct:
+            reach |= anc[i] | (1 << i)
+            covered |= anc[i]
+        anc[j] = reach
+        parents.append([i for i in direct if not (covered >> i) & 1])
+        beat[j] = 1 + max((beat[i] for i in direct), default=-1)
+    num = [0] + [first + k for k in range(n - 1)]
+    nodes = [CausalNode(0, "#init", "init", init_stage, 0, "")]
+    for k, (kind, stage, ev) in enumerate(rows, 1):
+        nodes.append(CausalNode(num[k], ev.name, kind,
+                                stage if kind == "clause" else ev.pre,
+                                beat[k], repr(_event_key(kind, stage, ev))))
+    edges = []
+    for j in range(n):
+        for i in parents[j]:
+            flow = prod[i] & cons[j]
+            read = prod[i] & pers[j]
+            if flow:
+                kind, atoms = "flow", flow
+            elif read:
+                kind, atoms = "read", read
+            else:
+                ri, wi = fps[i]
+                rj, wj = fps[j]
+                kind, atoms = "order", (wi & (wj | rj)) | (wj & ri)
+            edges.append(CausalEdge(num[i], num[j],
+                                    tuple(sorted(map(_atom_str, atoms))),
+                                    kind))
+    edges.sort(key=lambda e: (e.src, e.dst))
+    frontier = tuple(num[j] for j in range(n)
+                     if not any((anc[k] >> j) & 1 for k in range(j + 1, n)))
+    return CausalGraph(tuple(nodes), tuple(edges), frontier)
+
+
+def canonical_graph(g: CausalGraph) -> CausalGraph:
+    """The graph with occurrences renumbered by (beat, content key):
+    two traces with equal run_key give byte-equal canonical graphs —
+    beat-internal firing order is presentation, like clause names."""
+    order = sorted(g.nodes, key=lambda nd: (nd.beat, nd.key, nd.i))
+    new = {nd.i: k for k, nd in enumerate(order)}
+    nodes = tuple(nd._replace(i=new[nd.i]) for nd in order)
+    edges = tuple(sorted((e._replace(src=new[e.src], dst=new[e.dst])
+                          for e in g.edges),
+                         key=lambda e: (e.src, e.dst)))
+    return CausalGraph(nodes, edges,
+                       tuple(sorted(new[i] for i in g.frontier)))
 
 
 # -- the projection cache ------------------------------------------------

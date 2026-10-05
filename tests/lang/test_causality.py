@@ -1,0 +1,208 @@
+"""The causality graph (spec 09 P1/P2): the run as a partial order —
+nets.causal_graph (the object), lang.causality (beats/DOT/JSON
+mirrors) and the REPL's `graph` + the wire op over the session.
+
+Goldens pin the tragedy fixture's DOT and JSON bytes; regenerate
+deliberately with METIS_BLESS=1 (and review the diff)."""
+
+import io
+import json
+import os
+import random
+from pathlib import Path
+
+from metis.kernel.nets import (_footprint, canonical_graph, causal_graph,
+                               foata_levels, run_key)
+from metis.kernel.refsample import canonical_events, run_trace
+from metis.lang.causality import as_json, beats_text, dot
+from metis.lang.repl import Repl
+from metis.loop.wire import dispatch
+
+ROOT = Path(__file__).resolve().parents[2]
+FICTION = ROOT.parent / "metis-catalog/domains/fiction"
+GOLDENS = Path(__file__).parent / "goldens"
+
+
+def _shell(name, seed=1):
+    return Repl(FICTION / name, seed=seed, stdout=io.StringIO())
+
+
+def _run(r, *cmds):
+    for c in cmds:
+        r.onecmd(c)
+    out, r.stdout = r.stdout.getvalue(), io.StringIO()
+    return out
+
+
+def _trace(name, seed=1):
+    """(program, case, event indices) of a seeded fixture trace."""
+    r = _shell(name)
+    idx, _ = run_trace(r.prog, r.case["steps"] or 6, seed)
+    return r.prog, r.case, list(idx)
+
+
+def _graph(prog, case, idx):
+    tbl = canonical_events(prog)
+    return causal_graph([tbl[i] for i in idx], case["init"],
+                        prog.init_stage)
+
+
+def _golden(name, text):
+    p = GOLDENS / name
+    if os.environ.get("METIS_BLESS"):
+        p.parent.mkdir(exist_ok=True)
+        p.write_text(text)
+    assert text == p.read_text(), f"{name} drifted (METIS_BLESS=1 to " \
+                                  "regenerate, then review the diff)"
+
+
+# -- the pinned goldens ------------------------------------------------
+
+def test_tragedy_graph_goldens(tmp_path):
+    """The REPL's `graph F.dot` / `graph F.json` on a seeded tragedy
+    session are pinned byte for byte."""
+    r = _shell("tragedy.llp")
+    _run(r, "run 40")
+    _run(r, f"graph {tmp_path}/t.dot", f"graph {tmp_path}/t.json")
+    _golden("causality_tragedy.dot", (tmp_path / "t.dot").read_text())
+    _golden("causality_tragedy.json", (tmp_path / "t.json").read_text())
+
+
+# -- the object's laws -------------------------------------------------
+
+def _closure(g):
+    """occurrence -> strict ancestors, from the edges alone."""
+    par = {nd.i: {e.src for e in g.edges if e.dst == nd.i}
+           for nd in g.nodes}
+    memo = {}
+
+    def anc(j):
+        if j not in memo:
+            memo[j] = set()
+            for i in par[j]:
+                memo[j] |= {i} | anc(i)
+        return memo[j]
+    return {nd.i: anc(nd.i) for nd in g.nodes}
+
+
+def test_edges_are_the_hasse_diagram_of_the_dependence_order():
+    """Every edge is a direct footprint conflict (D1: covering pairs
+    only — no edge is implied by a longer path) and every dependent
+    pair is ordered by the closure."""
+    prog, case, idx = _trace("tragedy.llp")
+    tbl = canonical_events(prog)
+    rows = [tbl[i] for i in idx]
+    g = _graph(prog, case, idx)
+    anc = _closure(g)
+    for e in g.edges:
+        others = {e2.src for e2 in g.edges if e2.dst == e.dst} - {e.src}
+        assert not any(e.src in anc[k] for k in others), e
+    fps = [_footprint(*row) for row in rows]
+    for j in range(len(rows)):
+        for i in range(j):
+            (ri, wi), (rj, wj) = fps[i], fps[j]
+            if (wi & (wj | rj)) or (wj & ri):
+                assert i + 1 in anc[j + 1], (i + 1, j + 1)
+
+
+def test_beats_are_the_narrated_foata_levels_and_frontier_maximal():
+    prog, case, idx = _trace("tragedy.llp")
+    tbl = canonical_events(prog)
+    g = _graph(prog, case, idx)
+    levels = foata_levels([tbl[i] for i in idx])
+    assert [nd.beat for nd in g.nodes[1:]] == [l + 1 for l in levels]
+    anc = _closure(g)
+    maximal = {j for j in anc if not any(j in a for a in anc.values())}
+    assert set(g.frontier) == maximal
+
+
+def test_flow_edges_carry_the_spent_tokens():
+    """3lp seed 1: the stick house build_stick made is the token
+    blow_stick spent — a flow edge labeled stickhouse."""
+    prog, case, idx = _trace("3lp.llp")
+    g = _graph(prog, case, idx)
+    name = {nd.i: nd.name for nd in g.nodes}
+    flows = {(name[e.src], name[e.dst]): e.atoms for e in g.edges
+             if e.kind == "flow"}
+    assert flows[("build_stick", "blow_stick")] == ("stickhouse",)
+    assert flows[("#init", "build_stick")] == ("pig", "sticks")
+
+
+def test_adjacent_independent_swap_leaves_canonical_bytes_invariant():
+    """run_key's theorem made visible: swapping adjacent independent
+    events changes neither run_key nor the canonical graph's bytes —
+    checked on every swappable pair, then on a seeded random walk."""
+    for name in ("tragedy.llp", "3lp.llp", "love_triangle.llp"):
+        prog, case, idx = _trace(name)
+        tbl = canonical_events(prog)
+
+        def swappable(seq, k):
+            (r1, w1), (r2, w2) = (_footprint(*tbl[seq[k]]),
+                                  _footprint(*tbl[seq[k + 1]]))
+            return not (w1 & (w2 | r2)) and not (w2 & r1)
+
+        def canon(seq):
+            g = _graph(prog, case, seq)
+            return as_json(canonical_graph(g), prog.init_stage, "")
+        # traces index canonical_events; run_key reads program.events()
+        pos = {id(ev): k for k, (_, _, ev) in enumerate(prog.events())}
+
+        def rkey(seq):
+            return run_key(prog, [pos[id(tbl[i][2])] for i in seq])
+        ref, key = canon(idx), rkey(idx)
+        pairs = [k for k in range(len(idx) - 1) if swappable(idx, k)]
+        assert pairs or name == "3lp.llp" and len(idx) < 3
+        for k in pairs:
+            seq = idx[:k] + [idx[k + 1], idx[k]] + idx[k + 2:]
+            assert canon(seq) == ref and rkey(seq) == key
+        rng, seq = random.Random(9), list(idx)
+        for _ in range(200):
+            ks = [k for k in range(len(seq) - 1) if swappable(seq, k)]
+            if not ks:
+                break
+            k = rng.choice(ks)
+            seq[k], seq[k + 1] = seq[k + 1], seq[k]
+        assert canon(seq) == ref and rkey(seq) == key
+
+
+# -- the REPL / wire surface -------------------------------------------
+
+def test_graph_text_marks_frontier_and_parents():
+    r = _shell("3lp.llp")
+    _run(r, "run 6")
+    out = _run(r, "graph")
+    assert "6 fired" in out and "1<5(stickhouse)" in out
+    assert "|*6" in out and "frontier: 6" in out
+    assert "usage" in _run(r, "graph x.txt")
+
+
+def test_graph_rebases_on_edits_and_undo_restores_the_base():
+    """reset / assert / retract / #init are edits no event explains:
+    the graph restarts there (node 0 = that state); undo brings the
+    previous base back."""
+    r = _shell("3lp.llp")
+    _run(r, "run 3")
+    assert "3 fired" in _run(r, "graph")
+    _run(r, "+wolf")
+    out = _run(r, "graph")
+    assert "0 fired (since #3" in out and "frontier: 0" in out
+    _run(r, "step")
+    assert "|*4" in _run(r, "graph")
+    _run(r, "undo", "undo")
+    assert "3 fired" in _run(r, "graph")
+    _run(r, "reset", "step")
+    assert "1 fired (since #3" in _run(r, "graph")
+
+
+def test_wire_graph_is_the_json_mirror():
+    r = _shell("3lp.llp")
+    _run(r, "run 6")
+    out = dispatch(r, "graph", "")
+    assert out["ok"] and out["frontier"] == [6]
+    assert [n["i"] for n in out["nodes"]] == list(range(7))
+    assert {"from", "to", "atoms", "kind"} <= set(out["edges"][0])
+    g, _ = r.causal()
+    assert json.loads(as_json(g, r.stage, r.key)) == \
+        {k: v for k, v in out.items() if k != "ok"}
+    assert dot(g).startswith("digraph causality {")
+    assert beats_text(g)[-1].strip().startswith("* frontier")
