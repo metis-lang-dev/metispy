@@ -204,7 +204,7 @@ def test_graph_rebases_on_edits_and_undo_restores_the_base():
     assert "1 fired (since #3" in _run(r, "graph")
 
 
-def test_wire_graph_is_the_json_mirror():
+def test_wire_graph_is_the_json_mirror(tmp_path):
     r = _shell("3lp.llp")
     _run(r, "run 6")
     out = dispatch(r, "graph", "")
@@ -213,8 +213,10 @@ def test_wire_graph_is_the_json_mirror():
     assert {"from", "to", "atoms", "kind"} <= set(out["edges"][0])
     g, _ = r.causal()
     assert json.loads(as_json(g, r.stage, r.key)) == \
-        {k: v for k, v in out.items() if k not in ("ok", "text")}
+        {k: v for k, v in out.items() if k not in ("ok", "text", "dot")}
     assert out["text"] == r.capture("graph")      # CONSOLE §4 posting
+    _run(r, f"graph {tmp_path}/g.dot")             # the console download
+    assert out["dot"] == (tmp_path / "g.dot").read_text()
     assert dot(g).startswith("digraph causality {")
     assert beats_text(g)[-1].strip().startswith("* frontier")
 

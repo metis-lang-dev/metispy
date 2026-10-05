@@ -161,3 +161,32 @@ def test_ctx_carries_rule_source_and_run_key():
     assert c["run_key"] and len(c["run_key"]) == 64
     r.onecmd("reset")
     assert r.ctx()["run_key"] != c["run_key"]
+
+
+def test_wire_narrate_tells_the_session_run_bare_and_a_seed_on_request():
+    """Console step 4: bare `narrate` narrates what the stream shows —
+    the session's run since the base (REPL parity); `narrate N` a fresh
+    seeded trace. `command:cat` echoes the certified material."""
+    r = _shell("3lp.llp", "run 3")
+    r.llm = "command:cat"
+    s = dispatch(r, "narrate", "")
+    assert (s["source"], s["events"]) == ("session", 3)
+    beats = s["narration"].rsplit("== the run, in beats ==", 1)[1] \
+        .split("== the final state ==")[0]     # this run, not an example
+    assert "blow_straw" in beats and "build_brick" not in beats
+    t = dispatch(r, "narrate", "2")
+    assert (t["source"], t["seed"]) == ("seed", 2)
+    r.onecmd("reset")
+    assert dispatch(r, "narrate", "")["source"] == "seed"   # nothing since
+
+
+def test_wire_trace_bare_is_the_repls_case_replay_with_its_notes():
+    """Console step 4: bare `trace` carries the REPL's own replay text
+    and records its runtime notes (tragedy: exact out of reach), so
+    `findings` sees them; `trace SEED` keeps the seeded JSON only."""
+    r = _shell("tragedy.llp")
+    t = dispatch(r, "trace", "")
+    assert t["text"].startswith("case tragedy") and "Q " in t["text"]
+    codes = [d["code"] for d in dispatch(r, "findings", "")["diagnostics"]]
+    assert "exact-unreachable" in codes
+    assert "text" not in dispatch(r, "trace", "2")

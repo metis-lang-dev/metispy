@@ -1042,7 +1042,8 @@ class Repl(LoopVerbs, Cmd):
         self._say(self._llm_status(a))
 
     def do_narrate(self, arg):
-        """tell this session's fired events (or 'narrate SEED' for a
+        """tell this session's fired events since the last reset/edit
+        (or 'narrate SEED' for a
         fresh seeded trace) as prose: Foata beats + final state + the
         catalog's %% docs through the configured llm endpoint — the
         loop's narrate-out boundary. `narrate system` prints the
@@ -1067,7 +1068,7 @@ class Repl(LoopVerbs, Cmd):
             rows = [self.events_tbl[i] for i in idx]
         else:
             seed = 0
-            rows = list(self.fired_rows)
+            rows = list(self.fired_rows[self._base[0]:])   # since base
             stage = self.stage
             kappa = [(q, n) for q, n in sorted(self.counts.items())
                      if n > 0]

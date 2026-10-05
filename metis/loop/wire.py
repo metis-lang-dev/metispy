@@ -113,11 +113,20 @@ def _op_trace(shell, arg):
     idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
                                     seed)
     events = canonical_events(prog)
-    return {"ok": True, "seed": seed,
-            "events": [f"{events[i][1]}/{events[i][2].name}"
-                       for i in idx],
-            "final_stage": stage,
-            "final": {a: n for a, n in sorted(kappa)}}
+    out = {"ok": True, "seed": seed,
+           "events": [f"{events[i][1]}/{events[i][2].name}"
+                      for i in idx],
+           "final_stage": stage,
+           "final": {a: n for a, n in sorted(kappa)}}
+    if not arg.strip():
+        # bare `trace` = the REPL's: the file's '#'-case replayed (all
+        # seeds, queries, exact= where tractable), its runtime notes
+        # recorded for `findings` — the console shows what a terminal
+        # user sees; `trace SEED` stays the one seeded readout above
+        text = _text(shell, "trace")
+        if text is not None:
+            out["text"] = text
+    return out
 
 
 def _op_map(shell, arg):
@@ -227,12 +236,23 @@ def _op_narrate(shell, arg):
         text, src = prompts.resolve("narrate", override)
         return {"ok": True, "role": "system", "source": src,
                 "prompt": text}
-    prog = _scene_prog(shell)
-    seed = int(parts[0]) if parts else 1
-    idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
-                                    seed)
-    events = canonical_events(prog)
-    rows = [events[i] for i in idx]
+    k0 = getattr(shell, "_base", (0,))[0]
+    live = list(getattr(shell, "fired_rows", [])[k0:])
+    if not parts and live:
+        # bare `narrate` tells THIS session's run since the graph base
+        # (the REPL's own reading — the console narrates what its
+        # stream shows); `narrate SEED` a fresh seeded trace
+        source, seed, rows = "session", 0, live
+        stage = shell.stage
+        kappa = [(q, n) for q, n in sorted(shell.counts.items()) if n > 0]
+    else:
+        prog = _scene_prog(shell)
+        seed = int(parts[0]) if parts else 1
+        idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
+                                        seed)
+        events = canonical_events(prog)
+        rows = [events[i] for i in idx]
+        source = "seed"
     if show == "user":             # the certified material, ditto
         return {"ok": True, "role": "user", "seed": seed,
                 "events": len(rows),
@@ -240,18 +260,22 @@ def _op_narrate(shell, arg):
                                       shell.text, seed=seed)}
     text = narrate(shell.llm or "ollama", rows, stage, kappa,
                    shell.text, seed=seed, system=override)
-    return {"ok": True, "seed": seed, "events": len(rows),
-            "llm": shell.llm or "ollama", "narration": text}
+    return {"ok": True, "source": source, "seed": seed,
+            "events": len(rows), "llm": shell.llm or "ollama",
+            "narration": text}
 
 
 def _op_graph(shell, arg):
     """Spec 09 P2: the causality graph of the session as JSON (the
     console draws it). No file writes on the wire — paths are the
     REPL's."""
-    from metis.lang.causality import as_obj
-    g, _ = shell.causal()
+    from metis.lang.causality import as_obj, dot, header
+    g, n = shell.causal()
+    k = shell._base[0]
+    title = header(shell.path.name, shell.key, shell.stage, n) + (
+        f" (since #{k}: base #0 = the state then)" if k else "")
     return {"ok": True, **as_obj(g, shell.stage, shell.key),
-            "text": _text(shell, "graph")}
+            "dot": dot(g, title), "text": _text(shell, "graph")}
 
 
 def _op_why(shell, arg):
