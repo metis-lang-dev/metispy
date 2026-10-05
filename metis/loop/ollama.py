@@ -54,15 +54,20 @@ def strip_fences(text: str) -> str:
 
 
 def generate(prompt: str, model: str = None, host: str = None,
-             timeout: int = 600) -> str:
-    """One completion from the local Ollama server."""
+             timeout: int = 600, options: dict = None,
+             system: str = None) -> str:
+    """One completion from the local Ollama server. `options` merge
+    over the temperature-0 default (the narrate seat warms it);
+    `system` goes in the model's system slot, apart from the
+    material — small models keep the two straight only that way."""
     req = urllib.request.Request(
         (host or default_host()).rstrip("/") + "/api/generate",
         data=json.dumps({
             "model": model or default_model(),
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0},
+            "options": {"temperature": 0, **(options or {})},
+            **({"system": system} if system else {}),
         }).encode(),
         headers={"Content-Type": "application/json"})
     try:

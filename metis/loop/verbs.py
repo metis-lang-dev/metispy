@@ -72,8 +72,16 @@ class LoopVerbs:
         """Candidate from a .llp FILE (includes spliced); its leading
         comment block becomes the TEXT when none is set."""
         from pathlib import Path
+        if not arg.strip():
+            return {"ok": False,
+                    "error": "usage: load FILE.llp (a candidate pack) "
+                             "— to re-read the served file, reload"}
         p = Path(arg.strip()).expanduser()
-        src = p.read_text()
+        try:
+            src = p.read_text()
+        except OSError as e:
+            return {"ok": False, "error": f"cannot load {p}: "
+                                          f"{e.strerror or e}"}
         cat = resolve_includes(parse(src), p.parent)
         self.loop.cand = pretty(cat)
         out = {"ok": True, "file": str(p),

@@ -45,7 +45,8 @@ def resolve(spec: str) -> Endpoint:
     return Endpoint(backend, rest.strip())
 
 
-def _anthropic(prompt: str, model: str, timeout: int) -> str:
+def _anthropic(prompt: str, model: str, timeout: int,
+               options: dict = None, system: str = None) -> str:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
@@ -56,6 +57,9 @@ def _anthropic(prompt: str, model: str, timeout: int) -> str:
         data=json.dumps({
             "model": model or ANTHROPIC_DEFAULT_MODEL,
             "max_tokens": 2048,
+            **({"temperature": options["temperature"]}
+               if options and "temperature" in options else {}),
+            **({"system": system} if system else {}),
             "messages": [{"role": "user", "content": prompt}],
         }).encode(),
         headers={"Content-Type": "application/json",
@@ -67,14 +71,22 @@ def _anthropic(prompt: str, model: str, timeout: int) -> str:
                    for b in out.get("content", [])).strip()
 
 
-def complete(spec, prompt: str, timeout: int = 600) -> str:
-    """One completion from the configured endpoint."""
+def complete(spec, prompt: str, timeout: int = 600,
+             options: dict = None, system: str = None) -> str:
+    """One completion from the configured endpoint. `options` are
+    sampling knobs (Ollama's: temperature, num_ctx, ...); the
+    anthropic backend honors temperature only, command ignores them.
+    `system` rides the backend's system slot; the command backend,
+    which has none, gets it prepended to the prompt."""
     ep = spec if isinstance(spec, Endpoint) else resolve(spec)
     if ep.backend == "ollama":
         from .ollama import generate
-        return generate(prompt, model=ep.arg or None, timeout=timeout)
+        return generate(prompt, model=ep.arg or None, timeout=timeout,
+                        options=options, system=system)
     if ep.backend == "anthropic":
-        return _anthropic(prompt, ep.arg, timeout)
+        return _anthropic(prompt, ep.arg, timeout, options, system)
+    if system:
+        prompt = system + "\n\n" + prompt
     proc = subprocess.run(shlex.split(ep.arg), input=prompt,
                           capture_output=True, text=True,
                           timeout=timeout)

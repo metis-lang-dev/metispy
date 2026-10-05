@@ -17,6 +17,9 @@ Recognized today:
   [ollama]
   host  = "http://localhost:11434"
   model = "qwen2.5-coder:7b"
+  [narrate]                    # narrate seat only; formalize stays
+  temperature = 0.3            # at temperature 0
+  num_ctx     = 8192
 
 Environment variables keep the last word ($OLLAMA_HOST /
 $OLLAMA_MODEL beat [ollama]); the config supplies defaults where
