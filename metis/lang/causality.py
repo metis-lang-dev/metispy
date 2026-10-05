@@ -6,13 +6,15 @@ partial order, in three deterministic mirrors of one object
     without leaving the terminal: one block per Foata level, each
     occurrence with its covering parents (i<j), frontier marked *;
   - DOT — text only, rendering is the user's `dot -Tsvg` (no
-    graphviz dependency); rank per beat, links as diamonds, the
-    frontier bold;
+    graphviz dependency): a causal diagram, rank per beat with a
+    beat column, action over bindings in each node, links as
+    diamonds, the frontier bold, a legend in the graph label;
   - JSON — the wire/console channel.
 
-v1 edge styling is flow-only (D4): flow edges carry their atoms and
-draw solid; read/order covering edges draw plain and unlabeled (the
-JSON keeps their class and atoms — the vocabulary held in reserve).
+Edge classes in the DOT (D4, checked): flow solid + atom label,
+read dashed + `$atom` label, order dotted gray with atoms only in a
+tooltip. The beat text marks flow atoms; the JSON carries every
+class and its atoms.
 Ordering: nodes by occurrence number, edges by (src, dst), atoms
 sorted — so equal graphs give equal bytes."""
 import json
@@ -63,37 +65,73 @@ def beats_text(g: CausalGraph, title: str = "") -> List[str]:
 
 
 def _q(s: str) -> str:
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """A DOT string; a newline becomes DOT's centered line break."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') \
+        .replace("\n", "\\n") + '"'
+
+
+LEGEND = ("solid, atom: token flow (made, then spent)  ·  "
+          "dashed, $atom: read (needed, kept)  ·  "
+          "dotted: order (competition, stage)  ·  "
+          "bold: frontier  ·  diamond: stage switch")
+
+
+def _node_label(nd) -> str:
+    """`NN name` over the bindings (`C=montague D=romeo …`): the
+    action first, its cast on a second line."""
+    base, _, rest = nd.name.partition("[")
+    binds = rest.rstrip("]").replace(",", " ")
+    return f"{nd.i} {base}" + (f"\n{binds}" if binds else "")
 
 
 def dot(g: CausalGraph, label: str = "") -> str:
-    """The DOT rendering: one rank per beat, links diamond, base
-    ellipse, frontier bold; flow edges solid + atom-labeled, every
-    other covering edge plain and unlabeled (D4)."""
+    """The causal diagram (spec 09 D4, CelfToGraph style: nodes are
+    actions, edges causal relationships), one rank per beat with a
+    beat column on the left. Edge classes: flow solid + atom label
+    (the causal edge proper), read dashed + `$atom` label, order
+    dotted gray with the atoms in a tooltip only (the noise class;
+    constraint=false so it never bends the layout — the invisible
+    beat chain keeps the ranks)."""
     front = set(g.frontier)
     out = ["digraph causality {",
-           "  rankdir=TB;",
-           "  node [shape=box, fontname=\"monospace\"];"]
-    if label:
-        out += [f"  label={_q(label)};", "  labelloc=t;"]
+           "  rankdir=TB; nodesep=0.25; ranksep=0.45;",
+           '  graph [fontname="Helvetica", fontsize=12];',
+           '  node [shape=box, fontname="Helvetica", fontsize=11, '
+           'margin="0.12,0.04"];',
+           '  edge [fontname="Helvetica", fontsize=9, arrowsize=0.7];']
+    title = "\n".join(x for x in (label, LEGEND) if x)
+    out += [f"  label={_q(title)};", "  labelloc=t;"]
     beats = max((nd.beat for nd in g.nodes), default=0) + 1
+    out.append('  node [shape=plaintext, fontcolor=gray40] '
+               + " ".join(f'b{b} [label="beat {b}"];'
+                          for b in range(beats)))
+    if beats > 1:
+        out.append("  " + " -> ".join(f"b{b}" for b in range(beats))
+                   + " [style=invis];")
+    out.append('  node [shape=box, fontcolor=black];')
     for b in range(beats):
         ids = " ".join(f"n{nd.i};" for nd in g.nodes if nd.beat == b)
-        out.append(f"  {{ rank=same; {ids} }}")
+        out.append(f"  {{ rank=same; b{b}; {ids} }}")
     for nd in sorted(g.nodes, key=lambda nd: nd.i):
-        attrs = [f"label={_q(f'{nd.i} {nd.name}')}"]
+        attrs = [f"label={_q(_node_label(nd))}"]
         if nd.kind == "link":
             attrs.append("shape=diamond")
         elif nd.kind == "init":
             attrs.append("shape=ellipse")
         if nd.i in front:
-            attrs.append("style=bold")
+            attrs.append("style=bold, penwidth=2")
         out.append(f"  n{nd.i} [{', '.join(attrs)}];")
     for e in g.edges:
-        attrs = (f" [label={_q(', '.join(e.atoms))}]"
-                 if e.kind == "flow" else
-                 " [color=gray]")
-        out.append(f"  n{e.src} -> n{e.dst}{attrs};")
+        if e.kind == "flow":
+            attrs = f"label={_q(chr(10).join(e.atoms))}, penwidth=1.6"
+        elif e.kind == "read":
+            attrs = (f"label={_q(chr(10).join('$' + a for a in e.atoms))}"
+                     ", style=dashed, color=steelblue4, "
+                     "fontcolor=steelblue4")
+        else:
+            attrs = (f"tooltip={_q(', '.join(e.atoms))}, style=dotted, "
+                     "color=gray55, constraint=false")
+        out.append(f"  n{e.src} -> n{e.dst} [{attrs}];")
     out.append("}")
     return "\n".join(out) + "\n"
 

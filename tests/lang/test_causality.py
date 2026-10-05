@@ -274,3 +274,34 @@ def test_alternative_branches_match_their_source_rule(tmp_path):
     assert any(n.endswith("-1") or n.endswith("-2") for n in r.fired)
     assert dispatch(r, "causes", "build_stick blow_stick")["verdict"] \
         == "yes"
+
+
+# -- step 3: the DOT as a causal diagram (spec 09 D4, checked) -------
+
+def test_dot_draws_all_three_edge_classes_with_a_legend():
+    """flow solid + atom label, read dashed + `$atom` label, order
+    dotted gray with atoms only in a tooltip (never a label); node
+    labels split action / bindings; the graph label carries a legend
+    and a beat column keeps the ranks."""
+    r = _shell("tragedy.llp")
+    _run(r, "run 40")
+    g, _ = r.causal()
+    text = dot(g, "t")
+    lines = text.splitlines()
+    kinds = {e.kind for e in g.edges}
+    assert kinds == {"flow", "read", "order"}
+    for e in g.edges:
+        line = next(l for l in lines
+                    if l.strip().startswith(f"n{e.src} -> n{e.dst} ["))
+        if e.kind == "flow":
+            assert "label=" in line and "style=" not in line
+            assert all(a in line for a in e.atoms)
+        elif e.kind == "read":
+            assert "style=dashed" in line
+            assert all(f"${a}" in line for a in e.atoms)
+        else:
+            assert "style=dotted" in line and "label=" not in line
+            assert "tooltip=" in line and "constraint=false" in line
+    assert 'label="36 murder\\nC=romeo D=tybalt L=town"' in text
+    assert "token flow" in text and "read" in text and "order" in text
+    assert "b0 -> b1" in text and '{ rank=same; b0; n0; }' in text

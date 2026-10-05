@@ -1,117 +1,122 @@
 digraph causality {
-  rankdir=TB;
-  node [shape=box, fontname="monospace"];
-  label="tragedy.llp · key b451d5b05bd5 · stage all · 40 fired";
+  rankdir=TB; nodesep=0.25; ranksep=0.45;
+  graph [fontname="Helvetica", fontsize=12];
+  node [shape=box, fontname="Helvetica", fontsize=11, margin="0.12,0.04"];
+  edge [fontname="Helvetica", fontsize=9, arrowsize=0.7];
+  label="tragedy.llp · key b451d5b05bd5 · stage all · 40 fired\nsolid, atom: token flow (made, then spent)  ·  dashed, $atom: read (needed, kept)  ·  dotted: order (competition, stage)  ·  bold: frontier  ·  diamond: stage switch";
   labelloc=t;
-  { rank=same; n0; }
-  { rank=same; n1; n2; n5; n7; }
-  { rank=same; n3; n4; n6; n10; n20; }
-  { rank=same; n8; n9; n11; n13; }
-  { rank=same; n12; n14; n19; }
-  { rank=same; n15; n16; }
-  { rank=same; n17; n21; }
-  { rank=same; n18; n22; n23; }
-  { rank=same; n24; }
-  { rank=same; n25; n26; }
-  { rank=same; n27; n29; }
-  { rank=same; n28; n30; n33; n39; }
-  { rank=same; n31; n34; }
-  { rank=same; n32; n35; }
-  { rank=same; n36; n37; n38; }
-  { rank=same; n40; }
+  node [shape=plaintext, fontcolor=gray40] b0 [label="beat 0"]; b1 [label="beat 1"]; b2 [label="beat 2"]; b3 [label="beat 3"]; b4 [label="beat 4"]; b5 [label="beat 5"]; b6 [label="beat 6"]; b7 [label="beat 7"]; b8 [label="beat 8"]; b9 [label="beat 9"]; b10 [label="beat 10"]; b11 [label="beat 11"]; b12 [label="beat 12"]; b13 [label="beat 13"]; b14 [label="beat 14"]; b15 [label="beat 15"];
+  b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b6 -> b7 -> b8 -> b9 -> b10 -> b11 -> b12 -> b13 -> b14 -> b15 [style=invis];
+  node [shape=box, fontcolor=black];
+  { rank=same; b0; n0; }
+  { rank=same; b1; n1; n2; n5; n7; }
+  { rank=same; b2; n3; n4; n6; n10; n20; }
+  { rank=same; b3; n8; n9; n11; n13; }
+  { rank=same; b4; n12; n14; n19; }
+  { rank=same; b5; n15; n16; }
+  { rank=same; b6; n17; n21; }
+  { rank=same; b7; n18; n22; n23; }
+  { rank=same; b8; n24; }
+  { rank=same; b9; n25; n26; }
+  { rank=same; b10; n27; n29; }
+  { rank=same; b11; n28; n30; n33; n39; }
+  { rank=same; b12; n31; n34; }
+  { rank=same; b13; n32; n35; }
+  { rank=same; b14; n36; n37; n38; }
+  { rank=same; b15; n40; }
   n0 [label="0 #init", shape=ellipse];
-  n1 [label="1 travelTo[C=montague,D=romeo,M=town,L=mon_house]"];
-  n2 [label="2 travelTo[C=nurse,D=juliet,M=town,L=cap_house]"];
-  n3 [label="3 formOpinion-1[C=nurse,L=town,D=romeo]"];
-  n4 [label="4 compliment-private[C=juliet,L=town,D=nurse]"];
-  n5 [label="5 compliment-private[C=romeo,L=town,D=mercutio]"];
-  n6 [label="6 formOpinion-1[C=apothecary,L=town,D=nurse]", style=bold];
-  n7 [label="7 formOpinion-2[C=mercutio,L=town,D=juliet]"];
-  n8 [label="8 compliment-private[C=nurse,L=town,D=juliet]"];
-  n9 [label="9 insult-witnessed[C=tybalt,L=town,D=romeo,Witness=nurse]"];
-  n10 [label="10 compliment-private[C=montague,L=town,D=romeo]"];
-  n11 [label="11 compliment-witnessed[C=montague,L=town,D=romeo,Witness=tybalt]"];
-  n12 [label="12 compliment-private[C=nurse,L=town,D=juliet]"];
-  n13 [label="13 compliment-witnessed[C=nurse,L=town,D=romeo,Witness=tybalt]"];
-  n14 [label="14 insult-private[C=nurse,L=town,D=tybalt]"];
-  n15 [label="15 compliment-witnessed[C=juliet,L=town,D=nurse,Witness=tybalt]"];
-  n16 [label="16 insult-witnessed[C=tybalt,L=town,D=nurse,Witness=juliet]"];
-  n17 [label="17 compliment-witnessed[C=nurse,L=town,D=juliet,Witness=tybalt]"];
-  n18 [label="18 eroticize[C=juliet,L=town,D=nurse,M=town]", style=bold];
-  n19 [label="19 compliment-witnessed[C=romeo,L=town,D=montague,Witness=tybalt]"];
-  n20 [label="20 compliment-private[C=mercutio,L=town,D=romeo]"];
-  n21 [label="21 insult-witnessed[C=mercutio,L=town,D=juliet,Witness=nurse]"];
-  n22 [label="22 compliment-witnessed[C=romeo,L=town,D=mercutio,Witness=juliet]"];
-  n23 [label="23 insult-private[C=tybalt,L=town,D=nurse]"];
-  n24 [label="24 compliment-witnessed[C=romeo,L=town,D=mercutio,Witness=juliet]"];
-  n25 [label="25 insult-witnessed[C=tybalt,L=town,D=romeo,Witness=mercutio]"];
-  n26 [label="26 compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=juliet]"];
-  n27 [label="27 insult-private[C=tybalt,L=town,D=romeo]"];
-  n28 [label="28 compliment-witnessed[C=romeo,L=town,D=nurse,Witness=tybalt]"];
-  n29 [label="29 compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=juliet]"];
-  n30 [label="30 eroticize[C=romeo,L=town,D=mercutio,M=town]"];
-  n31 [label="31 compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=tybalt]"];
-  n32 [label="32 compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=tybalt]"];
-  n33 [label="33 insult-witnessed[C=tybalt,L=town,D=montague,Witness=romeo]"];
-  n34 [label="34 insult-witnessed[C=tybalt,L=town,D=romeo,Witness=nurse]"];
-  n35 [label="35 insult-witnessed[C=tybalt,L=town,D=romeo,Witness=montague]"];
-  n36 [label="36 murder[C=romeo,D=tybalt,L=town]", style=bold];
-  n37 [label="37 becomeSuicidal[C=romeo,L=town]", style=bold];
-  n38 [label="38 eroticize[C=mercutio,L=town,D=romeo,M=town]"];
-  n39 [label="39 formOpinion-2[C=juliet,L=town,D=mercutio]", style=bold];
-  n40 [label="40 compliment-private[C=romeo,L=town,D=mercutio]", style=bold];
-  n0 -> n1 [label="at(montague,mon_house)"];
-  n0 -> n2 [label="at(nurse,cap_house)"];
-  n0 -> n5 [color=gray];
-  n0 -> n7 [label="neutral(mercutio,juliet)"];
-  n1 -> n10 [color=gray];
-  n2 -> n3 [color=gray];
-  n2 -> n4 [color=gray];
-  n2 -> n6 [color=gray];
-  n3 -> n9 [color=gray];
-  n3 -> n13 [color=gray];
-  n4 -> n8 [color=gray];
-  n5 -> n20 [color=gray];
-  n7 -> n21 [color=gray];
-  n8 -> n12 [color=gray];
-  n9 -> n14 [color=gray];
-  n9 -> n19 [color=gray];
-  n10 -> n11 [color=gray];
-  n11 -> n19 [color=gray];
-  n12 -> n15 [color=gray];
-  n12 -> n16 [color=gray];
-  n13 -> n14 [color=gray];
-  n13 -> n19 [color=gray];
-  n14 -> n15 [color=gray];
-  n14 -> n16 [color=gray];
-  n15 -> n17 [color=gray];
-  n15 -> n21 [color=gray];
-  n16 -> n17 [color=gray];
-  n17 -> n18 [label="philia(juliet,nurse)"];
-  n17 -> n23 [color=gray];
-  n17 -> n28 [color=gray];
-  n19 -> n25 [color=gray];
-  n20 -> n22 [color=gray];
-  n21 -> n22 [color=gray];
-  n22 -> n24 [color=gray];
-  n23 -> n34 [color=gray];
-  n24 -> n25 [color=gray];
-  n24 -> n26 [color=gray];
-  n25 -> n27 [color=gray];
-  n26 -> n29 [color=gray];
-  n27 -> n28 [color=gray];
-  n27 -> n33 [color=gray];
-  n28 -> n31 [color=gray];
-  n28 -> n34 [color=gray];
-  n29 -> n30 [label="philia(romeo,mercutio)"];
-  n29 -> n39 [color=gray];
-  n30 -> n31 [color=gray];
-  n31 -> n32 [color=gray];
-  n32 -> n36 [color=gray];
-  n32 -> n38 [color=gray];
-  n33 -> n34 [color=gray];
-  n34 -> n35 [color=gray];
-  n35 -> n36 [label="anger(romeo,tybalt)"];
-  n35 -> n37 [label="depressed(romeo)"];
-  n38 -> n40 [color=gray];
+  n1 [label="1 travelTo\nC=montague D=romeo M=town L=mon_house"];
+  n2 [label="2 travelTo\nC=nurse D=juliet M=town L=cap_house"];
+  n3 [label="3 formOpinion-1\nC=nurse L=town D=romeo"];
+  n4 [label="4 compliment-private\nC=juliet L=town D=nurse"];
+  n5 [label="5 compliment-private\nC=romeo L=town D=mercutio"];
+  n6 [label="6 formOpinion-1\nC=apothecary L=town D=nurse", style=bold, penwidth=2];
+  n7 [label="7 formOpinion-2\nC=mercutio L=town D=juliet"];
+  n8 [label="8 compliment-private\nC=nurse L=town D=juliet"];
+  n9 [label="9 insult-witnessed\nC=tybalt L=town D=romeo Witness=nurse"];
+  n10 [label="10 compliment-private\nC=montague L=town D=romeo"];
+  n11 [label="11 compliment-witnessed\nC=montague L=town D=romeo Witness=tybalt"];
+  n12 [label="12 compliment-private\nC=nurse L=town D=juliet"];
+  n13 [label="13 compliment-witnessed\nC=nurse L=town D=romeo Witness=tybalt"];
+  n14 [label="14 insult-private\nC=nurse L=town D=tybalt"];
+  n15 [label="15 compliment-witnessed\nC=juliet L=town D=nurse Witness=tybalt"];
+  n16 [label="16 insult-witnessed\nC=tybalt L=town D=nurse Witness=juliet"];
+  n17 [label="17 compliment-witnessed\nC=nurse L=town D=juliet Witness=tybalt"];
+  n18 [label="18 eroticize\nC=juliet L=town D=nurse M=town", style=bold, penwidth=2];
+  n19 [label="19 compliment-witnessed\nC=romeo L=town D=montague Witness=tybalt"];
+  n20 [label="20 compliment-private\nC=mercutio L=town D=romeo"];
+  n21 [label="21 insult-witnessed\nC=mercutio L=town D=juliet Witness=nurse"];
+  n22 [label="22 compliment-witnessed\nC=romeo L=town D=mercutio Witness=juliet"];
+  n23 [label="23 insult-private\nC=tybalt L=town D=nurse"];
+  n24 [label="24 compliment-witnessed\nC=romeo L=town D=mercutio Witness=juliet"];
+  n25 [label="25 insult-witnessed\nC=tybalt L=town D=romeo Witness=mercutio"];
+  n26 [label="26 compliment-witnessed\nC=mercutio L=town D=romeo Witness=juliet"];
+  n27 [label="27 insult-private\nC=tybalt L=town D=romeo"];
+  n28 [label="28 compliment-witnessed\nC=romeo L=town D=nurse Witness=tybalt"];
+  n29 [label="29 compliment-witnessed\nC=mercutio L=town D=romeo Witness=juliet"];
+  n30 [label="30 eroticize\nC=romeo L=town D=mercutio M=town"];
+  n31 [label="31 compliment-witnessed\nC=mercutio L=town D=romeo Witness=tybalt"];
+  n32 [label="32 compliment-witnessed\nC=mercutio L=town D=romeo Witness=tybalt"];
+  n33 [label="33 insult-witnessed\nC=tybalt L=town D=montague Witness=romeo"];
+  n34 [label="34 insult-witnessed\nC=tybalt L=town D=romeo Witness=nurse"];
+  n35 [label="35 insult-witnessed\nC=tybalt L=town D=romeo Witness=montague"];
+  n36 [label="36 murder\nC=romeo D=tybalt L=town", style=bold, penwidth=2];
+  n37 [label="37 becomeSuicidal\nC=romeo L=town", style=bold, penwidth=2];
+  n38 [label="38 eroticize\nC=mercutio L=town D=romeo M=town"];
+  n39 [label="39 formOpinion-2\nC=juliet L=town D=mercutio", style=bold, penwidth=2];
+  n40 [label="40 compliment-private\nC=romeo L=town D=mercutio", style=bold, penwidth=2];
+  n0 -> n1 [label="at(montague,mon_house)", penwidth=1.6];
+  n0 -> n2 [label="at(nurse,cap_house)", penwidth=1.6];
+  n0 -> n5 [label="$at(mercutio,town)\n$at(romeo,town)\n$philia(romeo,mercutio)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n0 -> n7 [label="neutral(mercutio,juliet)", penwidth=1.6];
+  n1 -> n10 [label="$at(montague,town)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n2 -> n3 [label="$at(nurse,town)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n2 -> n4 [label="$at(nurse,town)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n2 -> n6 [label="$at(nurse,town)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n3 -> n9 [label="$philia(nurse,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n3 -> n13 [label="$philia(nurse,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n4 -> n8 [label="$philia(nurse,juliet)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n5 -> n20 [label="$philia(mercutio,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n7 -> n21 [label="$anger(mercutio,juliet)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n8 -> n12 [tooltip="philia(juliet,nurse)", style=dotted, color=gray55, constraint=false];
+  n9 -> n14 [label="$anger(nurse,tybalt)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n9 -> n19 [tooltip="anger(tybalt,romeo)", style=dotted, color=gray55, constraint=false];
+  n10 -> n11 [tooltip="philia(romeo,montague)", style=dotted, color=gray55, constraint=false];
+  n11 -> n19 [label="$anger(tybalt,montague)\n$philia(romeo,montague)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n12 -> n15 [label="$philia(juliet,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n12 -> n16 [label="$philia(juliet,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n13 -> n14 [tooltip="anger(tybalt,nurse)", style=dotted, color=gray55, constraint=false];
+  n13 -> n19 [tooltip="anger(tybalt,romeo)", style=dotted, color=gray55, constraint=false];
+  n14 -> n15 [label="$anger(tybalt,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n14 -> n16 [label="$anger(tybalt,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n15 -> n17 [label="$anger(tybalt,juliet)\n$philia(nurse,juliet)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n15 -> n21 [label="$philia(nurse,juliet)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n16 -> n17 [tooltip="anger(tybalt,nurse), philia(juliet,nurse)", style=dotted, color=gray55, constraint=false];
+  n17 -> n18 [label="philia(juliet,nurse)", penwidth=1.6];
+  n17 -> n23 [label="$anger(tybalt,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n17 -> n28 [label="$anger(tybalt,nurse)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n19 -> n25 [label="$anger(tybalt,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n20 -> n22 [label="$philia(romeo,mercutio)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n21 -> n22 [label="$anger(juliet,mercutio)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n22 -> n24 [tooltip="anger(juliet,romeo), philia(mercutio,romeo)", style=dotted, color=gray55, constraint=false];
+  n23 -> n34 [tooltip="anger(nurse,tybalt)", style=dotted, color=gray55, constraint=false];
+  n24 -> n25 [label="$philia(mercutio,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n24 -> n26 [label="$anger(juliet,romeo)\n$philia(mercutio,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n25 -> n27 [tooltip="anger(romeo,tybalt), depressed(romeo)", style=dotted, color=gray55, constraint=false];
+  n26 -> n29 [tooltip="anger(juliet,mercutio), philia(romeo,mercutio)", style=dotted, color=gray55, constraint=false];
+  n27 -> n28 [tooltip="anger(tybalt,romeo)", style=dotted, color=gray55, constraint=false];
+  n27 -> n33 [tooltip="anger(romeo,tybalt)", style=dotted, color=gray55, constraint=false];
+  n28 -> n31 [label="$anger(tybalt,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n28 -> n34 [label="$anger(tybalt,romeo)\n$philia(nurse,romeo)", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n29 -> n30 [label="philia(romeo,mercutio)", penwidth=1.6];
+  n29 -> n39 [tooltip="anger(juliet,mercutio)", style=dotted, color=gray55, constraint=false];
+  n30 -> n31 [tooltip="philia(romeo,mercutio)", style=dotted, color=gray55, constraint=false];
+  n31 -> n32 [tooltip="anger(tybalt,mercutio), philia(romeo,mercutio)", style=dotted, color=gray55, constraint=false];
+  n32 -> n36 [tooltip="at(tybalt,town)", style=dotted, color=gray55, constraint=false];
+  n32 -> n38 [tooltip="philia(mercutio,romeo)", style=dotted, color=gray55, constraint=false];
+  n33 -> n34 [tooltip="anger(romeo,tybalt)", style=dotted, color=gray55, constraint=false];
+  n34 -> n35 [tooltip="anger(romeo,tybalt), depressed(romeo)", style=dotted, color=gray55, constraint=false];
+  n35 -> n36 [label="anger(romeo,tybalt)", penwidth=1.6];
+  n35 -> n37 [label="depressed(romeo)", penwidth=1.6];
+  n38 -> n40 [tooltip="philia(mercutio,romeo)", style=dotted, color=gray55, constraint=false];
 }
