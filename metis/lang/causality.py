@@ -109,10 +109,12 @@ def dot(g: CausalGraph, label: str = "") -> str:
         out.append("  " + " -> ".join(f"b{b}" for b in range(beats))
                    + " [style=invis];")
     out.append('  node [shape=box, fontcolor=black];')
+    ranks = []
     for b in range(beats):
         ids = " ".join(f"n{nd.i};" for nd in g.nodes if nd.beat == b)
-        out.append(f"  {{ rank=same; b{b}; {ids} }}")
-    for nd in sorted(g.nodes, key=lambda nd: nd.i):
+        ranks.append(f"  {{ rank=same; b{b}; {ids} }}")
+
+    def node_line(nd, indent="  "):
         attrs = [f"label={_q(_node_label(nd))}"]
         if nd.kind == "link":
             attrs.append("shape=diamond")
@@ -120,7 +122,28 @@ def dot(g: CausalGraph, label: str = "") -> str:
             attrs.append("shape=ellipse")
         if nd.i in front:
             attrs.append("style=bold, penwidth=2")
-        out.append(f"  n{nd.i} [{', '.join(attrs)}];")
+        return f"{indent}n{nd.i} [{', '.join(attrs)}];"
+    nodes = sorted(g.nodes, key=lambda nd: nd.i)
+    if not any(nd.kind == "link" for nd in nodes):
+        out += ranks + [node_line(nd) for nd in nodes]
+    else:
+        # D5 quiescence frames: one cluster per stage episode, link
+        # diamonds between them. newrank lets the beat ranks (and the
+        # beat column) align across cluster boundaries.
+        out.insert(2, "  newrank=true;")
+        episodes = sorted({nd.episode for nd in nodes
+                           if nd.episode is not None})
+        for ep in episodes:
+            members = [nd for nd in nodes if nd.episode == ep]
+            stage = members[0].stage
+            out += [f"  subgraph cluster_e{ep} {{",
+                    f"    label={_q(f'stage {stage} · episode {ep}')};",
+                    "    labeljust=l; style=filled; fillcolor=gray96; "
+                    "color=gray80; fontcolor=gray30;"]
+            out += [node_line(nd, "    ") for nd in members]
+            out.append("  }")
+        out += [node_line(nd) for nd in nodes if nd.episode is None]
+        out += ranks
     for e in g.edges:
         if e.kind == "flow":
             attrs = f"label={_q(chr(10).join(e.atoms))}, penwidth=1.6"
@@ -138,10 +161,12 @@ def dot(g: CausalGraph, label: str = "") -> str:
 
 def as_obj(g: CausalGraph, stage: str, key: str) -> dict:
     """The JSON mirror (spec 09 P1): nodes, edges, frontier, stage,
-    key — the wire op's result body."""
+    key — the wire op's result body. Nodes carry their stage episode
+    (D5; null for a link, which stands between episodes)."""
     return {
         "nodes": [{"i": nd.i, "name": nd.name, "kind": nd.kind,
-                   "stage": nd.stage, "beat": nd.beat}
+                   "stage": nd.stage, "beat": nd.beat,
+                   "episode": nd.episode}
                   for nd in sorted(g.nodes, key=lambda nd: nd.i)],
         "edges": [{"from": e.src, "to": e.dst, "atoms": list(e.atoms),
                    "kind": e.kind} for e in g.edges],

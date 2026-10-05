@@ -1,0 +1,98 @@
+digraph causality {
+  rankdir=TB; nodesep=0.25; ranksep=0.45;
+  newrank=true;
+  graph [fontname="Helvetica", fontsize=12];
+  node [shape=box, fontname="Helvetica", fontsize=11, margin="0.12,0.04"];
+  edge [fontname="Helvetica", fontsize=9, arrowsize=0.7];
+  label="herstory.llp · key 3e873a6f57bd · stage (done) · 23 fired\nsolid, atom: token flow (made, then spent)  ·  dashed, $atom: read (needed, kept)  ·  dotted: order (competition, stage)  ·  bold: frontier  ·  diamond: stage switch";
+  labelloc=t;
+  node [shape=plaintext, fontcolor=gray40] b0 [label="beat 0"]; b1 [label="beat 1"]; b2 [label="beat 2"]; b3 [label="beat 3"]; b4 [label="beat 4"]; b5 [label="beat 5"]; b6 [label="beat 6"]; b7 [label="beat 7"]; b8 [label="beat 8"]; b9 [label="beat 9"]; b10 [label="beat 10"]; b11 [label="beat 11"]; b12 [label="beat 12"]; b13 [label="beat 13"]; b14 [label="beat 14"]; b15 [label="beat 15"]; b16 [label="beat 16"]; b17 [label="beat 17"]; b18 [label="beat 18"]; b19 [label="beat 19"];
+  b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b6 -> b7 -> b8 -> b9 -> b10 -> b11 -> b12 -> b13 -> b14 -> b15 -> b16 -> b17 -> b18 -> b19 [style=invis];
+  node [shape=box, fontcolor=black];
+  subgraph cluster_e0 {
+    label="stage beginning · episode 0";
+    labeljust=l; style=filled; fillcolor=gray96; color=gray80; fontcolor=gray30;
+    n0 [label="0 #init", shape=ellipse];
+    n1 [label="1 eve_hannah_birth"];
+    n2 [label="2 hannah_eve_meet"];
+    n3 [label="3 florence_dies"];
+  }
+  subgraph cluster_e1 {
+    label="stage courtship · episode 1";
+    labeljust=l; style=filled; fillcolor=gray96; color=gray80; fontcolor=gray30;
+    n5 [label="5 date_carl"];
+    n6 [label="6 breakup_carl"];
+    n7 [label="7 meet_simon"];
+    n8 [label="8 hannah_marries_simon"];
+  }
+  subgraph cluster_e2 {
+    label="stage tragedy · episode 2";
+    labeljust=l; style=filled; fillcolor=gray96; color=gray80; fontcolor=gray30;
+    n10 [label="10 hannah_gets_pregnant"];
+    n11 [label="11 eve_ventures_out"];
+    n12 [label="12 hannah_miscarries"];
+    n13 [label="13 parents_die"];
+  }
+  subgraph cluster_e3 {
+    label="stage betrayal · episode 3";
+    labeljust=l; style=filled; fillcolor=gray96; color=gray80; fontcolor=gray30;
+    n15 [label="15 hannah_birthday"];
+    n16 [label="16 eve_performs"];
+    n17 [label="17 eve_simon_affair"];
+    n18 [label="18 eve_to_glasgow", style=bold, penwidth=2];
+    n19 [label="19 hannah_discover_affair"];
+    n20 [label="20 hannah_poses_as_eve"];
+    n21 [label="21 simon_regifts"];
+    n22 [label="22 hannah_break_mirror"];
+    n23 [label="23 hannah_kill_simon", style=bold, penwidth=2];
+  }
+  n4 [label="4 act2", shape=diamond];
+  n9 [label="9 act3", shape=diamond];
+  n14 [label="14 act4", shape=diamond];
+  { rank=same; b0; n0; }
+  { rank=same; b1; n1; }
+  { rank=same; b2; n2; }
+  { rank=same; b3; n3; }
+  { rank=same; b4; n4; }
+  { rank=same; b5; n5; }
+  { rank=same; b6; n6; }
+  { rank=same; b7; n7; }
+  { rank=same; b8; n8; }
+  { rank=same; b9; n9; }
+  { rank=same; b10; n10; n11; n13; }
+  { rank=same; b11; n12; }
+  { rank=same; b12; n14; }
+  { rank=same; b13; n15; n16; }
+  { rank=same; b14; n17; }
+  { rank=same; b15; n18; n19; }
+  { rank=same; b16; n20; }
+  { rank=same; b17; n21; }
+  { rank=same; b18; n22; }
+  { rank=same; b19; n23; }
+  n0 -> n1 [label="pregnant(mother)", penwidth=1.6];
+  n1 -> n2 [label="hannah_eve_separate", penwidth=1.6];
+  n2 -> n3 [label="stairs", penwidth=1.6];
+  n3 -> n4 [tooltip="@stage beginning", style=dotted, color=gray55, constraint=false];
+  n4 -> n5 [label="alive(carl)", penwidth=1.6];
+  n5 -> n6 [label="dating(hannah,carl)", penwidth=1.6];
+  n6 -> n7 [label="older", penwidth=1.6];
+  n7 -> n8 [label="dating(hannah,simon)", penwidth=1.6];
+  n8 -> n9 [tooltip="@stage courtship", style=dotted, color=gray55, constraint=false];
+  n9 -> n10 [tooltip="@stage tragedy", style=dotted, color=gray55, constraint=false];
+  n9 -> n11 [tooltip="@stage tragedy", style=dotted, color=gray55, constraint=false];
+  n9 -> n13 [label="death_caps", penwidth=1.6];
+  n10 -> n12 [label="pregnant(hannah)", penwidth=1.6];
+  n11 -> n14 [tooltip="@stage tragedy", style=dotted, color=gray55, constraint=false];
+  n12 -> n14 [tooltip="@stage tragedy", style=dotted, color=gray55, constraint=false];
+  n13 -> n14 [tooltip="@stage tragedy", style=dotted, color=gray55, constraint=false];
+  n14 -> n15 [label="birthday", penwidth=1.6];
+  n14 -> n16 [label="$wig", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n15 -> n21 [label="$mirror", style=dashed, color=steelblue4, fontcolor=steelblue4];
+  n16 -> n17 [label="attraction(simon,eve)", penwidth=1.6];
+  n17 -> n18 [label="pregnant(eve)", penwidth=1.6];
+  n17 -> n19 [label="had_affair(simon,eve)", penwidth=1.6];
+  n19 -> n20 [label="hannah_knows", penwidth=1.6];
+  n20 -> n21 [label="hannah_in_wig", penwidth=1.6];
+  n21 -> n22 [label="hannah_rage", penwidth=1.6];
+  n22 -> n23 [label="mirror_shards", penwidth=1.6];
+}

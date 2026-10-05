@@ -1,0 +1,412 @@
+{
+ "nodes": [
+  {
+   "i": 0,
+   "name": "#init",
+   "kind": "init",
+   "stage": "beginning",
+   "beat": 0,
+   "episode": 0
+  },
+  {
+   "i": 1,
+   "name": "eve_hannah_birth",
+   "kind": "clause",
+   "stage": "beginning",
+   "beat": 1,
+   "episode": 0
+  },
+  {
+   "i": 2,
+   "name": "hannah_eve_meet",
+   "kind": "clause",
+   "stage": "beginning",
+   "beat": 2,
+   "episode": 0
+  },
+  {
+   "i": 3,
+   "name": "florence_dies",
+   "kind": "clause",
+   "stage": "beginning",
+   "beat": 3,
+   "episode": 0
+  },
+  {
+   "i": 4,
+   "name": "act2",
+   "kind": "link",
+   "stage": "beginning",
+   "beat": 4,
+   "episode": null
+  },
+  {
+   "i": 5,
+   "name": "date_carl",
+   "kind": "clause",
+   "stage": "courtship",
+   "beat": 5,
+   "episode": 1
+  },
+  {
+   "i": 6,
+   "name": "breakup_carl",
+   "kind": "clause",
+   "stage": "courtship",
+   "beat": 6,
+   "episode": 1
+  },
+  {
+   "i": 7,
+   "name": "meet_simon",
+   "kind": "clause",
+   "stage": "courtship",
+   "beat": 7,
+   "episode": 1
+  },
+  {
+   "i": 8,
+   "name": "hannah_marries_simon",
+   "kind": "clause",
+   "stage": "courtship",
+   "beat": 8,
+   "episode": 1
+  },
+  {
+   "i": 9,
+   "name": "act3",
+   "kind": "link",
+   "stage": "courtship",
+   "beat": 9,
+   "episode": null
+  },
+  {
+   "i": 10,
+   "name": "hannah_gets_pregnant",
+   "kind": "clause",
+   "stage": "tragedy",
+   "beat": 10,
+   "episode": 2
+  },
+  {
+   "i": 11,
+   "name": "eve_ventures_out",
+   "kind": "clause",
+   "stage": "tragedy",
+   "beat": 10,
+   "episode": 2
+  },
+  {
+   "i": 12,
+   "name": "hannah_miscarries",
+   "kind": "clause",
+   "stage": "tragedy",
+   "beat": 11,
+   "episode": 2
+  },
+  {
+   "i": 13,
+   "name": "parents_die",
+   "kind": "clause",
+   "stage": "tragedy",
+   "beat": 10,
+   "episode": 2
+  },
+  {
+   "i": 14,
+   "name": "act4",
+   "kind": "link",
+   "stage": "tragedy",
+   "beat": 12,
+   "episode": null
+  },
+  {
+   "i": 15,
+   "name": "hannah_birthday",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 13,
+   "episode": 3
+  },
+  {
+   "i": 16,
+   "name": "eve_performs",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 13,
+   "episode": 3
+  },
+  {
+   "i": 17,
+   "name": "eve_simon_affair",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 14,
+   "episode": 3
+  },
+  {
+   "i": 18,
+   "name": "eve_to_glasgow",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 15,
+   "episode": 3
+  },
+  {
+   "i": 19,
+   "name": "hannah_discover_affair",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 15,
+   "episode": 3
+  },
+  {
+   "i": 20,
+   "name": "hannah_poses_as_eve",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 16,
+   "episode": 3
+  },
+  {
+   "i": 21,
+   "name": "simon_regifts",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 17,
+   "episode": 3
+  },
+  {
+   "i": 22,
+   "name": "hannah_break_mirror",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 18,
+   "episode": 3
+  },
+  {
+   "i": 23,
+   "name": "hannah_kill_simon",
+   "kind": "clause",
+   "stage": "betrayal",
+   "beat": 19,
+   "episode": 3
+  }
+ ],
+ "edges": [
+  {
+   "from": 0,
+   "to": 1,
+   "atoms": [
+    "pregnant(mother)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 1,
+   "to": 2,
+   "atoms": [
+    "hannah_eve_separate"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 2,
+   "to": 3,
+   "atoms": [
+    "stairs"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 3,
+   "to": 4,
+   "atoms": [
+    "@stage beginning"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 4,
+   "to": 5,
+   "atoms": [
+    "alive(carl)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 5,
+   "to": 6,
+   "atoms": [
+    "dating(hannah,carl)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 6,
+   "to": 7,
+   "atoms": [
+    "older"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 7,
+   "to": 8,
+   "atoms": [
+    "dating(hannah,simon)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "atoms": [
+    "@stage courtship"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 9,
+   "to": 10,
+   "atoms": [
+    "@stage tragedy"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 9,
+   "to": 11,
+   "atoms": [
+    "@stage tragedy"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 9,
+   "to": 13,
+   "atoms": [
+    "death_caps"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 10,
+   "to": 12,
+   "atoms": [
+    "pregnant(hannah)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 11,
+   "to": 14,
+   "atoms": [
+    "@stage tragedy"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 12,
+   "to": 14,
+   "atoms": [
+    "@stage tragedy"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 13,
+   "to": 14,
+   "atoms": [
+    "@stage tragedy"
+   ],
+   "kind": "order"
+  },
+  {
+   "from": 14,
+   "to": 15,
+   "atoms": [
+    "birthday"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 14,
+   "to": 16,
+   "atoms": [
+    "wig"
+   ],
+   "kind": "read"
+  },
+  {
+   "from": 15,
+   "to": 21,
+   "atoms": [
+    "mirror"
+   ],
+   "kind": "read"
+  },
+  {
+   "from": 16,
+   "to": 17,
+   "atoms": [
+    "attraction(simon,eve)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 17,
+   "to": 18,
+   "atoms": [
+    "pregnant(eve)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 17,
+   "to": 19,
+   "atoms": [
+    "had_affair(simon,eve)"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 19,
+   "to": 20,
+   "atoms": [
+    "hannah_knows"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 20,
+   "to": 21,
+   "atoms": [
+    "hannah_in_wig"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 21,
+   "to": 22,
+   "atoms": [
+    "hannah_rage"
+   ],
+   "kind": "flow"
+  },
+  {
+   "from": 22,
+   "to": 23,
+   "atoms": [
+    "mirror_shards"
+   ],
+   "kind": "flow"
+  }
+ ],
+ "frontier": [
+  18,
+  23
+ ],
+ "stage": "(done)",
+ "key": "3e873a6f57bdd5e546b0f192da87164de7cff91c301aa20b2358bedc5c14bde8"
+}

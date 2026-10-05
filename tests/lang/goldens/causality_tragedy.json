@@ -5,287 +5,328 @@
    "name": "#init",
    "kind": "init",
    "stage": "all",
-   "beat": 0
+   "beat": 0,
+   "episode": 0
   },
   {
    "i": 1,
    "name": "travelTo[C=montague,D=romeo,M=town,L=mon_house]",
    "kind": "clause",
    "stage": "all",
-   "beat": 1
+   "beat": 1,
+   "episode": 0
   },
   {
    "i": 2,
    "name": "travelTo[C=nurse,D=juliet,M=town,L=cap_house]",
    "kind": "clause",
    "stage": "all",
-   "beat": 1
+   "beat": 1,
+   "episode": 0
   },
   {
    "i": 3,
    "name": "formOpinion-1[C=nurse,L=town,D=romeo]",
    "kind": "clause",
    "stage": "all",
-   "beat": 2
+   "beat": 2,
+   "episode": 0
   },
   {
    "i": 4,
    "name": "compliment-private[C=juliet,L=town,D=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 2
+   "beat": 2,
+   "episode": 0
   },
   {
    "i": 5,
    "name": "compliment-private[C=romeo,L=town,D=mercutio]",
    "kind": "clause",
    "stage": "all",
-   "beat": 1
+   "beat": 1,
+   "episode": 0
   },
   {
    "i": 6,
    "name": "formOpinion-1[C=apothecary,L=town,D=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 2
+   "beat": 2,
+   "episode": 0
   },
   {
    "i": 7,
    "name": "formOpinion-2[C=mercutio,L=town,D=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 1
+   "beat": 1,
+   "episode": 0
   },
   {
    "i": 8,
    "name": "compliment-private[C=nurse,L=town,D=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 3
+   "beat": 3,
+   "episode": 0
   },
   {
    "i": 9,
    "name": "insult-witnessed[C=tybalt,L=town,D=romeo,Witness=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 3
+   "beat": 3,
+   "episode": 0
   },
   {
    "i": 10,
    "name": "compliment-private[C=montague,L=town,D=romeo]",
    "kind": "clause",
    "stage": "all",
-   "beat": 2
+   "beat": 2,
+   "episode": 0
   },
   {
    "i": 11,
    "name": "compliment-witnessed[C=montague,L=town,D=romeo,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 3
+   "beat": 3,
+   "episode": 0
   },
   {
    "i": 12,
    "name": "compliment-private[C=nurse,L=town,D=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 4
+   "beat": 4,
+   "episode": 0
   },
   {
    "i": 13,
    "name": "compliment-witnessed[C=nurse,L=town,D=romeo,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 3
+   "beat": 3,
+   "episode": 0
   },
   {
    "i": 14,
    "name": "insult-private[C=nurse,L=town,D=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 4
+   "beat": 4,
+   "episode": 0
   },
   {
    "i": 15,
    "name": "compliment-witnessed[C=juliet,L=town,D=nurse,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 5
+   "beat": 5,
+   "episode": 0
   },
   {
    "i": 16,
    "name": "insult-witnessed[C=tybalt,L=town,D=nurse,Witness=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 5
+   "beat": 5,
+   "episode": 0
   },
   {
    "i": 17,
    "name": "compliment-witnessed[C=nurse,L=town,D=juliet,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 6
+   "beat": 6,
+   "episode": 0
   },
   {
    "i": 18,
    "name": "eroticize[C=juliet,L=town,D=nurse,M=town]",
    "kind": "clause",
    "stage": "all",
-   "beat": 7
+   "beat": 7,
+   "episode": 0
   },
   {
    "i": 19,
    "name": "compliment-witnessed[C=romeo,L=town,D=montague,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 4
+   "beat": 4,
+   "episode": 0
   },
   {
    "i": 20,
    "name": "compliment-private[C=mercutio,L=town,D=romeo]",
    "kind": "clause",
    "stage": "all",
-   "beat": 2
+   "beat": 2,
+   "episode": 0
   },
   {
    "i": 21,
    "name": "insult-witnessed[C=mercutio,L=town,D=juliet,Witness=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 6
+   "beat": 6,
+   "episode": 0
   },
   {
    "i": 22,
    "name": "compliment-witnessed[C=romeo,L=town,D=mercutio,Witness=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 7
+   "beat": 7,
+   "episode": 0
   },
   {
    "i": 23,
    "name": "insult-private[C=tybalt,L=town,D=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 7
+   "beat": 7,
+   "episode": 0
   },
   {
    "i": 24,
    "name": "compliment-witnessed[C=romeo,L=town,D=mercutio,Witness=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 8
+   "beat": 8,
+   "episode": 0
   },
   {
    "i": 25,
    "name": "insult-witnessed[C=tybalt,L=town,D=romeo,Witness=mercutio]",
    "kind": "clause",
    "stage": "all",
-   "beat": 9
+   "beat": 9,
+   "episode": 0
   },
   {
    "i": 26,
    "name": "compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 9
+   "beat": 9,
+   "episode": 0
   },
   {
    "i": 27,
    "name": "insult-private[C=tybalt,L=town,D=romeo]",
    "kind": "clause",
    "stage": "all",
-   "beat": 10
+   "beat": 10,
+   "episode": 0
   },
   {
    "i": 28,
    "name": "compliment-witnessed[C=romeo,L=town,D=nurse,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 11
+   "beat": 11,
+   "episode": 0
   },
   {
    "i": 29,
    "name": "compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=juliet]",
    "kind": "clause",
    "stage": "all",
-   "beat": 10
+   "beat": 10,
+   "episode": 0
   },
   {
    "i": 30,
    "name": "eroticize[C=romeo,L=town,D=mercutio,M=town]",
    "kind": "clause",
    "stage": "all",
-   "beat": 11
+   "beat": 11,
+   "episode": 0
   },
   {
    "i": 31,
    "name": "compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 12
+   "beat": 12,
+   "episode": 0
   },
   {
    "i": 32,
    "name": "compliment-witnessed[C=mercutio,L=town,D=romeo,Witness=tybalt]",
    "kind": "clause",
    "stage": "all",
-   "beat": 13
+   "beat": 13,
+   "episode": 0
   },
   {
    "i": 33,
    "name": "insult-witnessed[C=tybalt,L=town,D=montague,Witness=romeo]",
    "kind": "clause",
    "stage": "all",
-   "beat": 11
+   "beat": 11,
+   "episode": 0
   },
   {
    "i": 34,
    "name": "insult-witnessed[C=tybalt,L=town,D=romeo,Witness=nurse]",
    "kind": "clause",
    "stage": "all",
-   "beat": 12
+   "beat": 12,
+   "episode": 0
   },
   {
    "i": 35,
    "name": "insult-witnessed[C=tybalt,L=town,D=romeo,Witness=montague]",
    "kind": "clause",
    "stage": "all",
-   "beat": 13
+   "beat": 13,
+   "episode": 0
   },
   {
    "i": 36,
    "name": "murder[C=romeo,D=tybalt,L=town]",
    "kind": "clause",
    "stage": "all",
-   "beat": 14
+   "beat": 14,
+   "episode": 0
   },
   {
    "i": 37,
    "name": "becomeSuicidal[C=romeo,L=town]",
    "kind": "clause",
    "stage": "all",
-   "beat": 14
+   "beat": 14,
+   "episode": 0
   },
   {
    "i": 38,
    "name": "eroticize[C=mercutio,L=town,D=romeo,M=town]",
    "kind": "clause",
    "stage": "all",
-   "beat": 14
+   "beat": 14,
+   "episode": 0
   },
   {
    "i": 39,
    "name": "formOpinion-2[C=juliet,L=town,D=mercutio]",
    "kind": "clause",
    "stage": "all",
-   "beat": 11
+   "beat": 11,
+   "episode": 0
   },
   {
    "i": 40,
    "name": "compliment-private[C=romeo,L=town,D=mercutio]",
    "kind": "clause",
    "stage": "all",
-   "beat": 15
+   "beat": 15,
+   "episode": 0
   }
  ],
  "edges": [

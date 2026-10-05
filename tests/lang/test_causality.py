@@ -68,6 +68,16 @@ def test_tragedy_graph_goldens(tmp_path):
     _golden("causality_tragedy.json", (tmp_path / "t.json").read_text())
 
 
+def test_herstory_graph_goldens(tmp_path):
+    """The multi-stage pin (D5): herstory's four acts are four stage
+    episodes; `graph F.dot` / `graph F.json` pinned byte for byte."""
+    r = _shell("herstory.llp")
+    _run(r, "run 40")
+    _run(r, f"graph {tmp_path}/h.dot", f"graph {tmp_path}/h.json")
+    _golden("causality_herstory.dot", (tmp_path / "h.dot").read_text())
+    _golden("causality_herstory.json", (tmp_path / "h.json").read_text())
+
+
 # -- the object's laws -------------------------------------------------
 
 def _closure(g):
@@ -305,3 +315,52 @@ def test_dot_draws_all_three_edge_classes_with_a_legend():
     assert 'label="36 murder\\nC=romeo D=tybalt L=town"' in text
     assert "token flow" in text and "read" in text and "order" in text
     assert "b0 -> b1" in text and '{ rank=same; b0; n0; }' in text
+
+
+# -- step 4: quiescence frames (spec 09 D5) ----------------------------
+
+def test_episodes_cluster_the_dot_and_links_stand_between():
+    """One cluster per stage episode (label: stage · episode), link
+    diamonds outside every cluster, newrank so the beat column aligns
+    across clusters; a run with no link has no cluster at all."""
+    r = _shell("herstory.llp")
+    _run(r, "run 40")
+    g, _ = r.causal()
+    text = dot(g, "h")
+    eps = [nd.episode for nd in g.nodes]
+    links = [nd for nd in g.nodes if nd.kind == "link"]
+    assert [nd.episode for nd in links] == [None] * 3
+    assert sorted({e for e in eps if e is not None}) == [0, 1, 2, 3]
+    assert text.count("subgraph cluster_e") == 4 and "newrank=true" in text
+    for stage, ep in (("beginning", 0), ("courtship", 1),
+                      ("tragedy", 2), ("betrayal", 3)):
+        assert f'label="stage {stage} · episode {ep}"' in text
+    # each link node is declared at top level, never inside a cluster
+    depth, where = 0, {}
+    for line in text.splitlines():
+        if "subgraph cluster" in line:
+            depth += 1
+        elif line.strip() == "}" and depth:
+            depth -= 1
+        for nd in links:
+            if line.strip().startswith(f"n{nd.i} [label="):
+                where[nd.i] = depth
+    assert where == {nd.i: 0 for nd in links}
+    # no beat spans two episodes
+    for b in {nd.beat for nd in g.nodes}:
+        assert len({nd.episode for nd in g.nodes if nd.beat == b}) == 1
+    t = _shell("3lp.llp")
+    _run(t, "run 6")
+    tg, _ = t.causal()
+    assert "cluster" not in dot(tg) and "newrank" not in dot(tg)
+
+
+def test_json_mirror_carries_the_episode():
+    r = _shell("herstory.llp")
+    _run(r, "run 40")
+    nodes = dispatch(r, "graph", "")["nodes"]
+    assert {n["name"]: n["episode"] for n in nodes
+            if n["kind"] == "link"} == {"act2": None, "act3": None,
+                                        "act4": None}
+    assert nodes[0]["episode"] == 0 and nodes[-1]["episode"] == 3
+    assert {"i", "name", "kind", "stage", "beat"} <= set(nodes[0])

@@ -34,7 +34,7 @@ projection's `.program` (the canonical presentation). Policies are
 cacheable only under an explicit `policy_key` naming their identity."""
 
 import hashlib
-from typing import List, NamedTuple, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 from .filter import ForwardProjection
 from .program import Program
@@ -189,6 +189,7 @@ class CausalNode(NamedTuple):
     stage: str
     beat: int         # Foata level; the base is beat 0
     key: str          # repr of the content key (canonical ordering)
+    episode: Optional[int] = 0   # stage episode (D5); None = a link
 
 
 class CausalEdge(NamedTuple):
@@ -219,7 +220,11 @@ def causal_graph(rows, init, init_stage: str,
     covering pairs only, each a direct conflict, classed by
     precedence flow (produce ∩ consume) > read (produce ∩ persist) >
     order (any other write conflict: competition, stage switches).
-    Beats are Foata levels; maximal nodes are the frontier."""
+    Beats are Foata levels; maximal nodes are the frontier. Episodes
+    (D5): the runs between quiescence links, numbered from 0 (the
+    base's); links write both @stage markers, so no beat spans two
+    episodes; a link node itself has episode None — it stands
+    between them."""
     base = {a: n for a, n in dict(init).items() if n > 0}
     fps = [(frozenset(), frozenset(base) | {("@stage", init_stage)})]
     prod, cons, pers = [set(base)], [set()], [set()]
@@ -245,11 +250,14 @@ def causal_graph(rows, init, init_stage: str,
         parents.append([i for i in direct if not (covered >> i) & 1])
         beat[j] = 1 + max((beat[i] for i in direct), default=-1)
     num = [0] + [first + k for k in range(n - 1)]
-    nodes = [CausalNode(0, "#init", "init", init_stage, 0, "")]
+    nodes = [CausalNode(0, "#init", "init", init_stage, 0, "", 0)]
+    ep = 0                     # D5: a link closes episode ep, opens ep+1
     for k, (kind, stage, ev) in enumerate(rows, 1):
         nodes.append(CausalNode(num[k], ev.name, kind,
                                 stage if kind == "clause" else ev.pre,
-                                beat[k], repr(_event_key(kind, stage, ev))))
+                                beat[k], repr(_event_key(kind, stage, ev)),
+                                None if kind == "link" else ep))
+        ep += kind == "link"
     edges = []
     for j in range(n):
         for i in parents[j]:
