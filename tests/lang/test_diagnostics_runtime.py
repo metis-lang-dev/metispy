@@ -138,3 +138,19 @@ def test_findings_verb_lists_and_shows(capsys, monkeypatch):
     wire = dispatch(r, "findings", "")
     assert wire["ok"] and [d["code"] for d in wire["diagnostics"]] == \
         ["fact-var-singleton", "llm-endpoint"]
+
+
+def test_notes_dedupe_and_retire_with_the_world(monkeypatch):
+    """A repeated instrument adds no row; reload (a new world) retires
+    the old world's notes."""
+    monkeypatch.setattr(metis.kernel, "STATE_BUDGET", 10)
+    import metis.lang.repl as repl_mod
+    monkeypatch.setattr(repl_mod, "STATE_BUDGET", 10)
+    r = _repl(CATALOG / "domains/fiction/love_triangle.llp")
+    for _ in range(3):
+        r.onecmd("query anger(hermia,helena) 6")
+        r.onecmd("trace")
+    assert sorted(d.code for d in r.notes) == ["exact-unreachable",
+                                               "state-budget"]
+    r.onecmd("reload")
+    assert r.notes == []

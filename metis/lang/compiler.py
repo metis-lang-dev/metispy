@@ -324,6 +324,27 @@ def compile_catalog(cat: ast.Catalog,
     entries: List[Entry] = []
     horn_entries: List[Entry] = []
 
+    # decl-duplicate (a pre-pass, before sweep 1): one name, one
+    # declaration per kind — a second pred/bwd/type/namespace/port of a
+    # name is a finding at the SECOND occurrence (the two toolchains
+    # used to keep different ones: last-wins here, first-wins in metisc)
+    import os as _os
+    first_seen: Dict = {}
+    _dkind = {ast.PredDecl: "pred", ast.BwdDecl: "bwd",
+              ast.TypeDecl: "type", ast.NamespaceDecl: "namespace",
+              ast.PortDecl: "port"}
+    for d in cat.decls:
+        kind = _dkind.get(type(d))
+        if kind is None:
+            continue
+        p0 = first_seen.setdefault((kind, d.name), d)
+        if p0 is not d:
+            where = (f"{_os.path.basename(p0.file) or '<input>'}:"
+                     f"{p0.line}")
+            emitter(vocab.decl_source(d, f"{kind}/{d.name}"))(
+                "decl-duplicate",
+                f"{kind} '{d.name}' declared twice (first at {where})",
+                (("kind", kind), ("name", d.name), ("first", where)))
     for d in cat.decls:
         if isinstance(d, ast.TypeDecl):
             types[d.name] = list(d.consts)

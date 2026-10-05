@@ -53,6 +53,62 @@ approved unit; your rules must carry %% docs quoting it):
 {findings}"""
 
 
+# D5 (spec 08): the REPAIR prompt carries no base catalog — the
+# candidate's OWN source (it is being repaired) and the diagnostics,
+# whose context lines are the only vocabulary that travels.
+REPAIR_TEMPLATE = """\
+The observed, unmodeled behavior to formalize (this text is the
+approved unit; your rules must carry %% docs quoting it):
+
+{text}
+
+Your previous candidate:
+
+{candidate}
+
+It FAILED these gates. Each diagnostic quotes the offending
+declaration, the declarations it references, and a repair hint —
+repair and re-emit the full source:
+
+{diagnostics}"""
+
+
+# A model that runs away (thousands of tokens of non-LLP) must not
+# balloon every later prompt: the echoed candidate is capped, and the
+# cut is SAID in the prompt (measured 2026-10-04: an 8k-token runaway
+# made the next repair prompt 132 KB before this cap).
+CANDIDATE_CAP = 4000
+
+
+def _capped(candidate: str) -> str:
+    c = candidate.strip()
+    if len(c) <= CANDIDATE_CAP:
+        return c
+    return (c[:CANDIDATE_CAP] + f"\n[... candidate truncated: "
+            f"{len(c) - CANDIDATE_CAP} more characters omitted — far past "
+            f"a catalog's size; re-emit ONLY the LLP source]")
+
+
+def render_repair_prompt(text: str, candidate: str, report,
+                         system: str = None) -> str:
+    """The diagnostics-only repair prompt (D5): system + TEXT + the
+    candidate's own source + the diagnostics' text renderings. Findings
+    with no structured diagnostic (parse / roundtrip) travel as lines."""
+    from metis.kernel.diagnostics import render_text
+    from .prompts import resolve
+    # only what FAILED the gate: warnings ride the report, not the repair
+    diags = [d for d in (getattr(report, "diagnostics", []) or [])
+             if d.severity == "error"]
+    covered = {d.text for d in diags}
+    blocks = [render_text(d).rstrip("\n") for d in diags]
+    blocks += [f"error {f}" for f in report.findings
+               if not any(f.endswith(t) for t in covered)]
+    head, _ = resolve("formalize", system)
+    return head + "\n\n" + REPAIR_TEMPLATE.format(
+        text=text, candidate=_capped(candidate),
+        diagnostics="\n\n".join(blocks))
+
+
 def render_prompt(text: str, vocabulary: str,
                   findings: Sequence[str] = (),
                   system: str = None) -> str:
@@ -86,26 +142,49 @@ class FormalizeResult:
     llp: str = ""
     report: Optional[Formalization] = None
     history: List[Tuple[str, List[str]]] = field(default_factory=list)
+    prompts: List[str] = field(default_factory=list)   # sent, in order
 
 
 def formalize_loop(text: str, vocabulary: str, backend: Sequence[str],
                    base_path=None, scenarios=(), steps: int = 6,
                    max_rounds: int = 4,
-                   system: str = None) -> FormalizeResult:
+                   system: str = None, repair: str = "diagnostics",
+                   start: Optional[str] = None) -> FormalizeResult:
     """text -> candidate -> gates -> findings -> repair, <= max_rounds.
-    The candidate is UNTRUSTED; only the gate verdict is."""
-    findings: List[str] = []
+    The candidate is UNTRUSTED; only the gate verdict is.
+
+    repair: "diagnostics" (D5, default) — repair rounds send the TEXT,
+    the candidate's own source and the diagnostics, never the base
+    vocabulary; "full" — every round re-sends vocabulary + findings
+    (the pre-D5 prompt, kept for measurement).
+    start: a first candidate to repair instead of drafting one (round 1
+    is then this candidate's gate verdict — repair-only measurement)."""
+    if repair not in ("diagnostics", "full"):
+        raise ValueError(f"repair must be 'diagnostics' or 'full', "
+                         f"got {repair!r}")
     history: List[Tuple[str, List[str]]] = []
+    prompts: List[str] = []
+    rep = None
+    llp = ""
     for n in range(1, max_rounds + 1):
-        llp = run_backend(backend, render_prompt(text, vocabulary,
-                                                 findings, system))
+        if n == 1 and start is not None:
+            llp = start
+        else:
+            if rep is None:
+                prompt = render_prompt(text, vocabulary, (), system)
+            elif repair == "diagnostics":
+                prompt = render_repair_prompt(text, llp, rep, system)
+            else:
+                prompt = render_prompt(text, vocabulary, rep.findings,
+                                       system)
+            prompts.append(prompt)
+            llp = run_backend(backend, prompt)
         rep = admit(text, llp, base_path=base_path,
                     scenarios=scenarios, steps=steps)
         history.append((llp, list(rep.findings)))
         if rep.ok:
-            return FormalizeResult(True, n, llp, rep, history)
-        findings = rep.findings
-    return FormalizeResult(False, max_rounds, llp, rep, history)
+            return FormalizeResult(True, n, llp, rep, history, prompts)
+    return FormalizeResult(False, max_rounds, llp, rep, history, prompts)
 
 
 # ---- Explanation / replay ------------------------------------------

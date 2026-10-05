@@ -45,7 +45,9 @@ def parse_intent(line: str):
 def _note(shell, d) -> None:
     """Record a runtime diagnostic on the shell's session notes (spec 08
     step 3; listed by `findings`)."""
-    shell.__dict__.setdefault("notes", []).append(d)
+    notes = shell.__dict__.setdefault("notes", [])
+    if d not in notes:          # a repeated instrument adds no row
+        notes.append(d)
 
 
 def session_findings(shell) -> list:

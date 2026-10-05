@@ -6,6 +6,8 @@ boundary with `cat` in the LLM seat (the material is then auditable:
 the narration IS the prompt)."""
 import os
 import stat
+
+import pytest
 from pathlib import Path
 
 from metis.loop import admit, formalize_loop
@@ -222,3 +224,53 @@ def test_wire_and_narrate_cat_backend(tmp_path):
     txt = out["narration"]
     assert "beats" in txt and "== the rules" in txt
     assert "catch" in txt and "INDEPENDENT" in txt
+    assert "⇒ gone:" in txt and "new:" in txt     # glossed effects
+
+
+# -- D5: the diagnostics-only repair prompt (spec 08) ----------------
+
+def test_repair_prompt_carries_diagnostics_not_the_base(tmp_path):
+    """Repair rounds send the TEXT, the candidate's own source and the
+    failing diagnostics' slices — never the base catalog; `full` keeps
+    the pre-D5 prompt (vocabulary + findings)."""
+    from metis.loop.core import render_prompt, render_repair_prompt
+    base = LANG / "corpus/packbase.llp"
+    bad = _fixture("packmark.llp").replace("-o seen.", "-o seen * heads.")
+    rep = admit(TEXT, bad, base_path=base)
+    p = render_repair_prompt(TEXT, bad, rep)
+    assert "error containment-produce @" in p       # the slice
+    assert "| layers (dyn pack)." in p               # its context
+    assert bad.strip() in p                          # its own source
+    assert "provenance-shape" not in p               # warnings stay out
+    assert "stage roll" not in p                     # NO base source
+    full = render_prompt(TEXT, base.read_text(), rep.findings)
+    assert "stage roll" in full and "containment-produce" not in full
+
+
+def test_repair_modes_and_start(tmp_path):
+    """`start` repairs a given candidate (round 1 = its verdict); each
+    mode builds its own repair prompt; an unknown mode is loud."""
+    good = _fixture("packmark.llp")
+    bad = good.replace("mkt", "unlock", 1)
+    for mode, marker in (("diagnostics", "error pred-undeclared"),
+                         ("full", "FAILED these gates")):
+        seen = []
+        res = formalize_loop(TEXT, "coin, heads, tails, mkt",
+                             lambda p: (seen.append(p), good)[1],
+                             base_path=LANG / "corpus/packbase.llp",
+                             repair=mode, start=bad)
+        assert res.ok and res.rounds == 2 and len(seen) == 1
+        assert marker in seen[0] and res.prompts == seen
+    with pytest.raises(ValueError, match="repair must be"):
+        formalize_loop(TEXT, "", lambda p: good, repair="nope")
+
+
+def test_repair_prompt_caps_a_runaway_candidate():
+    """A runaway model output is echoed CAPPED, and the cut is said."""
+    from metis.loop.core import CANDIDATE_CAP, render_repair_prompt
+    base = LANG / "corpus/packbase.llp"
+    junk = "concept " * 20000
+    rep = admit(TEXT, junk, base_path=base)
+    p = render_repair_prompt(TEXT, junk, rep)
+    assert len(p) < CANDIDATE_CAP + 3000
+    assert "candidate truncated" in p

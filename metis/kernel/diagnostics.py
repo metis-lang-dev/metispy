@@ -62,6 +62,7 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "reads-var-unbound": ("error", "compile"),
     "include-cycle": ("error", "compile"),
     "extends-no-base": ("error", "compile"),
+    "decl-duplicate": ("error", "compile"),
     # kernel
     "containment-produce": ("error", "kernel"),
     "containment-consume": ("error", "kernel"),
@@ -159,6 +160,9 @@ HINTS: Dict[str, str] = {
         "break the include cycle at {path}",
     "extends-no-base":
         "compile this pack against its base catalog {base}",
+    "decl-duplicate":
+        "a name is declared once per kind: remove this {kind} "
+        "declaration of {name}, or rename it (first at {first})",
     "pred-undeclared":
         "declare {pred}: `pred {pred}(...) : <namespace>.`",
     "bwd-as-resource":
