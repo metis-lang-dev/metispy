@@ -272,6 +272,41 @@ def causal_graph(rows, init, init_stage: str,
     return CausalGraph(tuple(nodes), tuple(edges), frontier)
 
 
+def cone(g: CausalGraph, roots) -> List[int]:
+    """The causal cone (spec 09 P3): roots and all their ancestors
+    in g, by occurrence number. The Hasse edges' closure is the full
+    causal order, so walking edges back is exact."""
+    par = {nd.i: [] for nd in g.nodes}
+    for e in g.edges:
+        par[e.dst].append(e.src)
+    seen, todo = set(), list(roots)
+    while todo:
+        i = todo.pop()
+        if i not in seen:
+            seen.add(i)
+            todo.extend(par[i])
+    return sorted(seen)
+
+
+def live_roots(rows, init, init_stage: str, counts, stage,
+               first: int = 1) -> List[int]:
+    """Occurrences the CURRENT state directly depends on: a virtual
+    'now' reads every present atom and the active stage; the roots
+    are the occurrences whose writes conflict with that read (0 = the
+    base). Atoms are indistinguishable — this is dependence on the
+    multiset, not token lineage. cone(g, live_roots(...)) is bare
+    `why`: what the state rests on; everything else is pruned."""
+    present = {a for a, n in dict(counts).items() if n > 0}
+    if stage:                         # None/"" once the run is done
+        present.add(("@stage", stage))
+    base = {a for a, n in dict(init).items() if n > 0}
+    hits = [0] if (base | {("@stage", init_stage)}) & present else []
+    for k, row in enumerate(rows):
+        if _footprint(*row)[1] & present:
+            hits.append(first + k)
+    return hits
+
+
 def canonical_graph(g: CausalGraph) -> CausalGraph:
     """The graph with occurrences renumbered by (beat, content key):
     two traces with equal run_key give byte-equal canonical graphs —

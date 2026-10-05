@@ -116,3 +116,51 @@ def as_obj(g: CausalGraph, stage: str, key: str) -> dict:
 def as_json(g: CausalGraph, stage: str, key: str) -> str:
     return json.dumps(as_obj(g, stage, key), indent=1,
                       ensure_ascii=False) + "\n"
+
+
+def cone_text(g: CausalGraph, members, title: str,
+              source=None) -> List[str]:
+    """`why`: the cone grouped by beat, each occurrence with its rule's
+    source line (`source(name) -> (lineno, text) | None`, as `list`
+    renders rules), then what was pruned."""
+    keep = set(members)
+    num_w = len(str(max((nd.i for nd in g.nodes), default=0)))
+    out = [title]
+    beats = max((nd.beat for nd in g.nodes), default=0) + 1
+    for b in range(beats):
+        first = True
+        for nd in sorted((nd for nd in g.nodes
+                          if nd.beat == b and nd.i in keep),
+                         key=lambda nd: nd.i):
+            tag = f"{b:>{len(str(beats - 1))}}" if first else \
+                " " * len(str(beats - 1))
+            loc = source(nd.name) if source and nd.kind != "init" \
+                else None
+            where = (f"  L{loc[0]}: {loc[1].strip()}" if loc else
+                     "  (the base state)" if nd.kind == "init" else "")
+            out.append(f"  {tag} | {nd.i:>{num_w}} {nd.name}{where}")
+            first = False
+    pruned = [nd for nd in g.nodes if nd.i not in keep]
+    out.append(f"  pruned: {len(pruned)} irrelevant event"
+               f"{'' if len(pruned) == 1 else 's'}"
+               + (": " + ", ".join(f"{nd.i} {nd.name}" for nd in pruned)
+                  if pruned else ""))
+    return out
+
+
+def causes(g: CausalGraph, match_a, match_b) -> dict:
+    """TeLLer's `x a b` / CelfToGraph's `link`: for each occurrence of
+    B, the occurrences of A among its ancestors. verdict: yes (every
+    B has one), some, no — or none when B never fired."""
+    from metis.kernel.nets import cone
+    rows = []
+    for nd in g.nodes:
+        if nd.kind != "init" and match_b(nd.name):
+            anc = [i for i in cone(g, [nd.i]) if i != nd.i]
+            hits = [i for i in anc
+                    if match_a(next(n.name for n in g.nodes if n.i == i))]
+            rows.append({"b": nd.i, "name": nd.name, "a": hits})
+    n_yes = sum(1 for r in rows if r["a"])
+    verdict = ("none" if not rows else "yes" if n_yes == len(rows)
+               else "some" if n_yes else "no")
+    return {"rows": rows, "verdict": verdict}

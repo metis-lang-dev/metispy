@@ -61,6 +61,13 @@ graph [F.dot|F.json] beats: each event with its covering parents
                     (i<j, flow atoms in parens), * = frontier
                     ("where we are"); or write DOT (`dot -Tsvg`)
                     / JSON
+why [ATOM|K]        causal cone with rule lines + what is pruned:
+                    bare = what the current state rests on; ATOM =
+                    its last producer (else the base); K = event K
+                    (dependence on the multiset — atoms are
+                    indistinguishable, no token lineage)
+causes A B          per occurrence of B: is some A among its causes;
+                    yes / some / no (TeLLer's x)
 map [STEPS]         modal derivation (Viterbi) of the file scene
                     (exact; a blown state budget says so — lower
                     the horizon rather than wait)
@@ -909,6 +916,98 @@ class Repl(LoopVerbs, Cmd):
             return
         self._say(f"wrote {a} ({len(g.nodes)} nodes, {len(g.edges)} "
                   f"edges, frontier {' '.join(map(str, g.frontier))})")
+
+    def _occ_matcher(self, word):
+        """Event-name matcher for why/causes: the ground name, the
+        rule name, or the source rule of an ⊕ branch."""
+        spans = self._rule_spans()
+
+        def match(name):
+            base = name.partition("[")[0]
+            return word in (name, base, _source_name(base, spans))
+        return match
+
+    def _rule_head(self, name):
+        """(lineno, head text) of an event's rule, or None."""
+        spans = self._rule_spans()
+        span = spans.get(_source_name(name.partition("[")[0], spans))
+        if span is None:
+            return None
+        return span[1], self.text.splitlines()[span[1] - 1]
+
+    def _why(self, arg):
+        """(title, cone, graph) for `why [ATOM|K]`, or an error str."""
+        from metis.kernel.nets import cone, live_roots
+        g, n = self.causal()
+        k0, base_stage, base_counts = self._base
+        a = arg.strip()
+        if not a:
+            stage = None if self.stage == DONE else self.stage
+            roots = live_roots(self.fired_rows[k0:], base_counts,
+                               base_stage, self.counts, stage,
+                               first=k0 + 1)
+            what = "the current state"
+        elif a.isdigit():
+            k = int(a)
+            if not (k == 0 or k0 < k <= len(self.fired)):
+                return (f"no event {k} in the graph — it covers "
+                        f"{k0 + 1}..{len(self.fired)} (0 = the base)")
+            roots, what = [k], f"event {k}"
+        else:
+            rows = self.fired_rows[k0:]
+            prod = [k0 + 1 + j for j, (_, _, ev) in enumerate(rows)
+                    if a in ev.produce]
+            if prod:
+                roots = prod[-1:]
+                what = f"{a} (last produced by event {prod[-1]})"
+            elif base_counts.get(a, 0) > 0:
+                roots, what = [0], f"{a} (from the base state)"
+            else:
+                return (f"{a} was never produced and is not in the base "
+                        "state — 'state' lists atoms, 'log' events")
+        if a and not a.isdigit() and self.counts.get(a, 0) == 0:
+            what += " — not present now"
+        members = cone(g, roots)
+        title = (f"why {what}: {len(members)} of {len(g.nodes)} "
+                 f"occurrences")
+        return title, members, g
+
+    def do_why(self, arg):
+        """why [ATOM|K]: the causal cone — bare: what the current state
+        rests on (events that wrote a PRESENT atom or the stage, and
+        their causes; absences do not count); ATOM: the last event
+        that produced it; K: event K. Atoms are indistinguishable:
+        this is dependence, not token lineage."""
+        from metis.lang.causality import cone_text
+        res = self._why(arg)
+        if isinstance(res, str):
+            self._say(res)
+            return
+        title, members, g = res
+        self._say("\n".join(cone_text(g, members, title,
+                                      self._rule_head)))
+
+    def do_causes(self, arg):
+        """causes A B: for each occurrence of B, is an occurrence of A
+        among its causes (TeLLer's x) — rows + yes/some/no"""
+        from metis.lang.causality import causes
+        parts = arg.split()
+        if len(parts) != 2:
+            self._say("usage: causes A B   (event or rule names)")
+            return
+        g, _ = self.causal()
+        res = causes(g, self._occ_matcher(parts[0]),
+                     self._occ_matcher(parts[1]))
+        if res["verdict"] == "none":
+            self._say(f"{parts[1]} has not fired since the base — "
+                      "'log' lists events")
+            return
+        for r in res["rows"]:
+            got = (" ".join(map(str, r["a"])) if r["a"] else "no")
+            self._say(f"  {r['b']} {r['name']}  <- {parts[0]}: {got}")
+        self._say(f"{res['verdict']}: {parts[0]} causes "
+                  f"{sum(1 for r in res['rows'] if r['a'])} of "
+                  f"{len(res['rows'])} {parts[1]}")
 
     def do_version(self, arg):
         """version — what exactly is running: package, source

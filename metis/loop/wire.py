@@ -21,7 +21,8 @@ from typing import Dict
 INTENT_VERBS = frozenset(
     ["records", "record", "replay", "mine", "text", "init", "steps",
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
-     "formalize", "llm", "narrate", "graph", "help"])
+     "formalize", "llm", "narrate", "graph", "why", "causes",
+     "help"])
 
 
 def parse_intent(line: str):
@@ -241,6 +242,28 @@ def _op_graph(shell, arg):
     return {"ok": True, **as_obj(g, shell.stage, shell.key)}
 
 
+def _op_why(shell, arg):
+    """Spec 09 P3: the cone as JSON — target, cone, pruned."""
+    res = shell._why(str(arg))
+    if isinstance(res, str):
+        return {"ok": False, "error": res}
+    title, members, g = res
+    keep = set(members)
+    return {"ok": True, "target": title, "cone": members,
+            "pruned": [nd.i for nd in g.nodes if nd.i not in keep]}
+
+
+def _op_causes(shell, arg):
+    """Spec 09 P3: causes A B as JSON rows + verdict."""
+    from metis.lang.causality import causes
+    parts = str(arg).split()
+    if len(parts) != 2:
+        return {"ok": False, "error": "usage: causes A B"}
+    g, _ = shell.causal()
+    return {"ok": True, **causes(g, shell._occ_matcher(parts[0]),
+                                 shell._occ_matcher(parts[1]))}
+
+
 def _op_help(shell, arg):
     return {"ok": True, "ops": sorted(INTENT_VERBS)}
 
@@ -249,7 +272,8 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "marginals": _op_marginals, "init": _op_init,
              "steps": _op_steps, "seed": _op_seed, "llm": _op_llm,
              "narrate": _op_narrate, "help": _op_help,
-             "findings": _op_findings, "graph": _op_graph}
+             "findings": _op_findings, "graph": _op_graph,
+             "why": _op_why, "causes": _op_causes}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:

@@ -206,3 +206,71 @@ def test_wire_graph_is_the_json_mirror():
         {k: v for k, v in out.items() if k != "ok"}
     assert dot(g).startswith("digraph causality {")
     assert beats_text(g)[-1].strip().startswith("* frontier")
+
+
+# -- step 2: why / causes (spec 09 P3) ---------------------------------
+
+def test_why_cone_is_the_hand_computed_ancestry():
+    """3lp seed 1 (run 6): 1 build_stick, 2 build_straw, 3 blow_straw,
+    4 build_brick, 5 blow_stick, 6 blow_brick. The final state is
+    {brickhouse}: only build_brick wrote it; its causes are the pig
+    competition 1<2<4 and the base — the three blows are pruned."""
+    r = _shell("3lp.llp")
+    _run(r, "run 6")
+    out = _run(r, "why")
+    assert out.splitlines()[0] == \
+        "why the current state: 4 of 7 occurrences"
+    assert "pruned: 3 irrelevant events: 3 blow_straw, 5 blow_stick, " \
+           "6 blow_brick" in out
+    assert "L35: build_brick [story]" in out     # source line, as list
+    assert dispatch(r, "why", "5")["cone"] == [0, 1, 5]
+    assert dispatch(r, "why", "6")["cone"] == [0, 1, 2, 3, 4, 5, 6]
+    assert dispatch(r, "why", "brickhouse")["cone"] == [0, 1, 2, 4]
+
+
+def test_why_atom_and_errors():
+    r = _shell("3lp.llp")
+    _run(r, "run 6")
+    assert "last produced by event 4" in _run(r, "why brickhouse")
+    out = _run(r, "why wolf")
+    assert "from the base state" in out and "not present now" in out
+    assert "covers 1..6" in _run(r, "why 9")
+    assert "never produced" in _run(r, "why dragon")
+    assert dispatch(r, "why", "9")["ok"] is False
+
+
+def test_causes_truth_table_on_a_fork():
+    """yes / no / some / none — love_triangle's jealousies fork: the
+    two jealousy chains 1<2<4 and 3<5 run side by side."""
+    r = _shell("3lp.llp")
+    _run(r, "run 6")
+    assert dispatch(r, "causes", "build_stick blow_stick")["verdict"] \
+        == "yes"
+    assert dispatch(r, "causes", "build_brick blow_straw")["verdict"] \
+        == "no"
+    assert "has not fired" in _run(r, "reset", "causes pig blow_brick")
+    assert "usage" in _run(r, "causes x")
+    t = _shell("love_triangle.llp")
+    _run(t, "run 6")
+    res = dispatch(t, "causes", "jealousy jealousy")
+    assert res["verdict"] == "some"
+    assert [(row["b"], row["a"]) for row in res["rows"]] == \
+        [(1, []), (2, [1]), (3, []), (4, [1, 2]), (5, [3])]
+    assert "some: jealousy causes 3 of 5 jealousy" in \
+        _run(t, "causes jealousy jealousy")
+
+
+def test_alternative_branches_match_their_source_rule(tmp_path):
+    """⊕ branches (blow_stick-1/-2) answer to the rule's own name."""
+    src = (FICTION / "3lp.llp").read_text()
+    old = "blow_stick [story] : $wolf * stickhouse -o ()."
+    assert old in src
+    alt = tmp_path / "3lp_alt.llp"
+    alt.write_text(src.replace(old, "blow_stick [story] : $wolf * "
+                               "stickhouse\n    -o ( () @w 0.75 | "
+                               "stickhouse @w 0.25 )."))
+    r = Repl(alt, seed=1, stdout=io.StringIO())
+    _run(r, "run 6")
+    assert any(n.endswith("-1") or n.endswith("-2") for n in r.fired)
+    assert dispatch(r, "causes", "build_stick blow_stick")["verdict"] \
+        == "yes"
