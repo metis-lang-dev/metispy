@@ -686,10 +686,13 @@ class Repl(LoopVerbs, Cmd):
         status = ("done" if self.stage == DONE or not cands
                   else "quiescent" if kinds == {"link"} else "running")
         rules = []
+        lines = self.text.splitlines()
         for name in sorted(rel["stage"],
                            key=lambda r: spans.get(r, (1e9,))[0]):
             mark, tail = self._list_marks(name, rel)
+            a, _, b = spans.get(name, (0, 0, -1))
             rules.append({
+                "src": "\n".join(lines[a - 1:b]) if a else "",
                 "name": name, "state": self._CTX_STATE[mark],
                 "detail": tail.strip(),
                 "line": spans[name][1] if name in spans else None,
@@ -698,6 +701,7 @@ class Repl(LoopVerbs, Cmd):
                 "pruned": rel["pruned"].get(name, [])})
         return {
             "catalog": self.doc.catalog.name, "key": self.key,
+            "run_key": self._run_key(),
             "file": str(self.path), "stage": self.stage,
             "status": status, "fired": len(self.fired),
             "base": self._base[0],
@@ -714,6 +718,17 @@ class Repl(LoopVerbs, Cmd):
                 for st, items in rel["elsewhere"]],
             "pruned_elsewhere": rel["pruned_elsewhere"],
         }
+
+    def _run_key(self):
+        """run_key of the session since the graph base (spec 09: the
+        Foata class, hashed) — None if the events predate a reload."""
+        from metis.kernel.nets import run_key
+        pos = {id(ev): k for k, (_, _, ev) in enumerate(self.prog.events())}
+        try:
+            return run_key(self.prog, [pos[id(ev)] for _, _, ev
+                                       in self.fired_rows[self._base[0]:]])
+        except KeyError:
+            return None
 
     _CTX_SECTIONS = ("tokens", "rules", "trace")
 

@@ -122,3 +122,42 @@ def test_both_help_surfaces_name_ctx():
     ops = dispatch(r, "help", "")["ops"]
     assert {"ctx", "findings", "graph", "why", "causes"} <= set(ops)
     assert "ctx" in INTENT_VERBS and "accept" not in INTENT_VERBS
+
+
+# -- console step 2: the execution ops behind the page's chips --------
+
+def test_execution_ops_return_text_and_beats():
+    """run/step carry the REPL's own text plus each fired event with
+    its beat, episode and linear effect (the page's beat blocks);
+    reset/undo/state/log/list/events are whitelisted and structured."""
+    r = _shell("herstory.llp")
+    out = dispatch(r, "run", "5")
+    assert out["text"].startswith("eve_hannah_birth hannah_eve_meet")
+    f = out["fired"]
+    assert [x["beat"] for x in f] == [1, 2, 3, 4, 5]
+    assert f[3]["kind"] == "link" and f[3]["episode"] is None
+    assert (f[3]["stage"], f[3]["post"]) == ("beginning", "courtship")
+    assert f[0]["consume"] == {"pregnant(mother)": 1}
+    assert f[4]["episode"] == 1
+    ev = dispatch(r, "events", "")
+    assert ev["enabled"][0]["name"] == "breakup_carl"
+    assert dispatch(r, "step", "")["fired"][0]["i"] == 6
+    assert dispatch(r, "undo", "")["fired"] == []
+    assert len(r.fired) == 5
+    assert dispatch(r, "reset", "")["stage"] == "beginning"
+    assert dispatch(r, "log", "")["fired"] == 5
+    for verb in ("run", "step", "events", "reset", "undo", "state",
+                 "log", "list"):
+        assert parse_intent(":" + verb) is not None, verb
+
+
+def test_ctx_carries_rule_source_and_run_key():
+    r = _shell("3lp.llp", "run 3")
+    c = r.ctx()
+    brick = next(x for x in c["rules"] if x["name"] == "build_brick")
+    assert brick["src"] == ("  %% a pig spends the bricks on a brick "
+                            "house.\n  build_brick [story] : pig * bricks"
+                            " -o brickhouse.")
+    assert c["run_key"] and len(c["run_key"]) == 64
+    r.onecmd("reset")
+    assert r.ctx()["run_key"] != c["run_key"]

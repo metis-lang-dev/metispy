@@ -22,7 +22,8 @@ INTENT_VERBS = frozenset(
     ["records", "record", "replay", "mine", "text", "init", "steps",
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
      "formalize", "llm", "narrate", "graph", "why", "causes",
-     "ctx", "findings", "help"])
+     "ctx", "findings", "run", "step", "events", "reset", "undo",
+     "state", "log", "list", "help"])
 
 
 def parse_intent(line: str):
@@ -327,6 +328,71 @@ def run_intent(shell, line: str) -> dict:
                          " ".join(sorted(INTENT_VERBS)) +
                          " (no command: specs)"}
     return dispatch(shell, *p)
+
+
+# -- session execution (CONSOLE §2a chips): the REPL command runs ONCE;
+#    its printed text is kept, the structured half is read off the
+#    session after. No paths, no approval — the same verbs a terminal
+#    user types.
+
+def _fired_since(shell, k):
+    """Occurrences k+1.. as the console draws them: beat, episode and
+    the linear effect, from the causality graph (stable: an event's
+    beat depends only on earlier events)."""
+    if not hasattr(shell, "causal"):
+        return []
+    g, _ = shell.causal()
+    by = {nd.i: nd for nd in g.nodes}
+    out = []
+    for j, (kind, stage, ev) in enumerate(shell.fired_rows[k:], k + 1):
+        nd = by.get(j)
+        out.append({"i": j, "name": ev.name, "kind": kind,
+                    "stage": stage if kind == "clause" else ev.pre,
+                    "post": ev.post if kind == "link" else None,
+                    "beat": nd.beat if nd else None,
+                    "episode": nd.episode if nd else None,
+                    "consume": dict(ev.consume),
+                    "produce": dict(ev.produce),
+                    "persist": dict(ev.persist)})
+    return out
+
+
+def _exec(cmd):
+    def op(shell, arg):
+        k = len(shell.fired)
+        text = shell.capture(cmd, str(arg))
+        k = min(k, len(shell.fired))        # undo/reset may shrink
+        return {"ok": True, "text": text,
+                "fired": _fired_since(shell, k),
+                "stage": shell.stage,
+                "counts": dict(sorted(shell.counts.items()))}
+    op.__doc__ = f"CONSOLE §2a: `{cmd}` on the session, text + data."
+    return op
+
+
+def _op_events(shell, arg):
+    cands = shell._candidates()
+    total = sum(w for _, w in cands) or 1.0
+    return {"ok": True, "text": shell.capture("events"),
+            "enabled": [{"k": k, "name": shell.events_tbl[i][2].name,
+                         "kind": shell.events_tbl[i][0], "w": w,
+                         "p": w / total}
+                        for k, (i, w) in enumerate(cands, 1)]}
+
+
+def _op_read(cmd):
+    def op(shell, arg):
+        return {"ok": True, "text": shell.capture(cmd, str(arg)),
+                "stage": shell.stage,
+                "counts": dict(sorted(shell.counts.items())),
+                "fired": len(shell.fired)}
+    return op
+
+
+_WIRE_OPS.update({"run": _exec("run"), "step": _exec("step"),
+                  "reset": _exec("reset"), "undo": _exec("undo"),
+                  "events": _op_events, "state": _op_read("state"),
+                  "log": _op_read("log"), "list": _op_read("list")})
 
 
 def intent_posting(shell, line: str, session=None) -> dict:
