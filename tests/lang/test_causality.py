@@ -213,7 +213,8 @@ def test_wire_graph_is_the_json_mirror():
     assert {"from", "to", "atoms", "kind"} <= set(out["edges"][0])
     g, _ = r.causal()
     assert json.loads(as_json(g, r.stage, r.key)) == \
-        {k: v for k, v in out.items() if k != "ok"}
+        {k: v for k, v in out.items() if k not in ("ok", "text")}
+    assert out["text"] == r.capture("graph")      # CONSOLE §4 posting
     assert dot(g).startswith("digraph causality {")
     assert beats_text(g)[-1].strip().startswith("* frontier")
 

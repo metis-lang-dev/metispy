@@ -15,6 +15,7 @@ Discovery only: certified expectations stay in manifests."""
 
 import argparse
 import atexit
+import io
 import os
 import re
 import sys
@@ -59,6 +60,11 @@ trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
 log                 fired events this session
+ctx [tokens|rules|trace]
+                    the context at this stop (Pwndbg's context; the
+                    console's band): catalog, key, stage, beat,
+                    episode, status running|quiescent|done, tokens,
+                    enabled — then the sections (all, or one)
 
 causality (spec 09) — the run as a partial order, since the last
 reset/assert/retract/#init (node #0 is the state then):
@@ -508,38 +514,46 @@ class Repl(LoopVerbs, Cmd):
                   f"fired, last {last}")
         for row in state_table(self.counts.items()) or ["  (empty)"]:
             self._say("     " + row)
-        rel = self._relevance()
+        self._say("\n".join(self._rules_lines()))
+
+    def _rules_lines(self, rel=None):
+        """list's rules block (also `ctx rules`): the current stage's
+        rules with source lines and relevance marks, then what the
+        present rests on in other stages."""
+        rel = rel or self._relevance()
+        out = []
         spans, lines = self._rule_spans(), self.text.splitlines()
         width = len(str(len(lines)))
         if self.stage == DONE:
-            self._say("rules  none can fire — the run is done ('reset' "
-                      "to start over)")
+            out.append("rules  none can fire — the run is done ('reset' "
+                       "to start over)")
         else:
-            self._say(f"rules  of stage {self.stage}  (* enabled now ×N "
-                      "· ◂ the present rests on #k · · fired, no longer "
-                      "matters · ? waiting on ← maker · – spent: no X "
-                      "and nothing here makes it)")
+            out.append(f"rules  of stage {self.stage}  (* enabled now ×N "
+                       "· ◂ the present rests on #k · · fired, no longer "
+                       "matters · ? waiting on ← maker · – spent: no X "
+                       "and nothing here makes it)")
         for name in sorted(rel["stage"],
                            key=lambda r: spans.get(r, (1e9,))[0]):
             mark, tail = self._list_marks(name, rel)
             if name not in spans:
-                self._say(f"  {mark} {'?':>{width}}  {name}{tail}")
+                out.append(f"  {mark} {'?':>{width}}  {name}{tail}")
                 continue
             a, head, b = spans[name]
             for k in range(a, b + 1):
                 lead = f"  {mark if k == head else ' '} {k:>{width}}  "
-                self._say(f"{lead}{lines[k - 1]}"
-                          f"{tail if k == head else ''}")
+                out.append(f"{lead}{lines[k - 1]}"
+                           f"{tail if k == head else ''}")
         if rel["elsewhere"]:
-            self._say("rests on  (rules of other stages the present "
-                      "depends on)")
+            out.append("rests on  (rules of other stages the present "
+                       "depends on)")
             for stage, items in rel["elsewhere"]:
-                self._say(f"  ◂ {stage}: " + " · ".join(
+                out.append(f"  ◂ {stage}: " + " · ".join(
                     f"{n} {' '.join(f'#{i}' for i in occ)}"
                     for n, occ in items))
         if rel["pruned_elsewhere"]:
-            self._say(f"  · {rel['pruned_elsewhere']} more fired "
-                      "event(s) in other stages no longer matter")
+            out.append(f"  · {rel['pruned_elsewhere']} more fired "
+                       "event(s) in other stages no longer matter")
+        return out
 
     def _relevance(self):
         """list's relevance (spec 09 D3 follow-up): per rule, enabled
@@ -653,6 +667,104 @@ class Repl(LoopVerbs, Cmd):
         mark = ("*" if en else "◂" if occ else "·" if gone
                 else wait[:1] if wait else " ")
         return mark, ("   " + "  ".join(tail) if tail else "")
+
+    _CTX_STATE = {"*": "fireable", "◂": "rests_on", "·": "fired_pruned",
+                  "?": "waiting", "–": "spent", " ": "idle"}
+
+    def ctx(self):
+        """The aggregate context (CONSOLE §4, Pwndbg's `context`):
+        list's relevance analysis plus the header facts, as data —
+        the console's band and sections render from this, never from
+        text. status: running (a clause can fire) | quiescent (only a
+        stage link can: the stage has settled) | done (nothing can)."""
+        rel = self._relevance()
+        g, _ = self.causal()
+        spans = self._rule_spans()
+        cands = self._candidates()
+        total = sum(w for _, w in cands) or 1.0
+        kinds = {self.events_tbl[i][0] for i, _ in cands}
+        status = ("done" if self.stage == DONE or not cands
+                  else "quiescent" if kinds == {"link"} else "running")
+        rules = []
+        for name in sorted(rel["stage"],
+                           key=lambda r: spans.get(r, (1e9,))[0]):
+            mark, tail = self._list_marks(name, rel)
+            rules.append({
+                "name": name, "state": self._CTX_STATE[mark],
+                "detail": tail.strip(),
+                "line": spans[name][1] if name in spans else None,
+                "enabled": rel["enabled"].get(name, 0),
+                "rests_on": rel["cone"].get(name, []),
+                "pruned": rel["pruned"].get(name, [])})
+        return {
+            "catalog": self.doc.catalog.name, "key": self.key,
+            "file": str(self.path), "stage": self.stage,
+            "status": status, "fired": len(self.fired),
+            "base": self._base[0],
+            "beat": max((nd.beat for nd in g.nodes), default=0),
+            "episode": sum(1 for nd in g.nodes if nd.kind == "link"),
+            "counts": dict(sorted(self.counts.items())),
+            "enabled": [{"name": self.events_tbl[i][2].name, "w": w,
+                         "p": w / total} for i, w in cands],
+            "rules": rules,
+            "last_event": self.fired[-1] if self.fired else None,
+            "rests_on_stages": [
+                {"stage": st, "rules": [{"name": n, "occurrences": occ}
+                                        for n, occ in items]}
+                for st, items in rel["elsewhere"]],
+            "pruned_elsewhere": rel["pruned_elsewhere"],
+        }
+
+    _CTX_SECTIONS = ("tokens", "rules", "trace")
+
+    def ctx_lines(self, section=""):
+        """The text ctx: the band (what the console's context band
+        shows), then the sections — all three bare, or the one asked
+        for (`ctx tokens|rules|trace`)."""
+        from metis.lang.causality import beats_text
+        c = self.ctx()
+        dots = "  ".join(
+            f"{a} {'●' * n if n <= 5 else f'●×{n}'}"
+            for a, n in c["counts"].items()) or "(empty)"
+        n_rules = sum(1 for r in c["rules"] if r["state"] == "fireable")
+        out = [f"CATALOG {c['catalog']}  KEY {c['key'][:12]}  STAGE "
+               f"{c['stage']}  BEAT {c['beat']}  EPISODE {c['episode']}"
+               f"  {c['status'].upper()}  {c['fired']} fired"
+               + (f" · last {c['last_event']}" if c["last_event"]
+                  else ""),
+               f"TOKENS  {dots}",
+               f"ENABLED {len(c['enabled'])} event(s) · {n_rules} of "
+               f"{len(c['rules'])} rule(s) fireable"]
+        want = [section] if section else list(self._CTX_SECTIONS)
+        if "tokens" in want:
+            out += ["── tokens"] + (state_table(self.counts.items())
+                                   or ["  (empty)"])
+        if "rules" in want:
+            out += ["── rules"] + self._rules_lines()
+        if "trace" in want:
+            g, _ = self.causal()
+            out += ["── trace"] + beats_text(g)
+        return out
+
+    def do_ctx(self, arg):
+        """ctx [tokens|rules|trace]: the context at this stop (Pwndbg's
+        `context`) — the band (catalog, key, stage, beat, episode,
+        status, tokens, enabled), then all sections or the one named"""
+        a = arg.strip()
+        if a and a not in self._CTX_SECTIONS:
+            self._say("usage: ctx [tokens|rules|trace]")
+            return
+        self._say("\n".join(self.ctx_lines(a)))
+
+    def capture(self, cmd, arg=""):
+        """A read-only command's text output, as the shell would print
+        it (the text half of a console result posting)."""
+        out, self.stdout = self.stdout, io.StringIO()
+        try:
+            getattr(self, "do_" + cmd)(arg)
+            return self.stdout.getvalue().rstrip("\n")
+        finally:
+            self.stdout = out
 
     def do_edit(self, arg):
         """open the file in your editor: in a VS Code terminal `code`,

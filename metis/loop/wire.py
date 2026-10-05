@@ -22,7 +22,7 @@ INTENT_VERBS = frozenset(
     ["records", "record", "replay", "mine", "text", "init", "steps",
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
      "formalize", "llm", "narrate", "graph", "why", "causes",
-     "help"])
+     "ctx", "findings", "help"])
 
 
 def parse_intent(line: str):
@@ -77,7 +77,15 @@ def _op_findings(shell, arg):
                                           f"(have {len(ds)})"}
         ds = [ds[k - 1]]
     return {"ok": True, "diagnostics": [json.loads(to_json(d))
-                                        for d in ds]}
+                                        for d in ds],
+            "text": _text(shell, "findings", arg)}
+
+
+def _text(shell, cmd, arg=""):
+    """The REPL's own rendering of a read-only command — the text half
+    of a result posting (CONSOLE §4); None for a shell without it."""
+    cap = getattr(shell, "capture", None)
+    return cap(cmd, str(arg)) if cap else None
 
 
 def _scene_prog(shell, init=None):
@@ -241,7 +249,8 @@ def _op_graph(shell, arg):
     REPL's."""
     from metis.lang.causality import as_obj
     g, _ = shell.causal()
-    return {"ok": True, **as_obj(g, shell.stage, shell.key)}
+    return {"ok": True, **as_obj(g, shell.stage, shell.key),
+            "text": _text(shell, "graph")}
 
 
 def _op_why(shell, arg):
@@ -252,7 +261,8 @@ def _op_why(shell, arg):
     title, members, g = res
     keep = set(members)
     return {"ok": True, "target": title, "cone": members,
-            "pruned": [nd.i for nd in g.nodes if nd.i not in keep]}
+            "pruned": [nd.i for nd in g.nodes if nd.i not in keep],
+            "text": _text(shell, "why", arg)}
 
 
 def _op_causes(shell, arg):
@@ -263,7 +273,19 @@ def _op_causes(shell, arg):
         return {"ok": False, "error": "usage: causes A B"}
     g, _ = shell.causal()
     return {"ok": True, **causes(g, shell._occ_matcher(parts[0]),
-                                 shell._occ_matcher(parts[1]))}
+                                 shell._occ_matcher(parts[1])),
+            "text": _text(shell, "causes", arg)}
+
+
+def _op_ctx(shell, arg):
+    """CONSOLE §4: the aggregate context as data (the band and the
+    sections render from it) + its text block; `ctx tokens|rules|
+    trace` narrows the text to one section, the data stays whole."""
+    a = str(arg).strip()
+    if a and a not in shell._CTX_SECTIONS:
+        return {"ok": False, "error": "usage: ctx [tokens|rules|trace]"}
+    return {"ok": True, **shell.ctx(),
+            "text": "\n".join(shell.ctx_lines(a))}
 
 
 def _op_help(shell, arg):
@@ -275,7 +297,7 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "steps": _op_steps, "seed": _op_seed, "llm": _op_llm,
              "narrate": _op_narrate, "help": _op_help,
              "findings": _op_findings, "graph": _op_graph,
-             "why": _op_why, "causes": _op_causes}
+             "why": _op_why, "causes": _op_causes, "ctx": _op_ctx}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:
@@ -305,6 +327,27 @@ def run_intent(shell, line: str) -> dict:
                          " ".join(sorted(INTENT_VERBS)) +
                          " (no command: specs)"}
     return dispatch(shell, *p)
+
+
+def intent_posting(shell, line: str, session=None) -> dict:
+    """What a loop session posts back for one queued intent (SPEC §6,
+    CONSOLE §4/§5): {status: done|refused|error, result: the text
+    rendering, json: the structured result} — sections render from
+    `json`, never from scraped text. `session` (CONSOLE §5a) is
+    echoed so every posting names its session."""
+    from .verbs import fmt
+    res = run_intent(shell, line)
+    if not res.get("ok"):
+        status = ("refused" if str(res.get("error", ""))
+                  .startswith("intent refused") else "error")
+    else:
+        status = "done"
+    text = res.pop("text", None)
+    out = {"status": status, "result": text if text is not None
+           else fmt(res), "json": res}
+    if session is not None:
+        out["session"] = session
+    return out
 
 
 def serve_json(shell, stdin=None, stdout=None) -> int:
