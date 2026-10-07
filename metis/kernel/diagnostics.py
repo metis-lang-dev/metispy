@@ -260,6 +260,21 @@ _LAYER_CODES = {"containment-produce", "containment-consume",
                 "layer-unknown", "namespace-layer-unknown"}
 
 
+def _naming_type(context, ty: str):
+    """The var-type-unknown slice (spec 08 A2): only the pred/bwd lines
+    whose signature names the unknown type — where the type was named,
+    which is what the repair needs; the rest of the rule's closure
+    (other preds, namespaces) is noise and overflowed the cap on wide
+    rules. Order kept; byte parity with metisc (diag.ml)."""
+    out = []
+    for ln in context:
+        if (ln.startswith("pred ") or ln.startswith("bwd ")) and "(" in ln:
+            args = ln[ln.index("(") + 1:ln.index(")")].split(",")
+            if ty in [a.strip() for a in args]:
+                out.append(ln)
+    return tuple(out)
+
+
 def make(code: str, text: str, src: Optional[Source],
          data: Tuple[Tuple[str, str], ...]) -> Diagnostic:
     if code not in REGISTRY:
@@ -270,6 +285,8 @@ def make(code: str, text: str, src: Optional[Source],
     context = src.context
     if code in _LAYER_CODES and src.layers:
         context = context + (src.layers,)
+    if code == "var-type-unknown":
+        context = _naming_type(context, dict(data).get("type", ""))
     if len(context) > CONTEXT_CAP:
         raise DiagnosticDefect(
             f"{code} @ {src.loc.decl}: context of {len(context)} lines "
