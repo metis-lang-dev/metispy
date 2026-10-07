@@ -689,7 +689,9 @@ class Repl(LoopVerbs, Cmd):
                 cf = self._presence(atom, left)
             except StateBudgetExceeded as e:
                 return self._whatif_budget(e, k, names, atom, horizon)
-            fact = actual["counts"].get(atom, 0) > 0
+            at = min(actual["n"], k + horizon)
+            fact = self._shelved_counts_at(at).get(atom, 0) > 0
+            actual = dict(actual, at=at)
             self._say("\n".join(self._whatif_query_report(
                 k, names, atom, horizon, forced, cf, base, fact,
                 actual, done)))
@@ -700,6 +702,21 @@ class Repl(LoopVerbs, Cmd):
         self._say("\n".join(self._whatif_run_report(
             k, names, horizon, actual, rows, how, dict(self.counts),
             done)))
+
+    def _shelved_counts_at(self, j):
+        """`_counts_at` on the SHELVED actual world (whatif asks it from
+        inside the fork)."""
+        w = self.shelf
+        if w is None or j >= len(w["fired"]):
+            return dict(w["counts"] if w else self.counts)
+        k0, _, counts = w["base"]
+        c = dict(counts)
+        for _, _, ev in w["fired_rows"][k0:max(k0, j)]:
+            for q, m in ev.consume.items():
+                c[q] = c.get(q, 0) - m
+            for q, m in ev.produce.items():
+                c[q] = c.get(q, 0) + m
+        return {q: m for q, m in c.items() if m > 0}
 
     def _whatif_budget(self, e, k, names, atom, horizon):
         from metis.kernel.diagnostics import budget_note
@@ -728,7 +745,8 @@ class Repl(LoopVerbs, Cmd):
         w = max(len(v) for v in vals) + 3
         rows = [
             f"WHATIF at #{k}  {names}  ·  query {atom}  ·  {span}",
-            f"  in fact     {vals[0]:<{w}}the actual world, #{n}",
+            f"  in fact     {vals[0]:<{w}}the actual world, "
+            f"#{actual.get('at', n)}",
             f"  with do     {vals[1]:<{w}}counterfactual, exact"
             + (f" ({forced} forced, {horizon - forced} by chance)"
                if forced else ""),
@@ -775,6 +793,202 @@ class Repl(LoopVerbs, Cmd):
                                   if gained or lost else "the same state"))
         out.append("  interventions: " + "; ".join(done))
         return out
+
+    # -- probabilities of causation (spec 10 P4, the exact tier) -------
+
+    def _cause_args(self, verb, arg, need_atom):
+        """K [ATOM] [STEPS] for necessity/sufficiency -> (k, name, atom,
+        horizon) or an error str. K = an occurrence of the actual
+        trace; the fork is at K-1, so K-1 must lie in [base, tip)."""
+        parts = arg.split()
+        usage = (f"usage: {verb} K {'ATOM' if need_atom else '[ATOM]'} "
+                 "[STEPS]")
+        if not parts or not parts[0].lstrip("#").isdigit() \
+                or len(parts) > 3:
+            return usage
+        k, n, k0 = int(parts[0].lstrip("#")), len(self.fired), \
+            self._base[0]
+        if self.shelf is not None:
+            return f"already forked — 'back' first ({verb} forks itself)"
+        if not k0 < k <= n:
+            return (f"{verb} K needs an event of the graph: "
+                    f"#{k0 + 1}..#{n} (the fork is at K-1)")
+        atom = parts[1] if len(parts) >= 2 else None
+        try:
+            horizon = int(parts[2]) if len(parts) == 3 else n - (k - 1)
+        except ValueError:
+            return usage
+        if atom is None and need_atom:
+            return usage
+        if atom is None:
+            cands = self._forward_cone_atoms(k)
+            if len(cands) != 1:
+                return (f"{verb} {k} needs an ATOM — present atoms in "
+                        f"#{k}'s forward cone: "
+                        + (" ".join(cands) if cands else "(none)"))
+            atom = cands[0]
+        return k, self.fired[k - 1], atom, horizon
+
+    def _counts_at(self, j):
+        """The actual world's multiset after occurrence j (deterministic
+        replay from the graph base; j clipped to the tip) — the "in
+        fact" at a horizon shorter than the actual world's."""
+        k0, _, counts = self._base
+        if j >= len(self.fired):
+            return dict(self.counts)
+        c = dict(counts)
+        for _, _, ev in self.fired_rows[k0:max(k0, j)]:
+            for q, m in ev.consume.items():
+                c[q] = c.get(q, 0) - m
+            for q, m in ev.produce.items():
+                c[q] = c.get(q, 0) + m
+        return {q: m for q, m in c.items() if m > 0}
+
+    def _forward_cone_atoms(self, k):
+        """Present atoms whose last producer's causal cone contains #k
+        (spec 09 cones: what #k is an ancestor of, now)."""
+        from metis.kernel.nets import cone
+        g, _ = self.causal()
+        k0 = self._base[0]
+        last = {}
+        for j, (_, _, ev) in enumerate(self.fired_rows[k0:], k0 + 1):
+            for q in ev.produce:
+                last[q] = j
+        return sorted(q for q, m in self.counts.items()
+                      if m > 0 and q in last and k in cone(g, [last[q]]))
+
+    def _arms(self, k, op, atom, horizon):
+        """(by chance, with the do) exact P[atom] from a fork at k-1 over
+        `horizon` events; op = "~EV" (block) or "EV" (force — spends a
+        step). Always comes back; StateBudgetExceeded propagates."""
+        self._quiet(f"fork {k - 1}")
+        try:
+            base = self._presence(atom, horizon)
+            before = len(self.ledger)
+            said = self._quiet("do " + op)
+            if len(self.ledger) == before:
+                raise ValueError(said.strip())
+            cf = self._presence(atom, horizon - (op[0] != "~"))
+            return base, cf
+        finally:
+            self._quiet("back")
+
+    def _cause_budget(self, e, verb, k, atom, horizon):
+        """Budget doctrine: say it; suggest the lower horizon — unless
+        (necessity) the outcome does not yet hold there, when a retry
+        would only be refused: then say THAT, honestly."""
+        from metis.kernel.diagnostics import budget_note
+        h = max(1, e.step - 1)
+        retry = f"{verb} {k} {atom} {h}"
+        _note(self, budget_note(e, "query", f"{verb} {k} {atom} "
+                                f"{horizon}", retry))
+        if verb == "necessity" and \
+                self._counts_at(k - 1 + h).get(atom, 0) <= 0:
+            self._say(f"{e} — and within the {h} event{'' if h == 1 else 's'}"
+                      f" it can answer, {atom} does not yet hold in fact "
+                      f"(it holds from #{self._first_holding(atom, k)}): "
+                      "this necessity is beyond the exact tier "
+                      "interactively")
+            return
+        self._say(f"{e} (try: {retry} — a shorter horizon answers for "
+                  "the nearer future only)")
+
+    def _first_holding(self, atom, k):
+        """The first occurrence >= k after which atom holds through the
+        tip (where `in fact` starts to hold)."""
+        j = len(self.fired)
+        while j - 1 >= k and self._counts_at(j - 1).get(atom, 0) > 0:
+            j -= 1
+        return j
+
+    def do_necessity(self, arg):
+        """necessity K [ATOM] [STEPS] — PN on the exact tier: the actual
+        trace fired #K and ATOM holds; fork at K-1, block #K's ground
+        event to the horizon (default: the actual world's), report
+        P(not ATOM | do(not K)) beside the fact. Without ATOM: the
+        present atoms in #K's forward cone (used if exactly one)."""
+        got = self._cause_args("necessity", arg, False)
+        if isinstance(got, str):
+            self._say(got)
+            return
+        k, ev, atom, horizon = got
+        n = min(len(self.fired), k - 1 + horizon)    # "in fact" here
+        if self._counts_at(n).get(atom, 0) <= 0:
+            self._say(f"{atom} is absent in fact at #{n} — necessity "
+                      "asks about an outcome that happened "
+                      "('sufficiency' asks the other way)")
+            return
+        try:
+            base, cf = self._arms(k, "~" + ev, atom, horizon)
+        except StateBudgetExceeded as e:
+            return self._cause_budget(e, "necessity", k, atom, horizon)
+        except ValueError as e:
+            self._say(f"necessity: cannot block #{k} at #{k - 1}: {e}")
+            return
+        pn = 1.0 - cf
+        word = ("necessary" if pn >= 0.95 else "not necessary"
+                if pn <= 0.05 else "partly necessary")
+        vals = [f"{atom} PRESENT", f"P = {self._p(cf)}",
+                f"P = {self._p(base)}"]
+        w = max(len(v) for v in vals) + 3
+        lw = len(f"without #{k}") + 3
+        span = (f"{horizon} event{'' if horizon == 1 else 's'} after "
+                f"#{k - 1}" + (" (the actual world's horizon)"
+                               if horizon == len(self.fired) - (k - 1)
+                               else ""))
+        self._say("\n".join([
+            f"NECESSITY of #{k} {ev} for {atom}  ·  {span}",
+            f"  {'in fact':<{lw}}{vals[0]:<{w}}#{k} fired; the actual "
+            f"world, #{n}",
+            f"  {'without #' + str(k):<{lw}}{vals[1]:<{w}}fork at "
+            f"#{k - 1}, do ~{ev} (blocked to the horizon), exact",
+            f"  {'by chance':<{lw}}{vals[2]:<{w}}from #{k - 1}, nothing "
+            "blocked",
+            f"  ⇒ PN ≈ {self._p(pn)}: #{k} {ev} was {word} for {atom} — "
+            f"had it not fired, {atom} would be absent with probability "
+            f"{self._p(pn)} (it holds in fact; by chance from #{k - 1}: "
+            f"{self._p(base)}).",
+            "  (interventional, prefix-fixed: the past to "
+            f"#{k - 1} is the actual one, the future re-randomized; "
+            "`why` gives the structural cone beside it)"]))
+
+    def do_sufficiency(self, arg):
+        """sufficiency K ATOM [STEPS] — the INTERVENTIONAL PROXY for PS
+        (D3): fork at K-1, force #K, P(ATOM) beside the unforced
+        baseline. Exact PS needs the posterior over the worlds where K
+        did not fire and ATOM did not hold — deferred (budget)."""
+        got = self._cause_args("sufficiency", arg, True)
+        if isinstance(got, str):
+            self._say(got)
+            return
+        k, ev, atom, horizon = got
+        n = min(len(self.fired), k - 1 + horizon)    # "in fact" here
+        try:
+            base, cf = self._arms(k, ev, atom, horizon)
+        except StateBudgetExceeded as e:
+            return self._cause_budget(e, "sufficiency", k, atom, horizon)
+        except ValueError as e:
+            self._say(f"sufficiency: cannot force #{k} at #{k - 1}: {e}")
+            return
+        fact = self._counts_at(n).get(atom, 0) > 0
+        vals = [f"{atom} {'PRESENT' if fact else 'absent'}",
+                f"P = {self._p(cf)}", f"P = {self._p(base)}"]
+        w = max(len(v) for v in vals) + 3
+        lw = len(f"forced #{k}") + 3
+        lift = cf - base
+        self._say("\n".join([
+            f"SUFFICIENCY (interventional PROXY, not Pearl's PS) of #{k} "
+            f"{ev} for {atom}  ·  {horizon} events after #{k - 1}",
+            f"  {'in fact':<{lw}}{vals[0]:<{w}}the actual world, #{n}",
+            f"  {'forced #' + str(k):<{lw}}{vals[1]:<{w}}fork at "
+            f"#{k - 1}, do {ev}, exact",
+            f"  {'by chance':<{lw}}{vals[2]:<{w}}from #{k - 1}, unforced",
+            f"  ⇒ forcing #{k} {ev} at #{k - 1} gives P({atom}) = "
+            f"{self._p(cf)} against {self._p(base)} by chance "
+            f"({'+' if lift >= 0 else '−'}{self._p(abs(lift))}).",
+            "  PROXY: true PS = P(ATOM | do(K), in the worlds where K did "
+            "not fire and ATOM did not hold) needs the posterior over "
+            "those ¬K worlds — exact PS is deferred (spec 10 D3)."]))
 
     def do_query(self, arg):
         """query ATOM [STEPS] — exact presence marginal from here"""

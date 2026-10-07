@@ -278,3 +278,123 @@ def test_query_honours_masks_and_says_so():
     masked = say("query brickhouse 3")
     assert "| do ~build_brick] = 0" in masked
     assert "do ~" not in plain
+
+
+# -- step 3: necessity + the PS proxy ----------------------------------
+
+def arms(r, k, op, atom, horizon):
+    """Both arms the long way: fork k-1, query, do, query, back."""
+    r._quiet(f"fork {k - 1}")
+    try:
+        base = r._presence(atom, horizon)
+        r._quiet("do " + op)
+        return base, r._presence(atom, horizon - (op[0] != "~"))
+    finally:
+        r._quiet("back")
+
+
+def three_brick():
+    r, say = shell(seed=1)     # build_brick fires at #4; brickhouse holds
+    say("run 8")
+    assert r.fired[3] == "build_brick" and r.counts.get("brickhouse")
+    return r, say
+
+
+def test_necessity_blocks_k_and_reports_pn_beside_the_fact():
+    r, say = three_brick()
+    before = world(r)
+    out = say("necessity 4 brickhouse")
+    assert world(r) == before
+    lines = out.strip().splitlines()
+    assert lines[0] == ("NECESSITY of #4 build_brick for brickhouse  ·  "
+                        "3 events after #3 (the actual world's horizon)")
+    assert lines[1].startswith("  in fact      brickhouse PRESENT")
+    assert lines[2].startswith("  without #4   P = 0 ")
+    assert "do ~build_brick (blocked to the horizon)" in lines[2]
+    assert lines[3].startswith("  by chance    P = ")
+    assert lines[4].startswith("  ⇒ PN ≈ 1: #4 build_brick was necessary "
+                               "for brickhouse")
+    assert "prefix-fixed" in lines[5]
+    base, cf = arms(r, 4, "~build_brick", "brickhouse", 3)
+    assert cf == 0 and f"P = {base:.4g}" in lines[3]
+
+
+def test_necessity_default_atom_from_the_forward_cone():
+    r, say = three_brick()
+    assert r._forward_cone_atoms(4) == ["brickhouse"]
+    assert "NECESSITY of #4 build_brick for brickhouse" in say("necessity 4")
+    r2, say2 = shell(seed=10)                # several candidates: ask
+    say2("run 8")
+    out = say2("necessity 1")
+    assert "needs an ATOM — present atoms in #1's forward cone:" in out
+
+
+def test_necessity_fact_is_read_at_the_horizon():
+    r, say = three_brick()
+    out = say("necessity 4 brickhouse 1")
+    assert "1 event after #3" in out and "the actual world, #4" in out
+    assert "(the actual world's horizon)" not in out
+    # an outcome absent at that point is refused, naming the point
+    assert "absent in fact at #6" in say("necessity 1 stickhouse")
+
+
+def test_necessity_refusals():
+    r, say = three_brick()
+    assert "usage: necessity K [ATOM]" in say("necessity")
+    assert "needs an event of the graph: #1..#6" in say("necessity 9 x")
+    say("fork 2")
+    assert "already forked" in say("necessity 1 brickhouse")
+
+
+def test_sufficiency_is_labelled_a_proxy_and_says_what_ps_needs():
+    r, say = three_brick()
+    before = world(r)
+    out = say("sufficiency 4 brickhouse")
+    assert world(r) == before
+    assert out.startswith("SUFFICIENCY (interventional PROXY, not "
+                          "Pearl's PS) of #4 build_brick for brickhouse")
+    assert "PROXY: true PS" in out and "posterior over those ¬K worlds" \
+        in out and "deferred (spec 10 D3)" in out
+    base, cf = arms(r, 4, "build_brick", "brickhouse", 3)
+    assert f"forced #4   P = {cf:.4g}" in out
+    assert f"by chance   P = {base:.4g}" in out
+    assert "usage: sufficiency K ATOM" in say("sufficiency 4")
+
+
+def test_causation_budget_says_so_and_suggests_a_lower_horizon(monkeypatch):
+    import metis.lang.repl as repl
+    monkeypatch.setattr(repl, "STATE_BUDGET", 2)
+    r, say = three_brick()
+    before = world(r)
+    for verb in ("necessity", "sufficiency"):
+        out = say(f"{verb} 4 brickhouse")
+        assert "budget" in out and f"(try: {verb} 4 brickhouse " in out
+        assert world(r) == before
+
+
+def test_counts_at_replays_the_actual_world():
+    r, say = three_brick()
+    states = []
+    r2, say2 = shell(seed=1)
+    for _ in range(6):
+        say2("run 1")
+        states.append(dict(r2.counts))
+    for j, st in enumerate(states, 1):
+        assert r._counts_at(j) == st
+
+
+def test_necessity_budget_never_suggests_a_retry_that_would_be_refused(
+        monkeypatch):
+    import metis.lang.repl as repl
+    r, say = three_brick()                    # brickhouse holds from #4
+    monkeypatch.setattr(repl, "STATE_BUDGET", 3)    # blows at step 2/3
+    assert "(try: necessity 4 brickhouse 1 " in say("necessity 4 brickhouse")
+    # had the outcome held only later, the retry would be refused: then
+    # the message says so instead of suggesting it
+    real = r._counts_at
+    monkeypatch.setattr(r, "_counts_at",
+                        lambda j: real(j) if j >= 6 else {})
+    out = say("necessity 4 brickhouse")
+    assert "(try:" not in out
+    assert "within the 1 event it can answer, brickhouse does not yet " \
+        "hold in fact (it holds from #6)" in out
