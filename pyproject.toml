@@ -7,12 +7,15 @@ name = "metispy"
 version = "0.1.0"
 description = "The metis python referee + research kit: exact semantics, learning, the formalize harness — cross-checking the metis-lang toolchain"
 requires-python = ">=3.9"
+dependencies = ["numpy"]
 
 [project.scripts]
 metis = "metis.lang.repl:main"
 
 [project.optional-dependencies]
 sysadmin = ["pyRDDLGym", "rddlrepository"]
+# CI / dev: the scoped flake rerun (CI.md D2) lives in pytest-rerunfailures
+test = ["pytest", "pytest-rerunfailures"]
 
 [tool.setuptools.packages.find]
 include = ["metis*"]
@@ -21,4 +24,5 @@ include = ["metis*"]
 testpaths = ["tests"]
 markers = [
     "slow: heavy parity gates (golden corpus, differential); skip in the dev loop with -m 'not slow'",
+    "flaky: known-flaky (CI.md D2) — rerun ONLY on the named exception via pytest-rerunfailures; never skipped",
 ]

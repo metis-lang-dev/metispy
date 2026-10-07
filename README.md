@@ -1,5 +1,7 @@
 # metispy
 
+[![ci](https://github.com/metis-lang-dev/metispy/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metispy/actions/workflows/ci.yml) [![parity](https://github.com/metis-lang-dev/metispy/actions/workflows/parity.yml/badge.svg)](https://github.com/metis-lang-dev/metispy/actions/workflows/parity.yml)
+
 The metis python referee + research kit. Import name stays `metis`.
 
 This is the SEMANTIC side of the metis toolchain: the exact measure

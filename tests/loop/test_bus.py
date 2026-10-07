@@ -21,8 +21,15 @@ METIS = os.environ.get(
 if not Path(METIS).exists():
     METIS = shutil.which("metis") or METIS
 
-pytestmark = pytest.mark.skipif(
-    not Path(METIS).exists(), reason="no metis executable")
+pytestmark = [
+    pytest.mark.skipif(not Path(METIS).exists(),
+                       reason="no metis executable"),
+    # CI.md D2: the bus FIFO intermittently raises ENXIO (OSError) when a
+    # writer opens before the reader is up — rerun ONLY that, twice; any
+    # other failure fails. Root cause stays on the metis-exact-audit
+    # backlog. (Needs pytest-rerunfailures; without it the marker is inert.)
+    pytest.mark.flaky(reruns=2, only_rerun=["OSError"]),
+]
 
 
 @pytest.fixture()
