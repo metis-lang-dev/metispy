@@ -23,7 +23,10 @@ INTENT_VERBS = frozenset(
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
      "formalize", "llm", "narrate", "graph", "why", "causes",
      "ctx", "findings", "run", "step", "events", "reset", "undo",
-     "state", "log", "list", "help"])
+     "state", "log", "list", "help",
+     # spec 10 P5: interventions — session-local, no paths, no
+     # approval; masks/the shelf are session state
+     "do", "fork", "back", "whatif", "necessity", "sufficiency"])
 
 
 def parse_intent(line: str):
@@ -414,6 +417,20 @@ def _op_events(shell, arg):
                         for k, (i, w) in enumerate(cands, 1)]}
 
 
+def _op_cf(cmd):
+    """whatif / necessity / sufficiency: the comparison report (text —
+    the console shows it preformatted, v1) + the session's
+    intervention state, which the command provably leaves as it was."""
+    def op(shell, arg):
+        text = shell.capture(cmd, str(arg))
+        out = {"ok": True, "text": text, "stage": shell.stage,
+               "fired": len(shell.fired)}
+        if hasattr(shell, "_ctx_interventions"):
+            out.update(shell._ctx_interventions())
+        return out
+    return op
+
+
 def _op_read(cmd):
     def op(shell, arg):
         return {"ok": True, "text": shell.capture(cmd, str(arg)),
@@ -426,7 +443,15 @@ def _op_read(cmd):
 _WIRE_OPS.update({"run": _exec("run"), "step": _exec("step"),
                   "reset": _exec("reset"), "undo": _exec("undo"),
                   "events": _op_events, "state": _op_read("state"),
-                  "log": _op_read("log"), "list": _op_read("list")})
+                  "log": _op_read("log"), "list": _op_read("list"),
+                  # spec 10: state/choice surgery reports what fired
+                  # (do EVENT) and the state after; the counterfactual
+                  # instruments are read-only reports (+ ctx's do data)
+                  "do": _exec("do"), "fork": _exec("fork"),
+                  "back": _exec("back"),
+                  "whatif": _op_cf("whatif"),
+                  "necessity": _op_cf("necessity"),
+                  "sufficiency": _op_cf("sufficiency")})
 
 
 def intent_posting(shell, line: str, session=None) -> dict:

@@ -335,7 +335,7 @@ def test_necessity_fact_is_read_at_the_horizon():
     assert "1 event after #3" in out and "the actual world, #4" in out
     assert "(the actual world's horizon)" not in out
     # an outcome absent at that point is refused, naming the point
-    assert "absent in fact at #6" in say("necessity 1 stickhouse")
+    assert "does not hold in fact at #6" in say("necessity 1 stickhouse")
 
 
 def test_necessity_refusals():
@@ -398,3 +398,54 @@ def test_necessity_budget_never_suggests_a_retry_that_would_be_refused(
     assert "(try:" not in out
     assert "within the 1 event it can answer, brickhouse does not yet " \
         "hold in fact (it holds from #6)" in out
+
+
+# -- step 4: the wire (spec 10 P5) -------------------------------------
+
+def test_intervention_verbs_ride_the_intent_whitelist():
+    from metis.loop.wire import INTENT_VERBS, intent_posting
+    assert {"do", "fork", "back", "whatif", "necessity",
+            "sufficiency"} <= INTENT_VERBS
+    r, say = three_brick()
+    before = world(r)
+    p = intent_posting(r, ":necessity 4 brickhouse", session="s1")
+    assert p["status"] == "done" and p["session"] == "s1"
+    assert p["result"].startswith("NECESSITY of #4 build_brick")
+    assert p["json"]["masks"] == [] and p["json"]["fork"] is None
+    assert world(r) == before
+    p = intent_posting(r, ":whatif 3 do(~build_brick) query brickhouse")
+    assert p["status"] == "done" and "WHATIF at #3" in p["result"]
+    p = intent_posting(r, ":sufficiency 4 brickhouse")
+    assert "interventional PROXY" in p["result"]
+    # the mutating ones post what fired and the state after
+    p = intent_posting(r, ":fork 3")
+    assert p["status"] == "done" and p["json"]["counts"] == r.counts
+    p = intent_posting(r, ":do build_brick")
+    assert [f["name"] for f in p["json"]["fired"]] == ["build_brick"]
+    assert r.fired_how[-1]["how"] == "do"
+    p = intent_posting(r, ":back")
+    assert "back in the actual world" in p["result"]
+    assert world(r) == before
+    # the graph op carries the marks to the console
+    from metis.loop.wire import dispatch
+    intent_posting(r, ":do ~blow_brick")
+    assert dispatch(r, "ctx")  # ctx still serves
+    assert r.ctx()["masks"] == ["blow_brick"]
+
+
+def test_absence_outcomes_bang_atom():
+    """`!wolf` — the outcome "the wolf is gone" (spec 10 §7's 3lp
+    question): P[!a] = 1 - P[a]; facts and sentences read ¬a."""
+    r, say = three_brick()                     # seed 1: wolf spent at #6
+    assert not r.counts.get("wolf")
+    out = say("necessity 4 !wolf")
+    assert out.startswith("NECESSITY of #4 build_brick for ¬wolf")
+    assert "in fact      wolf absent" in out
+    base, cf = arms(r, 4, "~build_brick", "wolf", 3)
+    pn = 1 - (1 - cf)                          # P(¬wolf fails) = P(wolf)
+    assert f"PN ≈ {pn:.4g}" in out
+    assert "PN ≈ 1: #4 build_brick was necessary for ¬wolf" in out
+    w = say("whatif 3 do(~build_brick) query !wolf")
+    assert "P(¬wolf) = 0" in w and "in fact ¬wolf holds" in w
+    assert "does not hold in fact" in say("necessity 4 !brickhouse")
+    assert r._presence("!wolf", 0) == 1.0 and r._y("!wolf") == "¬wolf"

@@ -646,7 +646,7 @@ class Repl(LoopVerbs, Cmd):
             self._say("usage: whatif K do(X)... query ATOM [STEPS] | "
                       "run N")
             return
-        if atom and atom not in self.atoms:
+        if atom and atom.lstrip("!") not in self.atoms:
             self._say(f"note: {atom} appears in no rule of this catalog "
                       "(atoms are ground — 'state' lists them)")
         actual = {"counts": dict(self.counts), "n": n,
@@ -690,8 +690,9 @@ class Repl(LoopVerbs, Cmd):
             except StateBudgetExceeded as e:
                 return self._whatif_budget(e, k, names, atom, horizon)
             at = min(actual["n"], k + horizon)
-            fact = self._shelved_counts_at(at).get(atom, 0) > 0
-            actual = dict(actual, at=at)
+            fc = self._shelved_counts_at(at)
+            fact = self._holds(fc, atom)
+            actual = dict(actual, at=at, fact_txt=self._fact(fc, atom))
             self._say("\n".join(self._whatif_query_report(
                 k, names, atom, horizon, forced, cf, base, fact,
                 actual, done)))
@@ -729,6 +730,12 @@ class Repl(LoopVerbs, Cmd):
 
     @staticmethod
     def _p(x):
+        """A probability for the reports: float noise within 1e-12 of 0
+        or 1 prints as the exact value (no "PN ≈ 1.11e-16")."""
+        if abs(x) < 1e-12:
+            x = 0.0
+        elif abs(1.0 - x) < 1e-12:
+            x = 1.0
         return f"{x:.4g}"
 
     def _whatif_query_report(self, k, names, atom, horizon, forced, cf,
@@ -740,7 +747,7 @@ class Repl(LoopVerbs, Cmd):
         span = (f"{horizon} event{'' if horizon == 1 else 's'} after #{k}"
                 + (" (the actual world's horizon)" if horizon == n - k
                    else ""))
-        vals = [f"{atom} {'PRESENT' if fact else 'absent'}",
+        vals = [actual["fact_txt"],
                 f"P = {self._p(cf)}", f"P = {self._p(base)}"]
         w = max(len(v) for v in vals) + 3
         rows = [
@@ -757,13 +764,14 @@ class Repl(LoopVerbs, Cmd):
         delta = cf - base
         trend = ("raises" if delta > 1e-12 else "lowers"
                  if delta < -1e-12 else "leaves")
-        how = (f"{trend} P({atom}) from {self._p(base)} to {self._p(cf)}"
+        y = self._y(atom)
+        how = (f"{trend} P({y}) from {self._p(base)} to {self._p(cf)}"
                if trend != "leaves" else
-               f"leaves P({atom}) at {self._p(cf)}")
-        rows.append(f"  ⇒ had {names} at #{k}, P({atom}) = "
+               f"leaves P({y}) at {self._p(cf)}")
+        rows.append(f"  ⇒ had {names} at #{k}, P({y}) = "
                     f"{self._p(cf)}; by chance from there "
-                    f"{self._p(base)}; in fact {atom} is "
-                    f"{'present' if fact else 'absent'}. "
+                    f"{self._p(base)}; in fact {y} "
+                    f"{'holds' if fact else 'does not hold'}. "
                     f"The intervention {how}.")
         return rows
 
@@ -883,9 +891,10 @@ class Repl(LoopVerbs, Cmd):
         _note(self, budget_note(e, "query", f"{verb} {k} {atom} "
                                 f"{horizon}", retry))
         if verb == "necessity" and \
-                self._counts_at(k - 1 + h).get(atom, 0) <= 0:
+                not self._holds(self._counts_at(k - 1 + h), atom):
             self._say(f"{e} — and within the {h} event{'' if h == 1 else 's'}"
-                      f" it can answer, {atom} does not yet hold in fact "
+                      f" it can answer, {self._y(atom)} does not yet "
+                      "hold in fact "
                       f"(it holds from #{self._first_holding(atom, k)}): "
                       "this necessity is beyond the exact tier "
                       "interactively")
@@ -897,7 +906,7 @@ class Repl(LoopVerbs, Cmd):
         """The first occurrence >= k after which atom holds through the
         tip (where `in fact` starts to hold)."""
         j = len(self.fired)
-        while j - 1 >= k and self._counts_at(j - 1).get(atom, 0) > 0:
+        while j - 1 >= k and self._holds(self._counts_at(j - 1), atom):
             j -= 1
         return j
 
@@ -913,8 +922,9 @@ class Repl(LoopVerbs, Cmd):
             return
         k, ev, atom, horizon = got
         n = min(len(self.fired), k - 1 + horizon)    # "in fact" here
-        if self._counts_at(n).get(atom, 0) <= 0:
-            self._say(f"{atom} is absent in fact at #{n} — necessity "
+        if not self._holds(self._counts_at(n), atom):
+            self._say(f"{self._y(atom)} does not hold in fact at #{n} — "
+                      "necessity "
                       "asks about an outcome that happened "
                       "('sufficiency' asks the other way)")
             return
@@ -926,9 +936,12 @@ class Repl(LoopVerbs, Cmd):
             self._say(f"necessity: cannot block #{k} at #{k - 1}: {e}")
             return
         pn = 1.0 - cf
+        pn = 0.0 if abs(pn) < 1e-12 else 1.0 if abs(1 - pn) < 1e-12 \
+            else pn
         word = ("necessary" if pn >= 0.95 else "not necessary"
                 if pn <= 0.05 else "partly necessary")
-        vals = [f"{atom} PRESENT", f"P = {self._p(cf)}",
+        y = self._y(atom)
+        vals = [self._fact(self._counts_at(n), atom), f"P = {self._p(cf)}",
                 f"P = {self._p(base)}"]
         w = max(len(v) for v in vals) + 3
         lw = len(f"without #{k}") + 3
@@ -937,15 +950,15 @@ class Repl(LoopVerbs, Cmd):
                                if horizon == len(self.fired) - (k - 1)
                                else ""))
         self._say("\n".join([
-            f"NECESSITY of #{k} {ev} for {atom}  ·  {span}",
+            f"NECESSITY of #{k} {ev} for {y}  ·  {span}",
             f"  {'in fact':<{lw}}{vals[0]:<{w}}#{k} fired; the actual "
             f"world, #{n}",
             f"  {'without #' + str(k):<{lw}}{vals[1]:<{w}}fork at "
             f"#{k - 1}, do ~{ev} (blocked to the horizon), exact",
             f"  {'by chance':<{lw}}{vals[2]:<{w}}from #{k - 1}, nothing "
             "blocked",
-            f"  ⇒ PN ≈ {self._p(pn)}: #{k} {ev} was {word} for {atom} — "
-            f"had it not fired, {atom} would be absent with probability "
+            f"  ⇒ PN ≈ {self._p(pn)}: #{k} {ev} was {word} for {y} — "
+            f"had it not fired, {y} would fail with probability "
             f"{self._p(pn)} (it holds in fact; by chance from #{k - 1}: "
             f"{self._p(base)}).",
             "  (interventional, prefix-fixed: the past to "
@@ -970,20 +983,20 @@ class Repl(LoopVerbs, Cmd):
         except ValueError as e:
             self._say(f"sufficiency: cannot force #{k} at #{k - 1}: {e}")
             return
-        fact = self._counts_at(n).get(atom, 0) > 0
-        vals = [f"{atom} {'PRESENT' if fact else 'absent'}",
+        y = self._y(atom)
+        vals = [self._fact(self._counts_at(n), atom),
                 f"P = {self._p(cf)}", f"P = {self._p(base)}"]
         w = max(len(v) for v in vals) + 3
         lw = len(f"forced #{k}") + 3
         lift = cf - base
         self._say("\n".join([
             f"SUFFICIENCY (interventional PROXY, not Pearl's PS) of #{k} "
-            f"{ev} for {atom}  ·  {horizon} events after #{k - 1}",
+            f"{ev} for {y}  ·  {horizon} events after #{k - 1}",
             f"  {'in fact':<{lw}}{vals[0]:<{w}}the actual world, #{n}",
             f"  {'forced #' + str(k):<{lw}}{vals[1]:<{w}}fork at "
             f"#{k - 1}, do {ev}, exact",
             f"  {'by chance':<{lw}}{vals[2]:<{w}}from #{k - 1}, unforced",
-            f"  ⇒ forcing #{k} {ev} at #{k - 1} gives P({atom}) = "
+            f"  ⇒ forcing #{k} {ev} at #{k - 1} gives P({y}) = "
             f"{self._p(cf)} against {self._p(base)} by chance "
             f"({'+' if lift >= 0 else '−'}{self._p(abs(lift))}).",
             "  PROXY: true PS = P(ATOM | do(K), in the worlds where K did "
@@ -1000,7 +1013,7 @@ class Repl(LoopVerbs, Cmd):
         steps = int(parts[1]) if len(parts) == 2 \
             else (self.case["steps"] or 1)
         if self.stage == DONE:
-            p = float(self.counts.get(atom, 0) > 0)
+            p = float(self._holds(self.counts, atom))
             self._say(f"P[{atom} present | done] = {p:g}")
             return
         try:
@@ -1035,9 +1048,28 @@ class Repl(LoopVerbs, Cmd):
                        if not self._masked(lk.name)])
         return prog
 
+    # an OUTCOME is an atom (it holds when present) or `!atom` (it
+    # holds when absent — "the wolf is spent"): spec 10's measures
+    # answer for either.
+    @staticmethod
+    def _holds(counts, y):
+        return (counts.get(y.lstrip("!"), 0) > 0) != y.startswith("!")
+
+    @staticmethod
+    def _y(y):
+        return "¬" + y[1:] if y.startswith("!") else y
+
+    @staticmethod
+    def _fact(counts, y):
+        a = y.lstrip("!")
+        return f"{a} {'PRESENT' if counts.get(a, 0) > 0 else 'absent'}"
+
     def _presence(self, atom, steps):
         """P[atom present after `steps`] from here, exactly (raises
-        StateBudgetExceeded on a blowup; DONE = presence now)."""
+        StateBudgetExceeded on a blowup; DONE = presence now); `!atom`
+        = P[absent]."""
+        if atom.startswith("!"):
+            return 1.0 - self._presence(atom[1:], steps)
         if self.stage == DONE or steps <= 0:
             return float(self.counts.get(atom, 0) > 0)
         pr = ForwardProjection(self._here_prog(), steps,
