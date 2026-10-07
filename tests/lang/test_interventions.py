@@ -182,3 +182,99 @@ def test_ctx_lists_masks_shelf_and_likelihood():
     assert c["likelihood"]["sampled"] == 1
     band = say("ctx tokens")
     assert "DO      blocked blow_stick  FORKED at #1" in band
+
+
+# -- step 2: whatif ----------------------------------------------------
+
+def world(r):
+    return (list(r.fired), dict(r.counts), r.stage, r.rng.state,
+            [dict(h) for h in r.fired_how], set(r.masks), list(r.ledger),
+            len(r.undo_stack), r.shelf, r._base)
+
+
+def exact(r, k, dos, atom, horizon):
+    """The report's numbers the long way: fork, query, do, query."""
+    r._quiet(f"fork {k}")
+    try:
+        base = r._presence(atom, horizon)
+        for d in dos:
+            r._quiet("do " + d)
+        forced = sum(1 for d in dos if d[0] not in "+-~")
+        return base, r._presence(atom, horizon - forced)
+    finally:
+        r._quiet("back")
+
+
+def test_whatif_query_reports_fact_counterfactual_and_chance():
+    r, say = shell()
+    say("run 6")
+    before = world(r)
+    out = say("whatif 1 do(~blow_stick) do(~blow_straw) query wolf 4")
+    assert world(r) == before                         # session untouched
+    lines = out.strip().splitlines()
+    assert lines[0].startswith("WHATIF at #1  do(~blow_stick) "
+                               "do(~blow_straw)  ·  query wolf  ·  4 ")
+    assert lines[1].startswith("  in fact     wolf ")
+    assert lines[2].startswith("  with do     P = ")
+    assert lines[3].startswith("  by chance   P = ")
+    assert lines[4] == "  interventions: do ~blow_stick; do ~blow_straw"
+    assert lines[5].startswith("  ⇒ had do(~blow_stick) do(~blow_straw) "
+                               "at #1, P(wolf) = ")
+    base, cf = exact(r, 1, ["~blow_stick", "~blow_straw"], "wolf", 4)
+    assert f"P = {cf:.4g}" in lines[2] and f"P = {base:.4g}" in lines[3]
+    assert world(r) == before
+
+
+def test_whatif_default_horizon_is_the_actual_worlds_and_counts_forced():
+    r, say = shell()
+    say("run 5")
+    out = say("whatif 0 do(build_straw) query brickhouse")
+    assert "5 events after #0 (the actual world's horizon)" in out
+    assert "(1 forced, 4 by chance)" in out
+    base, cf = exact(r, 0, ["build_straw"], "brickhouse", 5)
+    assert f"P = {cf:.4g}" in out and f"P = {base:.4g}" in out
+
+
+def test_whatif_run_is_side_by_side_and_labelled_one_draw():
+    r, say = shell()
+    say("run 4")
+    before = world(r)
+    out = say("whatif 2 do(+bricks) run 3")
+    assert world(r) == before
+    assert "ONE sampled draw, not a measure" in out
+    assert "in fact (the actual world)" in out and "with do" in out
+    assert f"3. {r.fired[2]}" in out and "4. " in out
+    assert "interventions: do +bricks" in out
+
+
+def test_whatif_refusals_leave_the_session_alone():
+    r, say = shell()
+    say("run 3")
+    before = world(r)
+    assert "did not apply at #0" in say("whatif 0 do(nosuch) query wolf")
+    assert "usage: whatif" in say("whatif 1 query wolf")
+    assert "fork K needs" in say("whatif 9 do(~blow_stick) query wolf")
+    assert world(r) == before
+    say("fork 1")
+    assert "already forked" in say("whatif 1 do(~blow_stick) query wolf")
+
+
+def test_whatif_budget_says_so_and_suggests_a_lower_horizon(monkeypatch):
+    import metis.lang.repl as repl
+    monkeypatch.setattr(repl, "STATE_BUDGET", 3)
+    r, say = shell()
+    say("run 4")
+    before = world(r)
+    out = say("whatif 0 do(~build_brick) query wolf 6")
+    assert "budget" in out and "(try: whatif 0 do(~build_brick) " \
+        "query wolf " in out
+    assert world(r) == before
+
+
+def test_query_honours_masks_and_says_so():
+    r, say = shell()
+    plain = say("query brickhouse 3")
+    say("do ~build_brick")
+    masked = say("query brickhouse 3")
+    assert "| do ~build_brick] = 0" in masked
+    assert "do ~" not in plain

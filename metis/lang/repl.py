@@ -597,6 +597,185 @@ class Repl(LoopVerbs, Cmd):
         self._say(f"back in the actual world (#{len(self.fired)})")
         self.do_state("")
 
+    _WHATIF = re.compile(
+        r"^\s*#?(?P<k>\d+)\s+(?P<dos>(?:do\(\s*[^()]+\)\s*)+)"
+        r"(?P<mode>query|run)\s+(?P<rest>.+?)\s*$")
+
+    def _quiet(self, line):
+        """Run a command with its output captured (whatif's inner
+        steps) -> the text it would have said."""
+        keep, self.stdout = self.stdout, io.StringIO()
+        try:
+            self.onecmd(line)
+            return self.stdout.getvalue()
+        finally:
+            self.stdout = keep
+
+    def do_whatif(self, arg):
+        """whatif K do(X) [do(Y)...] query ATOM [STEPS] | run N — fork
+        at #K, apply the do's, answer, compare with the actual world,
+        back: one command, the session untouched. query is exact (the
+        horizon defaults to the actual world's, events after #K); run
+        is one sampled draw. do(+A [N]) do(-A) do(EVENT) do(~EVENT)."""
+        m = self._WHATIF.match(arg)
+        if not m:
+            self._say("usage: whatif K do(X) [do(Y)...] query ATOM "
+                      "[STEPS] | whatif K do(X)... run N")
+            return
+        if self.shelf is not None:
+            self._say("already forked — 'back' first (whatif forks and "
+                      "comes back by itself)")
+            return
+        k = int(m["k"])
+        dos = [d.strip() for d in
+               re.findall(r"do\(\s*([^()]+?)\s*\)", m["dos"])]
+        rest = m["rest"].split()
+        n = len(self.fired)
+        try:
+            if m["mode"] == "query":
+                if not 1 <= len(rest) <= 2:
+                    raise ValueError
+                atom = rest[0]
+                horizon = int(rest[1]) if len(rest) == 2 else (
+                    n - k if n > k else (self.case["steps"] or 1))
+            else:
+                if len(rest) != 1:
+                    raise ValueError
+                atom, horizon = None, int(rest[0])
+        except ValueError:
+            self._say("usage: whatif K do(X)... query ATOM [STEPS] | "
+                      "run N")
+            return
+        if atom and atom not in self.atoms:
+            self._say(f"note: {atom} appears in no rule of this catalog "
+                      "(atoms are ground — 'state' lists them)")
+        actual = {"counts": dict(self.counts), "n": n,
+                  "rows": list(self.fired[k:]),
+                  "how": [h["how"] for h in self.fired_how[k:]]}
+        said = self._quiet(f"fork {k}")
+        if self.shelf is None:                # fork refused: say why
+            self._say(said.strip())
+            return
+        try:
+            self._whatif_in_fork(k, dos, m["mode"], atom, horizon,
+                                 actual)
+        finally:
+            self._quiet("back")
+
+    def _whatif_in_fork(self, k, dos, mode, atom, horizon, actual):
+        names = " ".join(f"do({d})" for d in dos)
+        base = None
+        if mode == "query":
+            try:
+                base = self._presence(atom, horizon)
+            except StateBudgetExceeded as e:
+                return self._whatif_budget(e, k, names, atom, horizon)
+        forced = 0
+        for d in dos:
+            before = len(self.ledger)
+            said = self._quiet("do " + d)
+            if len(self.ledger) == before:
+                self._say(f"whatif: do({d}) did not apply at #{k} — "
+                          + said.strip())
+                return
+            if d[0] not in "+-~":
+                forced += 1
+        done = [f"#{e['k']} do {e['op']}" if e["op"][0] not in "+-~"
+                else f"do {e['op']}"
+                for e in self.ledger if e["k"] >= k][-len(dos):]
+        if mode == "query":
+            left = max(0, horizon - forced)
+            try:
+                cf = self._presence(atom, left)
+            except StateBudgetExceeded as e:
+                return self._whatif_budget(e, k, names, atom, horizon)
+            fact = actual["counts"].get(atom, 0) > 0
+            self._say("\n".join(self._whatif_query_report(
+                k, names, atom, horizon, forced, cf, base, fact,
+                actual, done)))
+            return
+        self._quiet(f"run {horizon}")
+        rows = list(self.fired[k:])
+        how = [h["how"] for h in self.fired_how[k:]]
+        self._say("\n".join(self._whatif_run_report(
+            k, names, horizon, actual, rows, how, dict(self.counts),
+            done)))
+
+    def _whatif_budget(self, e, k, names, atom, horizon):
+        from metis.kernel.diagnostics import budget_note
+        retry = (f"whatif {k} {names} query {atom} "
+                 f"{max(1, e.step - 1)}")
+        _note(self, budget_note(e, "query",
+                                f"whatif {k} {names} query {atom} "
+                                f"{horizon}", retry))
+        self._say(f"{e} (try: {retry})")
+
+    @staticmethod
+    def _p(x):
+        return f"{x:.4g}"
+
+    def _whatif_query_report(self, k, names, atom, horizon, forced, cf,
+                             base, fact, actual, done):
+        """One screen: the fact first, the counterfactual beside it,
+        chance-from-the-fork as the yardstick, the do's named, then
+        the sentence."""
+        n = actual["n"]
+        span = (f"{horizon} event{'' if horizon == 1 else 's'} after #{k}"
+                + (" (the actual world's horizon)" if horizon == n - k
+                   else ""))
+        vals = [f"{atom} {'PRESENT' if fact else 'absent'}",
+                f"P = {self._p(cf)}", f"P = {self._p(base)}"]
+        w = max(len(v) for v in vals) + 3
+        rows = [
+            f"WHATIF at #{k}  {names}  ·  query {atom}  ·  {span}",
+            f"  in fact     {vals[0]:<{w}}the actual world, #{n}",
+            f"  with do     {vals[1]:<{w}}counterfactual, exact"
+            + (f" ({forced} forced, {horizon - forced} by chance)"
+               if forced else ""),
+            f"  by chance   {vals[2]:<{w}}no intervention: same fork, "
+            "same horizon",
+            "  interventions: " + "; ".join(done),
+        ]
+        delta = cf - base
+        trend = ("raises" if delta > 1e-12 else "lowers"
+                 if delta < -1e-12 else "leaves")
+        how = (f"{trend} P({atom}) from {self._p(base)} to {self._p(cf)}"
+               if trend != "leaves" else
+               f"leaves P({atom}) at {self._p(cf)}")
+        rows.append(f"  ⇒ had {names} at #{k}, P({atom}) = "
+                    f"{self._p(cf)}; by chance from there "
+                    f"{self._p(base)}; in fact {atom} is "
+                    f"{'present' if fact else 'absent'}. "
+                    f"The intervention {how}.")
+        return rows
+
+    def _whatif_run_report(self, k, names, n_run, actual, rows, how,
+                           counts, done):
+        tag = {"forced": " [forced]", "do": " [do]"}
+        left = [f"{k + 1 + j}. {e}{tag.get(h, '')}"
+                for j, (e, h) in enumerate(zip(actual["rows"],
+                                               actual["how"]))]
+        right = [f"{k + 1 + j}. {e}{tag.get(h, '')}"
+                 for j, (e, h) in enumerate(zip(rows, how))]
+        head = "in fact (the actual world)"
+        w = max([len(x) for x in left] + [len(head)])
+        out = [f"WHATIF at #{k}  {names}  ·  run {n_run} (ONE sampled "
+               "draw, not a measure — 'query' gives the probability)",
+               f"  {head:<{w}}   with do"]
+        for j in range(max(len(left), len(right))):
+            a = left[j] if j < len(left) else ""
+            b = right[j] if j < len(right) else ""
+            out.append(f"  {a:<{w}}   {b}")
+        fa, fb = actual["counts"], counts
+        gained = sorted(a for a in fb if fb[a] > fa.get(a, 0))
+        lost = sorted(a for a in fa if fa[a] > fb.get(a, 0))
+        out.append("  final  " + ("differs: "
+                                  + " ".join([f"+{a}" for a in gained]
+                                             + [f"-{a}" for a in lost])
+                                  if gained or lost else "the same state"))
+        out.append("  interventions: " + "; ".join(done))
+        return out
+
     def do_query(self, arg):
         """query ATOM [STEPS] — exact presence marginal from here"""
         parts = arg.split()
@@ -610,12 +789,8 @@ class Repl(LoopVerbs, Cmd):
             p = float(self.counts.get(atom, 0) > 0)
             self._say(f"P[{atom} present | done] = {p:g}")
             return
-        here = replace(self.prog, init_stage=self.stage,
-                       init=dict(self.counts))
         try:
-            pr = ForwardProjection(here, steps,
-                                   max_states=STATE_BUDGET,
-                                   keep_history=False)
+            p = self._presence(atom, steps)
         except StateBudgetExceeded as e:
             from metis.kernel.diagnostics import budget_note
             retry = f"query {atom} {max(1, e.step - 1)}"
@@ -626,9 +801,36 @@ class Repl(LoopVerbs, Cmd):
         except Exception as e:
             self._say(f"filter failed: {e!r}")
             return
-        p = sum(q for (_, k), q in pr.final.items()
-                if any(a == atom and n > 0 for a, n in k))
-        self._say(f"P[{atom} present after {steps} steps] = {p:.6g}")
+        under = (f" | do ~{', ~'.join(sorted(self.masks))}"
+                 if self.masks else "")
+        self._say(f"P[{atom} present after {steps} steps{under}] = "
+                  f"{p:.6g}")
+
+    def _here_prog(self):
+        """The program from the session's state, the active masks
+        applied (spec 10 P2: a block prunes the tier, the measure
+        renormalizes — the same object for the exact tier)."""
+        prog = replace(self.prog, init_stage=self.stage,
+                       init=dict(self.counts))
+        if self.masks:
+            prog = replace(
+                prog,
+                stages={st: [c for c in cs if not self._masked(c.name)]
+                        for st, cs in prog.stages.items()},
+                links=[lk for lk in prog.links
+                       if not self._masked(lk.name)])
+        return prog
+
+    def _presence(self, atom, steps):
+        """P[atom present after `steps`] from here, exactly (raises
+        StateBudgetExceeded on a blowup; DONE = presence now)."""
+        if self.stage == DONE or steps <= 0:
+            return float(self.counts.get(atom, 0) > 0)
+        pr = ForwardProjection(self._here_prog(), steps,
+                               max_states=STATE_BUDGET,
+                               keep_history=False)
+        return sum(q for (_, k), q in pr.final.items()
+                   if any(a == atom and n > 0 for a, n in k))
 
     def do_seed(self, arg):
         """seed N — reseed the sampler"""
