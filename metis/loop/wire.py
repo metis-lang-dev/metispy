@@ -243,6 +243,11 @@ def _op_narrate(shell, arg):
         # (the REPL's own reading — the console narrates what its
         # stream shows); `narrate SEED` a fresh seeded trace
         source, seed, rows = "session", 0, live
+        # spec 10: interventions travel with the material (never told
+        # as chance)
+        hows = [h["how"] for h in getattr(shell, "fired_how", [])[k0:]] \
+            or None
+        bdo = tuple(getattr(shell, "_base_do", ()))
         stage = shell.stage
         kappa = [(q, n) for q, n in sorted(shell.counts.items()) if n > 0]
     else:
@@ -253,13 +258,16 @@ def _op_narrate(shell, arg):
         events = canonical_events(prog)
         rows = [events[i] for i in idx]
         source = "seed"
+        hows, bdo = None, ()
     if show == "user":             # the certified material, ditto
         return {"ok": True, "role": "user", "seed": seed,
                 "events": len(rows),
                 "prompt": user_prompt(rows, stage, kappa,
-                                      shell.text, seed=seed)}
+                                      shell.text, seed=seed,
+                                      marks=hows, base_do=bdo)}
     text = narrate(shell.llm or "ollama", rows, stage, kappa,
-                   shell.text, seed=seed, system=override)
+                   shell.text, seed=seed, system=override,
+                   marks=hows, base_do=bdo)
     return {"ok": True, "source": source, "seed": seed,
             "events": len(rows), "llm": shell.llm or "ollama",
             "narration": text}
@@ -274,8 +282,10 @@ def _op_graph(shell, arg):
     k = shell._base[0]
     title = header(shell.path.name, shell.key, shell.stage, n) + (
         f" (since #{k}: base #0 = the state then)" if k else "")
-    return {"ok": True, **as_obj(g, shell.stage, shell.key),
-            "dot": dot(g, title), "text": _text(shell, "graph")}
+    mk = shell.marks() if hasattr(shell, "marks") else {}
+    bd = getattr(shell, "_base_do", [])
+    return {"ok": True, **as_obj(g, shell.stage, shell.key, mk, bd),
+            "dot": dot(g, title, mk, bd), "text": _text(shell, "graph")}
 
 
 def _op_why(shell, arg):

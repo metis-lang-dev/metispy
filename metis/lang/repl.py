@@ -157,6 +157,19 @@ class Repl(LoopVerbs, Cmd):
         # counts) at the last edit no event explains — start, reset,
         # assert/retract, #init; the graph covers fired_rows after it
         self._base = (0, "", {})
+        # spec 10 (interventions): per fired row HOW it was chosen —
+        # {"how": "sampled"|"forced"|"do", "p": its tier probability};
+        # forced and do rows are conditioning, not sampling, and are
+        # excluded from the trace likelihood. masks block events/rules
+        # out of the tier (`do ~EVENT`); the ledger records the do's;
+        # _base_do names the state do's the current base is made of;
+        # shelf = the one shelved world while forked (D1).
+        self.fired_how = []
+        self.masks = set()
+        self.ledger = []
+        self._base_do = []
+        self.shelf = None
+        self.fork_at = None
         # runtime/loop diagnostics the instruments spoke this session
         # (spec 08 step 3) — listed by `findings`
         self.notes = []
@@ -226,13 +239,52 @@ class Repl(LoopVerbs, Cmd):
 
     def _mark(self):
         self.undo_stack.append(
-            (self.stage, dict(self.counts), len(self.fired), self._base))
+            (self.stage, dict(self.counts), len(self.fired), self._base,
+             frozenset(self.masks), len(self.ledger), list(self._base_do),
+             self.fork_at))
 
     def _rebase(self):
         """The current state becomes the causality graph's base: an
         edit no fired event explains (spec 09 — the graph is a pure
         function of base + the rows fired since)."""
         self._base = (len(self.fired), self.stage, dict(self.counts))
+        self._base_do = []
+        self.fork_at = None          # a new base: the cut leaves the graph
+
+    def _masked(self, name):
+        """D2: a mask names a ground event exactly, or a rule — all its
+        ground instances and ⊕ branches."""
+        if not self.masks:
+            return False
+        rule = name.partition("[")[0]
+        return (name in self.masks or rule in self.masks
+                or re.sub(r"-\d+$", "", rule) in self.masks)
+
+    def likelihood(self):
+        """(L, sampled, forced): the trace likelihood is the product of
+        the SAMPLED steps' tier probabilities; forced/do steps are
+        conditioning, not sampling (spec 07 P2, spec 10 P2), and are
+        excluded — never priced as if chance had chosen them."""
+        lik, ns, nf = 1.0, 0, 0
+        for h in self.fired_how:
+            if h["how"] == "sampled":
+                lik *= h["p"] if h["p"] is not None else 0.0
+                ns += 1
+            else:
+                nf += 1
+        return lik, ns, nf
+
+    def marks(self):
+        """{occurrence: "forced"|"do"|"fork"} for the graph renderers
+        (spec 10 P2/P1), over the graph's occurrences (since base)."""
+        k0 = self._base[0]
+        out = {j: h["how"] for j, h in
+               enumerate(self.fired_how[k0:], k0 + 1)
+               if h["how"] != "sampled"}
+        if self.fork_at is not None and self.fork_at >= k0:
+            j = self.fork_at if self.fork_at > k0 else 0   # 0 = the base
+            out[j] = (out[j] + "+fork") if j in out else "fork"
+        return out
 
     def causal(self):
         """(graph, events since base) — spec 09's object over the
@@ -251,13 +303,21 @@ class Repl(LoopVerbs, Cmd):
         for kind in ("clause", "link"):
             ws = [(i, choice_weight(ev, self.counts))
                   for i, (k, s, ev) in enumerate(self.events_tbl)
-                  if k == kind and s == self.stage]
+                  if k == kind and s == self.stage
+                  and not self._masked(ev.name)]
             ws = [(i, w) for i, w in ws if w > 0]
             if ws:
                 return ws
         return []
 
-    def _fire(self, i):
+    def _fire(self, i, how="sampled", ws=None):
+        """Fire event i; `ws` = the tier it was chosen from (computed
+        here when the caller has not), for its recorded probability."""
+        ws = self._candidates() if ws is None else ws
+        total = sum(w for _, w in ws)
+        w = dict(ws).get(i)
+        self.fired_how.append({"how": how,
+                               "p": (w / total) if w and total else None})
         kind, _, ev = self.events_tbl[i]
         for q, n in ev.consume.items():
             self.counts[q] = self.counts.get(q, 0) - n
@@ -287,7 +347,7 @@ class Repl(LoopVerbs, Cmd):
             if threshold < acc:
                 chosen = i
                 break
-        return self._fire(chosen)
+        return self._fire(chosen, "sampled", ws)
 
     def _say(self, s):
         self.stdout.write(s + "\n")
@@ -320,26 +380,12 @@ class Repl(LoopVerbs, Cmd):
             name = self._sample()
             self._say(f"fired (sampled): {name}")
             return
-        a = arg.strip()
-        pick = None
-        if a.isdigit() and 1 <= int(a) <= len(ws):
-            pick = ws[int(a) - 1][0]
-        else:
-            hits = [i for i, _ in ws
-                    if self.events_tbl[i][2].name.startswith(a)]
-            if len(hits) == 1:
-                pick = hits[0]
-            elif hits:
-                self.undo_stack.pop()
-                self._say(f"ambiguous: {len(hits)} candidates match "
-                          f"{a!r} — 'events' to list them")
-                return
+        pick, err = self._resolve(arg.strip(), ws)
         if pick is None:
             self.undo_stack.pop()
-            self._say(f"no enabled candidate {a!r} — 'events' lists "
-                      f"1..{len(ws)}")
+            self._say(err)
             return
-        self._say(f"fired: {self._fire(pick)}")
+        self._say(f"fired: {self._fire(pick, 'forced', ws)}")
 
     def do_run(self, arg):
         """sample N steps (stops at quiescence)"""
@@ -389,6 +435,7 @@ class Repl(LoopVerbs, Cmd):
             self.counts.pop(atom, None)
         self._rebase()
         self._say(f"{atom}:{c}")
+        return True
 
     def do_assert(self, arg):
         """assert ATOM [N] — add N (default 1) tokens"""
@@ -397,6 +444,158 @@ class Repl(LoopVerbs, Cmd):
     def do_retract(self, arg):
         """retract ATOM [N] — remove N (default 1) tokens"""
         self._adjust(arg, -1, "usage: retract ATOM [N]")
+
+    # -- interventions (spec 10) ----------------------------------------
+
+    def do_do(self, arg):
+        """do +ATOM [N] | -ATOM [N] | EVENT | ~EVENT — an intervention,
+        recorded as one: state surgery (assert/retract), choice surgery
+        (force an enabled EVENT — excluded from the likelihood), or a
+        block (~ masks a ground event, or a rule's every instance, out
+        of the tier; the measure renormalizes). Bare `do` lists them."""
+        a = arg.strip()
+        if not a:
+            k0 = self._base[0]
+            rows = [f"  {d['k']:>3}  do {d['op']}" for d in self.ledger]
+            self._say("\n".join(
+                ["interventions this session (after occurrence k):"]
+                + (rows or ["  (none)"])
+                + [f"masks: {' '.join(sorted(self.masks)) or '(none)'}",
+                   f"base #{k0}: " + (
+                       "do " + ", ".join(self._base_do)
+                       if self._base_do else "not an intervention")]))
+            return
+        if a[0] in "+-":
+            prev = list(self._base_do) \
+                if self._base[0] == len(self.fired) else []
+            if not self._adjust(a[1:], +1 if a[0] == "+" else -1,
+                                "usage: do +ATOM [N] | do -ATOM [N]"):
+                return
+            op = a[0] + " ".join(a[1:].split())
+            self._base_do = prev + [op]
+            self.ledger.append({"k": len(self.fired), "op": op})
+            self._say(f"do {op} — an intervention (state surgery): "
+                      "the graph's base is now this edit")
+            return
+        if a[0] == "~":
+            name = a[1:].strip()
+            n = sum(1 for _, _, ev in self.events_tbl
+                    if ev.name == name or ev.name.partition("[")[0]
+                    == name or re.sub(r"-\d+$", "",
+                                      ev.name.partition("[")[0]) == name)
+            if not name or not n:
+                self._say(f"no event or rule {name!r} — 'events' and "
+                          "'list' name them")
+                return
+            self._mark()
+            self.masks.add(name)
+            self.ledger.append({"k": len(self.fired), "op": "~" + name})
+            self._say(f"do ~{name} — blocked ({n} ground event"
+                      f"{'' if n == 1 else 's'}); the tier renormalizes "
+                      "without it until reset/back")
+            return
+        ws = self._candidates()
+        if not ws:
+            self._say("quiescent — nothing can be forced")
+            return
+        pick, err = self._resolve(a, ws)
+        if pick is None:
+            self._say(err)
+            return
+        self._mark()
+        name = self._fire(pick, "do", ws)
+        self.ledger.append({"k": len(self.fired), "op": name})
+        self._say(f"do {name} — forced (an intervention: conditioning, "
+                  "not sampling; excluded from the likelihood)")
+
+    def _resolve(self, a, ws):
+        """An enabled candidate by number or unique name prefix (the
+        `step` rule) -> (index, None) | (None, why)."""
+        if a.isdigit() and 1 <= int(a) <= len(ws):
+            return ws[int(a) - 1][0], None
+        hits = [i for i, _ in ws
+                if self.events_tbl[i][2].name.startswith(a)]
+        if len(hits) == 1:
+            return hits[0], None
+        if hits:
+            return None, (f"ambiguous: {len(hits)} candidates match "
+                          f"{a!r} — 'events' to list them")
+        return None, (f"no enabled candidate {a!r} — 'events' lists "
+                      f"1..{len(ws)}")
+
+    def _snapshot_world(self):
+        """The whole session world, deep-copied (the fork's shelf)."""
+        import copy
+        return copy.deepcopy({
+            "stage": self.stage, "counts": self.counts,
+            "fired": self.fired, "fired_rows": self.fired_rows,
+            "fired_how": self.fired_how, "base": self._base,
+            "base_do": self._base_do, "undo": self.undo_stack,
+            "masks": self.masks, "ledger": self.ledger,
+            "rng": self.rng})
+
+    def do_fork(self, arg):
+        """fork [K] — branch at occurrence K (default: here): the actual
+        world is shelved, the session becomes exactly post-K by
+        deterministic prefix replay, the graph marks the cut; `back`
+        restores it. One shelved world at a time (D1)."""
+        if self.shelf is not None:
+            self._say(f"already forked at #{self.fork_at if self.fork_at is not None else '?'} "
+                      "— 'back' first (one alternative world at a time; "
+                      "parallel worlds are parallel sessions)")
+            return
+        k0, n = self._base[0], len(self.fired)
+        a = arg.strip()
+        try:
+            k = int(a.lstrip("#")) if a else n
+        except ValueError:
+            self._say("usage: fork [K]")
+            return
+        if not k0 <= k <= n:
+            self._say(f"fork K needs #{k0} <= K <= #{n}: before #{k0} "
+                      "lies an edit no event explains (undo/reset to "
+                      "reach it)")
+            return
+        self.shelf = self._snapshot_world()
+        # deterministic prefix replay from the graph's base
+        _, stage, counts = self._base
+        counts = dict(counts)
+        for kind, _, ev in self.fired_rows[k0:k]:
+            for q, m in ev.consume.items():
+                counts[q] = counts.get(q, 0) - m
+            for q, m in ev.produce.items():
+                counts[q] = counts.get(q, 0) + m
+            if kind == "link":
+                stage = ev.post
+        self.counts = {q: m for q, m in counts.items() if m > 0}
+        self.stage = stage if not (k == n and self.stage == DONE) \
+            else self.stage
+        del self.fired[k:]
+        del self.fired_rows[k:]
+        del self.fired_how[k:]
+        self.ledger = [d for d in self.ledger if d["k"] <= k]
+        self.undo_stack = []
+        self.fork_at = k
+        self._say(f"forked at #{k} — the actual world (#{n}) is shelved; "
+                  "'back' returns to it. The future from here is "
+                  "re-randomized, not replayed.")
+        self.do_state("")
+
+    def do_back(self, arg):
+        """back — leave the fork: restore the shelved actual world
+        exactly (masks set inside the fork are cleared with it)"""
+        if self.shelf is None:
+            self._say("not forked — nothing to go back to")
+            return
+        w, self.shelf, self.fork_at = self.shelf, None, None
+        self.stage, self.counts = w["stage"], w["counts"]
+        self.fired, self.fired_rows = w["fired"], w["fired_rows"]
+        self.fired_how, self._base = w["fired_how"], w["base"]
+        self._base_do, self.undo_stack = w["base_do"], w["undo"]
+        self.ledger, self.rng = w["ledger"], w["rng"]
+        self.masks = w["masks"]       # the fork's own masks are gone
+        self._say(f"back in the actual world (#{len(self.fired)})")
+        self.do_state("")
 
     def do_query(self, arg):
         """query ATOM [STEPS] — exact presence marginal from here"""
@@ -444,9 +643,13 @@ class Repl(LoopVerbs, Cmd):
         if not self.undo_stack:
             self._say("nothing to undo")
             return
-        self.stage, self.counts, k, self._base = self.undo_stack.pop()
+        (self.stage, self.counts, k, self._base, masks, nl, base_do,
+         self.fork_at) = self.undo_stack.pop()
         del self.fired[k:]
         del self.fired_rows[k:]
+        del self.fired_how[k:]
+        self.masks, self._base_do = set(masks), list(base_do)
+        del self.ledger[nl:]
         self.do_state("")
 
     def do_reset(self, arg):
@@ -454,6 +657,7 @@ class Repl(LoopVerbs, Cmd):
         self._mark()
         self.stage = self.prog.init_stage
         self.counts = dict(self.case["init"])
+        self.masks = set()
         self._rebase()
         self.do_state("")
 
@@ -717,7 +921,20 @@ class Repl(LoopVerbs, Cmd):
                                         for n, occ in items]}
                 for st, items in rel["elsewhere"]],
             "pruned_elsewhere": rel["pruned_elsewhere"],
+            # spec 10: interventions, masks, the shelf, the honest
+            # likelihood (sampled steps only)
+            **self._ctx_interventions(),
         }
+
+    def _ctx_interventions(self):
+        lik, ns, nf = self.likelihood()
+        return {"likelihood": {"value": lik, "sampled": ns,
+                               "forced": nf},
+                "masks": sorted(self.masks),
+                "base_do": list(self._base_do),
+                "fork": ({"at": self.fork_at,
+                          "actual": len(self.shelf["fired"])}
+                         if self.shelf is not None else None)}
 
     def _run_key(self):
         """run_key of the session since the graph base (spec 09: the
@@ -750,6 +967,16 @@ class Repl(LoopVerbs, Cmd):
                f"TOKENS  {dots}",
                f"ENABLED {len(c['enabled'])} event(s) · {n_rules} of "
                f"{len(c['rules'])} rule(s) fireable"]
+        lk, fk = c["likelihood"], c["fork"]
+        if lk["forced"] or c["masks"] or c["base_do"] or fk:
+            out.append("DO      " + "  ".join(x for x in (
+                f"{lk['forced']} forced/do (out of the likelihood)"
+                if lk["forced"] else "",
+                "base do " + ", ".join(c["base_do"]) if c["base_do"]
+                else "",
+                "blocked " + " ".join(c["masks"]) if c["masks"] else "",
+                f"FORKED at #{fk['at']} (actual #{fk['actual']} shelved"
+                " — back)" if fk else "") if x))
         want = [section] if section else list(self._CTX_SECTIONS)
         if "tokens" in want:
             out += ["── tokens"] + (state_table(self.counts.items())
@@ -1066,24 +1293,28 @@ class Repl(LoopVerbs, Cmd):
                                             self.case["steps"] or 6,
                                             seed)
             rows = [self.events_tbl[i] for i in idx]
+            hows, bdo = None, ()          # a fresh sampled trace
         else:
             seed = 0
             rows = list(self.fired_rows[self._base[0]:])   # since base
+            hows = [h["how"] for h in self.fired_how[self._base[0]:]]
             stage = self.stage
             kappa = [(q, n) for q, n in sorted(self.counts.items())
                      if n > 0]
+            bdo = tuple(self._base_do)
         if not rows:
             self._say("nothing to narrate — step/run first, or "
                       "'narrate SEED' for a sampled trace")
             return
         if show == "user":
             self._say(user_prompt(rows, stage, kappa, self.text,
-                                  seed=seed))
+                                  seed=seed, marks=hows, base_do=bdo))
             return
         try:
             text = narrate(self.llm or "ollama", rows, stage, kappa,
                            self.text, seed=seed,
-                           system=self.sys_prompts.get("narrate"))
+                           system=self.sys_prompts.get("narrate"),
+                           marks=hows, base_do=bdo)
         except Exception as e:
             self._say(f"narrate failed ({type(e).__name__}): {e}")
             return
@@ -1132,10 +1363,34 @@ class Repl(LoopVerbs, Cmd):
                   f"— replay: metisc --run {path}")
 
     def do_log(self, arg):
-        """fired events this session"""
-        self._say("\n".join(f"  {k}. {n}"
-                            for k, n in enumerate(self.fired, 1))
-                  or "(nothing fired yet)")
+        """fired events this session; forced/do rows and the state do's
+        are marked, and the likelihood counts sampled steps only"""
+        if not self.fired and not self.ledger:
+            self._say("(nothing fired yet)")
+            return
+        tag = {"forced": "  [forced]", "do": "  [do]"}
+        state = {}
+        for d in self.ledger:
+            if d["op"][0] in "+-~":
+                state.setdefault(d["k"], []).append(d["op"])
+        out = []
+        for k in range(len(self.fired) + 1):
+            for op in state.get(k, []):
+                out.append(f"     do {op}")
+            if k == self.fork_at and self.shelf is not None:
+                out.append(f"     ── fork at #{k} (actual world shelved:"
+                           f" #{len(self.shelf['fired'])}) ──")
+            if k < len(self.fired):
+                h = self.fired_how[k] if k < len(self.fired_how) \
+                    else {"how": "sampled"}
+                out.append(f"  {k + 1}. {self.fired[k]}"
+                           + tag.get(h["how"], ""))
+        lik, ns, nf = self.likelihood()
+        out.append(f"likelihood {lik:.6g} over {ns} sampled step"
+                   f"{'' if ns == 1 else 's'}" + (
+                       f" ({nf} forced/do excluded — conditioning, "
+                       "not sampling)" if nf else ""))
+        self._say("\n".join(out))
 
     def do_graph(self, arg):
         """the causality graph (spec 09) since the last reset/assert/
@@ -1148,13 +1403,14 @@ class Repl(LoopVerbs, Cmd):
         title = header(self.path.name, self.key, self.stage, n) + (
             f" (since #{k}: base #0 = the state then)" if k else "")
         a = arg.strip()
+        mk, bd = self.marks(), self._base_do
         if not a:
-            self._say("\n".join(beats_text(g, title)))
+            self._say("\n".join(beats_text(g, title, mk, bd)))
             return
         if a.endswith(".dot"):
-            text = dot(g, title)
+            text = dot(g, title, mk, bd)
         elif a.endswith(".json"):
-            text = as_json(g, self.stage, self.key)
+            text = as_json(g, self.stage, self.key, mk, bd)
         else:
             self._say("usage: graph [FILE.dot | FILE.json]")
             return

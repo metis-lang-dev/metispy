@@ -22,6 +22,15 @@ from typing import Dict, List
 
 from metis.kernel.nets import CausalGraph
 
+# spec 10: interventions are drawn as such. marks = {occurrence:
+# "forced" | "do" | "fork" | "<how>+fork"}; occurrence 0 = the base,
+# whose label names the state do's it is made of (base_do).
+_TAG = {"forced": "[forced]", "do": "[do]", "fork": "[fork]"}
+
+
+def _tags(mark: str) -> str:
+    return " ".join(_TAG[m] for m in (mark or "").split("+") if m in _TAG)
+
 
 def _parents(g: CausalGraph) -> Dict[int, List]:
     out: Dict[int, List] = {nd.i: [] for nd in g.nodes}
@@ -35,7 +44,8 @@ def header(file: str, key: str, stage: str, steps: int) -> str:
             f"{steps} fired")
 
 
-def beats_text(g: CausalGraph, title: str = "") -> List[str]:
+def beats_text(g: CausalGraph, title: str = "", marks=None,
+               base_do=()) -> List[str]:
     """One block per beat, `_pretty_trace` style: occurrence number,
     event, its covering parents as i<j (flow atoms in parentheses),
     `*` on the frontier."""
@@ -57,8 +67,12 @@ def beats_text(g: CausalGraph, title: str = "") -> List[str]:
             tag = f"{b:>{beat_w}}" if first else " " * beat_w
             mark = "*" if nd.i in front else " "
             shape = "◇" if nd.kind == "link" else " "
-            out.append(f"  {tag} |{mark}{nd.i:>{num_w}} {shape}"
-                       f"{nd.name:<{name_w}}  {deps}".rstrip())
+            m = _tags((marks or {}).get(nd.i, ""))
+            if nd.i == 0 and base_do:
+                m = (m + " " if m else "") + "[do " + ", ".join(base_do) + "]"
+            out.append((f"  {tag} |{mark}{nd.i:>{num_w}} {shape}"
+                        f"{nd.name:<{name_w}}  {deps}".rstrip()
+                        + (f"  {m}" if m else "")))
             first = False
     out.append("  * frontier: " + " ".join(map(str, g.frontier)))
     return out
@@ -84,7 +98,8 @@ def _node_label(nd) -> str:
     return f"{nd.i} {base}" + (f"\n{binds}" if binds else "")
 
 
-def dot(g: CausalGraph, label: str = "") -> str:
+def dot(g: CausalGraph, label: str = "", marks=None,
+        base_do=()) -> str:
     """The causal diagram (spec 09 D4, CelfToGraph style: nodes are
     actions, edges causal relationships), one rank per beat with a
     beat column on the left. Edge classes: flow solid + atom label
@@ -99,7 +114,10 @@ def dot(g: CausalGraph, label: str = "") -> str:
            '  node [shape=box, fontname="Helvetica", fontsize=11, '
            'margin="0.12,0.04"];',
            '  edge [fontname="Helvetica", fontsize=9, arrowsize=0.7];']
-    title = "\n".join(x for x in (label, LEGEND) if x)
+    legend = LEGEND + ("  ·  orange: intervention (do / forced — "
+                       "not sampled)  ·  ⑂: the fork point"
+                       if marks or base_do else "")
+    title = "\n".join(x for x in (label, legend) if x)
     out += [f"  label={_q(title)};", "  labelloc=t;"]
     beats = max((nd.beat for nd in g.nodes), default=0) + 1
     out.append('  node [shape=plaintext, fontcolor=gray40] '
@@ -115,7 +133,21 @@ def dot(g: CausalGraph, label: str = "") -> str:
         ranks.append(f"  {{ rank=same; b{b}; {ids} }}")
 
     def node_line(nd, indent="  "):
-        attrs = [f"label={_q(_node_label(nd))}"]
+        mk = (marks or {}).get(nd.i, "")
+        lab = _node_label(nd)
+        if nd.i == 0 and base_do:
+            lab = "0 do(" + ", ".join(base_do) + ")"
+        if "do" in mk.split("+"):
+            lab = "do: " + lab
+        elif "forced" in mk.split("+"):
+            lab = "forced: " + lab
+        attrs = [f"label={_q(lab)}"]
+        if "do" in mk.split("+") or "forced" in mk.split("+") \
+                or (nd.i == 0 and base_do):
+            attrs.append("color=darkorange3, fontcolor=darkorange4, "
+                         "peripheries=2")
+        if "fork" in mk.split("+"):
+            attrs.append('xlabel="⑂ fork", fontcolor=red3')
         if nd.kind == "link":
             attrs.append("shape=diamond")
         elif nd.kind == "init":
@@ -159,25 +191,30 @@ def dot(g: CausalGraph, label: str = "") -> str:
     return "\n".join(out) + "\n"
 
 
-def as_obj(g: CausalGraph, stage: str, key: str) -> dict:
+def as_obj(g: CausalGraph, stage: str, key: str, marks=None,
+           base_do=()) -> dict:
     """The JSON mirror (spec 09 P1): nodes, edges, frontier, stage,
     key — the wire op's result body. Nodes carry their stage episode
     (D5; null for a link, which stands between episodes)."""
     return {
-        "nodes": [{"i": nd.i, "name": nd.name, "kind": nd.kind,
-                   "stage": nd.stage, "beat": nd.beat,
-                   "episode": nd.episode}
+        "nodes": [dict({"i": nd.i, "name": nd.name, "kind": nd.kind,
+                        "stage": nd.stage, "beat": nd.beat,
+                        "episode": nd.episode},
+                       **({"mark": (marks or {})[nd.i]}
+                          if (marks or {}).get(nd.i) else {}))
                   for nd in sorted(g.nodes, key=lambda nd: nd.i)],
         "edges": [{"from": e.src, "to": e.dst, "atoms": list(e.atoms),
                    "kind": e.kind} for e in g.edges],
         "frontier": list(g.frontier),
         "stage": stage,
         "key": key,
+        **({"base_do": list(base_do)} if base_do else {}),
     }
 
 
-def as_json(g: CausalGraph, stage: str, key: str) -> str:
-    return json.dumps(as_obj(g, stage, key), indent=1,
+def as_json(g: CausalGraph, stage: str, key: str, marks=None,
+            base_do=()) -> str:
+    return json.dumps(as_obj(g, stage, key, marks, base_do), indent=1,
                       ensure_ascii=False) + "\n"
 
 

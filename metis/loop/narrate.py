@@ -42,9 +42,24 @@ Now narrate this run.
 PROMPT = SYSTEM + "\n\n" + USER_TEMPLATE
 
 
+HONESTY = """\
+
+== interventions (NOT chance) ==
+{lines}
+These beats were decided OUTSIDE the story's chances. [forced]: the
+player chose it — tell it as the choice that was made, never as luck,
+fate or the dice. [do]: an intervention, a what-if imposed on the
+story — tell it as a supposition ("suppose…", "had…", "in this
+telling…"). A [do +X]/[do -X] start state was set by hand: say so.
+Never present any of these as a character's spontaneous impulse
+unless a rule's doc says so."""
+
+_HOW = {"forced": "[forced]", "do": "[do]"}
+
+
 def material(rows, final_stage: str,
              kappa: List[Tuple[str, int]], rules_src: str,
-             seed: int = 1) -> Dict[str, str]:
+             seed: int = 1, marks=None, base_do=()) -> Dict[str, str]:
     """Certified material: beats + state via metispy's renderers,
     rules from the approved source (story_rules: noise stripped)."""
     from metis.lang.directives import _pretty_state, _pretty_trace
@@ -57,8 +72,22 @@ def material(rows, final_stage: str,
                    key=lambda i: (foata_levels(rows)[i], i)) \
         if rows else []
     evs = [None] + [rows[i][2] for i in order]
-    return {"beats": "\n".join(gloss(l, docs, ev)
-                               for l, ev in zip(lines, evs)),
+    # spec 10: faithfulness extends to agency — an intervention is
+    # never presented as sampled
+    hows = [None] + [(marks or [None] * len(rows))[i] for i in order]
+    beats = "\n".join(gloss(l, docs, ev) + (
+        f"  {_HOW[h]}" if h in _HOW else "")
+        for l, ev, h in zip(lines, evs, hows))
+    forced = [rows[i][2].name for i in range(len(rows))
+              if (marks or [None] * len(rows))[i] in _HOW]
+    if forced or base_do:
+        beats += HONESTY.format(lines="\n".join(
+            [f"[do {op}] — the start state, set by hand"
+             for op in base_do]
+            + [f"[{(marks or [])[i]}] {rows[i][2].name}"
+               for i in range(len(rows))
+               if (marks or [None] * len(rows))[i] in _HOW]))
+    return {"beats": beats,
             "state": "\n".join(_pretty_state(seed, final_stage,
                                              sorted(kappa))),
             "rules": story_rules(rules_src)}
@@ -147,18 +176,20 @@ def gloss(line: str, docs: Dict[str, str], ev=None) -> str:
 
 
 def user_prompt(rows, final_stage, kappa, rules_src,
-                seed: int = 1) -> str:
+                seed: int = 1, marks=None, base_do=()) -> str:
     """The material half alone — what `narrate user` shows."""
     return USER_TEMPLATE.format(
-        **material(rows, final_stage, kappa, rules_src, seed))
+        **material(rows, final_stage, kappa, rules_src, seed,
+                   marks, base_do))
 
 
 def narrate(spec, rows, final_stage, kappa, rules_src,
             seed: int = 1, timeout: int = 600,
-            system: str = None) -> str:
+            system: str = None, marks=None, base_do=()) -> str:
     from .prompts import resolve
     head, _ = resolve("narrate", system)
-    body = user_prompt(rows, final_stage, kappa, rules_src, seed)
+    body = user_prompt(rows, final_stage, kappa, rules_src, seed,
+                       marks, base_do)
     return llm.complete(spec, body, timeout=timeout,
                         options=options(), system=head)
 
