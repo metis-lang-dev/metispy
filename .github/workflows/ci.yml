@@ -17,15 +17,51 @@ jobs:
   fast:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HAVE_READ_TOKEN: ${{ secrets.METIS_READ_TOKEN != '' }}
+      # catalog-reading test files (they read the sibling metis-catalog,
+      # which is PRIVATE): run only with METIS_READ_TOKEN
+      CATALOG_TESTS: >-
+        tests/lang/test_causality.py tests/lang/test_ctx.py
+        tests/lang/test_diagnostics_runtime.py tests/test_horn_tabling.py
     steps:
+      # the suite expects its siblings beside it (tests/langpath.py)
       - uses: actions/checkout@v4
+        with:
+          path: metispy
+      - name: Checkout metis-lang@master (public sibling — corpus + metisc)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-lang
+          ref: master
+          path: metis-lang
+      - name: Checkout metis-catalog (private sibling; needs METIS_READ_TOKEN)
+        if: env.HAVE_READ_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          token: ${{ secrets.METIS_READ_TOKEN }}
+          path: metis-catalog
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: metispy/pyproject.toml
+      - name: Build metisc (stdlib-only ocamlopt)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ocaml-nox g++
+          make -C metis-lang metisc
       - name: Install
-        run: pip install -e '.[test]'
+        run: pip install -e './metispy[test]'
       - name: The review recipe (fast suite)
-        # verbatim from the review cycle; model/net-dependent suites
-        # (kitchen/overcooked, sumo) excluded exactly as locally
-        run: pytest -q -m "not slow" --ignore=tests/kitchen -k "not sumo"
+        # verbatim from the review cycle; kitchen/overcooked and sumo are
+        # excluded exactly as locally
+        working-directory: metispy
+        run: |
+          IGNORE=""
+          if [ "$HAVE_READ_TOKEN" != "true" ]; then
+            for f in $CATALOG_TESTS; do IGNORE="$IGNORE --ignore=$f"; done
+            echo "::warning::catalog-reading tests NOT run (no METIS_READ_TOKEN — Contents: read on metis-lang-dev/metis-catalog): $CATALOG_TESTS"
+            echo "### NOT run (needs METIS_READ_TOKEN): $CATALOG_TESTS" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          pytest -q -m "not slow" --ignore=tests/kitchen -k "not sumo" $IGNORE
