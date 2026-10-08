@@ -205,36 +205,6 @@ def exact(r, k, dos, atom, horizon):
         r._quiet("back")
 
 
-def test_whatif_query_reports_fact_counterfactual_and_chance():
-    r, say = shell()
-    say("run 6")
-    before = world(r)
-    out = say("whatif 1 do(~blow_stick) do(~blow_straw) query wolf 4")
-    assert world(r) == before                         # session untouched
-    lines = out.strip().splitlines()
-    assert lines[0].startswith("WHATIF at #1  do(~blow_stick) "
-                               "do(~blow_straw)  ·  query wolf  ·  4 ")
-    assert lines[1].startswith("  in fact     wolf ")
-    assert lines[2].startswith("  with do     P = ")
-    assert lines[3].startswith("  by chance   P = ")
-    assert lines[4] == "  interventions: do ~blow_stick; do ~blow_straw"
-    assert lines[5].startswith("  ⇒ had do(~blow_stick) do(~blow_straw) "
-                               "at #1, P(wolf) = ")
-    base, cf = exact(r, 1, ["~blow_stick", "~blow_straw"], "wolf", 4)
-    assert f"P = {cf:.4g}" in lines[2] and f"P = {base:.4g}" in lines[3]
-    assert world(r) == before
-
-
-def test_whatif_default_horizon_is_the_actual_worlds_and_counts_forced():
-    r, say = shell()
-    say("run 5")
-    out = say("whatif 0 do(build_straw) query brickhouse")
-    assert "5 events after #0 (the actual world's horizon)" in out
-    assert "(1 forced, 4 by chance)" in out
-    base, cf = exact(r, 0, ["build_straw"], "brickhouse", 5)
-    assert f"P = {cf:.4g}" in out and f"P = {base:.4g}" in out
-
-
 def test_whatif_run_is_side_by_side_and_labelled_one_draw():
     r, say = shell()
     say("run 4")
@@ -257,18 +227,6 @@ def test_whatif_refusals_leave_the_session_alone():
     assert world(r) == before
     say("fork 1")
     assert "already forked" in say("whatif 1 do(~blow_stick) query wolf")
-
-
-def test_whatif_budget_says_so_and_suggests_a_lower_horizon(monkeypatch):
-    import metis.lang.repl as repl
-    monkeypatch.setattr(repl, "STATE_BUDGET", 3)
-    r, say = shell()
-    say("run 4")
-    before = world(r)
-    out = say("whatif 0 do(~build_brick) query wolf 6")
-    assert "budget" in out and "(try: whatif 0 do(~build_brick) " \
-        "query wolf " in out
-    assert world(r) == before
 
 
 def test_query_honours_masks_and_says_so():
@@ -300,25 +258,6 @@ def three_brick():
     return r, say
 
 
-def test_necessity_blocks_k_and_reports_pn_beside_the_fact():
-    r, say = three_brick()
-    before = world(r)
-    out = say("necessity 4 brickhouse")
-    assert world(r) == before
-    lines = out.strip().splitlines()
-    assert lines[0] == ("NECESSITY of #4 build_brick for brickhouse  ·  "
-                        "3 events after #3 (the actual world's horizon)")
-    assert lines[1].startswith("  in fact      brickhouse PRESENT")
-    assert lines[2].startswith("  without #4   P = 0 ")
-    assert "do ~build_brick (blocked to the horizon)" in lines[2]
-    assert lines[3].startswith("  by chance    P = ")
-    assert lines[4].startswith("  ⇒ PN ≈ 1: #4 build_brick was necessary "
-                               "for brickhouse")
-    assert "prefix-fixed" in lines[5]
-    base, cf = arms(r, 4, "~build_brick", "brickhouse", 3)
-    assert cf == 0 and f"P = {base:.4g}" in lines[3]
-
-
 def test_necessity_default_atom_from_the_forward_cone():
     r, say = three_brick()
     assert r._forward_cone_atoms(4) == ["brickhouse"]
@@ -329,47 +268,12 @@ def test_necessity_default_atom_from_the_forward_cone():
     assert "needs an ATOM — present atoms in #1's forward cone:" in out
 
 
-def test_necessity_fact_is_read_at_the_horizon():
-    r, say = three_brick()
-    out = say("necessity 4 brickhouse 1")
-    assert "1 event after #3" in out and "the actual world, #4" in out
-    assert "(the actual world's horizon)" not in out
-    # an outcome absent at that point is refused, naming the point
-    assert "does not hold in fact at #6" in say("necessity 1 stickhouse")
-
-
 def test_necessity_refusals():
     r, say = three_brick()
     assert "usage: necessity K [ATOM]" in say("necessity")
     assert "needs an event of the graph: #1..#6" in say("necessity 9 x")
     say("fork 2")
     assert "already forked" in say("necessity 1 brickhouse")
-
-
-def test_sufficiency_is_labelled_a_proxy_and_says_what_ps_needs():
-    r, say = three_brick()
-    before = world(r)
-    out = say("sufficiency 4 brickhouse")
-    assert world(r) == before
-    assert out.startswith("SUFFICIENCY (interventional PROXY, not "
-                          "Pearl's PS) of #4 build_brick for brickhouse")
-    assert "PROXY: true PS" in out and "posterior over those ¬K worlds" \
-        in out and "deferred (spec 10 D3)" in out
-    base, cf = arms(r, 4, "build_brick", "brickhouse", 3)
-    assert f"forced #4   P = {cf:.4g}" in out
-    assert f"by chance   P = {base:.4g}" in out
-    assert "usage: sufficiency K ATOM" in say("sufficiency 4")
-
-
-def test_causation_budget_says_so_and_suggests_a_lower_horizon(monkeypatch):
-    import metis.lang.repl as repl
-    monkeypatch.setattr(repl, "STATE_BUDGET", 2)
-    r, say = three_brick()
-    before = world(r)
-    for verb in ("necessity", "sufficiency"):
-        out = say(f"{verb} 4 brickhouse")
-        assert "budget" in out and f"(try: {verb} 4 brickhouse " in out
-        assert world(r) == before
 
 
 def test_counts_at_replays_the_actual_world():
@@ -381,23 +285,6 @@ def test_counts_at_replays_the_actual_world():
         states.append(dict(r2.counts))
     for j, st in enumerate(states, 1):
         assert r._counts_at(j) == st
-
-
-def test_necessity_budget_never_suggests_a_retry_that_would_be_refused(
-        monkeypatch):
-    import metis.lang.repl as repl
-    r, say = three_brick()                    # brickhouse holds from #4
-    monkeypatch.setattr(repl, "STATE_BUDGET", 3)    # blows at step 2/3
-    assert "(try: necessity 4 brickhouse 1 " in say("necessity 4 brickhouse")
-    # had the outcome held only later, the retry would be refused: then
-    # the message says so instead of suggesting it
-    real = r._counts_at
-    monkeypatch.setattr(r, "_counts_at",
-                        lambda j: real(j) if j >= 6 else {})
-    out = say("necessity 4 brickhouse")
-    assert "(try:" not in out
-    assert "within the 1 event it can answer, brickhouse does not yet " \
-        "hold in fact (it holds from #6)" in out
 
 
 # -- step 4: the wire (spec 10 P5) -------------------------------------
@@ -449,3 +336,116 @@ def test_absence_outcomes_bang_atom():
     assert "P(¬wolf) = 0" in w and "in fact ¬wolf holds" in w
     assert "does not hold in fact" in say("necessity 4 !brickhouse")
     assert r._presence("!wolf", 0) == 1.0 and r._y("!wolf") == "¬wolf"
+
+
+# -- spec 11: readouts and tiers on the spec 10 instruments -------------
+
+def test_whatif_global_readout_reports_and_matches_the_long_way():
+    """A plain N is the GLOBAL readout (validation, flagged): the report
+    shape and its numbers re-derived through the full filter."""
+    r, say = shell()
+    say("run 6")
+    before = world(r)
+    out = say("whatif 1 do(~blow_stick) do(~blow_straw) query wolf 4")
+    assert world(r) == before                         # session untouched
+    lines = out.strip().splitlines()
+    assert lines[0] == ("WHATIF at #1  do(~blow_stick) do(~blow_straw)  ·"
+                        "  query wolf  ·  4 global events (scheduling-"
+                        "sensitive — validation readout) after #1")
+    assert lines[1].startswith("  in fact      wolf ")
+    assert lines[2].startswith("  with do      P = ")
+    assert lines[3].startswith("  by chance    P = ")
+    assert lines[4] == "  interventions: do ~blow_stick; do ~blow_straw"
+    assert lines[5].startswith("  ⇒ had do(~blow_stick) do(~blow_straw) "
+                               "at #1, P(wolf) = ")
+    assert lines[6] == "  tier         exact (full world)"
+    base, cf = exact(r, 1, ["~blow_stick", "~blow_straw"], "wolf", 4)
+    assert f"P = {cf:.4g}" in lines[2] and f"P = {base:.4g}" in lines[3]
+    assert world(r) == before
+
+
+def test_whatif_default_reads_the_remainders_cone_steps_on_the_cone():
+    from metis.lang.cone import sweep
+    r, say = shell()
+    say("run 5")
+    out = say("whatif 0 do(build_straw) query brickhouse")
+    c = sweep(r.prog, ["brickhouse"], r.prog.init_stage)
+    names = {r.prog.events()[i][2].name for i in c.events}
+    n = sum(1 for x in r.fired if x in names)
+    assert f"query brickhouse  ·  @{n} cone step" in out
+    assert "(1 forced)" in out and "tier         exact (cone)" in out
+    assert "cone with do" in out and "cone chance" in out and "key " in out
+
+
+def test_auto_tier_samples_over_budget_and_exact_forced_refuses(
+        monkeypatch):
+    import metis.lang.repl as repl
+    monkeypatch.setattr(repl, "STATE_BUDGET", 3)
+    r, say = shell()
+    say("run 4")
+    before = world(r)
+    out = say("whatif 0 do(~build_brick) query !wolf 6")
+    assert "tier         sampled n=" in out and "exact refused:" in out
+    assert "common random numbers — variance reduction only" in out
+    assert " ± " in out
+    assert world(r) == before
+    ref = say("whatif 0 do(~build_brick) query !wolf 6 exact")
+    assert "budget" in ref and "`exact` was forced" in ref
+    assert world(r) == before
+
+
+def test_necessity_default_cone_readout_and_pn():
+    r, say = three_brick()
+    before = world(r)
+    out = say("necessity 4 brickhouse")
+    assert world(r) == before
+    lines = out.strip().splitlines()
+    assert lines[0] == ("NECESSITY of #4 build_brick for brickhouse  ·  "
+                        "@1 cone step (or when the cone settles, if sooner) "
+                        "after #3")
+    assert lines[1].startswith("  in fact      brickhouse PRESENT")
+    assert lines[2].startswith("  without #4   P = 0 ")
+    assert "do ~build_brick (blocked through the readout)" in lines[2]
+    assert lines[4].startswith("  ⇒ PN ≈ 1: #4 build_brick was necessary "
+                               "for brickhouse")
+    assert "tier         exact (cone)" in out
+
+
+def test_necessity_global_readout_reads_the_fact_there():
+    r, say = three_brick()
+    out = say("necessity 4 brickhouse 1")
+    assert "1 global event (scheduling-sensitive" in out
+    assert "the actual world, #4" in out
+    base, cf = arms(r, 4, "~build_brick", "brickhouse", 1)
+    assert f"P = {cf:.4g}" in out and f"P = {base:.4g}" in out
+    refused = say("necessity 1 stickhouse")
+    assert "does not hold in fact at #6" in refused
+
+
+def test_sufficiency_is_labelled_a_proxy_and_says_what_ps_needs():
+    r, say = three_brick()
+    before = world(r)
+    out = say("sufficiency 4 brickhouse 3")
+    assert world(r) == before
+    assert out.startswith("SUFFICIENCY (interventional PROXY, not "
+                          "Pearl's PS) of #4 build_brick for brickhouse")
+    assert "PROXY: true PS" in out and "posterior over those ¬K worlds" \
+        in out and "deferred (spec 10 D3)" in out
+    base, cf = arms(r, 4, "build_brick", "brickhouse", 3)
+    assert f"P = {cf:.4g}" in out and f"P = {base:.4g}" in out
+    assert "usage: sufficiency K ATOM" in say("sufficiency 4")
+
+
+def test_causation_over_budget_samples_and_forced_exact_refuses(
+        monkeypatch):
+    import metis.lang.repl as repl
+    monkeypatch.setattr(repl, "STATE_BUDGET", 2)
+    r, say = three_brick()
+    before = world(r)
+    for verb in ("necessity", "sufficiency"):
+        out = say(f"{verb} 4 brickhouse 3")
+        assert "tier         sampled n=" in out, out
+        ref = say(f"{verb} 4 brickhouse 3 exact")
+        assert "`exact` was forced" in ref
+        assert world(r) == before
+

@@ -36,6 +36,12 @@ from metis.kernel.program import Program, pack_counts
 from metis.kernel.weight import choice_weight
 
 
+class NotSettled(RuntimeError):
+    """@frame asked of a cone that does not settle within the cap — an
+    @frame answer does not exist there (read at @N instead); never a
+    probability read off an unsettled distribution."""
+
+
 class Cone(NamedTuple):
     atoms: FrozenSet[str]
     events: FrozenSet[int]       # indices into program.events()
@@ -163,9 +169,14 @@ def cone_readout(q: Program, outcome: str, readout, budget: int,
         pr = ForwardProjection(q, s, max_states=budget,
                                keep_history=False)
         done = sum(p for (st, _), p in pr.final.items() if st == DONE)
-        if done >= 1.0 - 1e-12 or s >= frame_cap:
+        if done >= 1.0 - 1e-12:
             return _holds_p(pr.final, outcome), {
                 "steps": s, "settled": done}
+        if s >= frame_cap:
+            raise NotSettled(
+                f"the cone has not settled after {s} cone steps (settled "
+                f"mass {done:.4g}) — @frame has no answer here; read at "
+                "@N cone steps")
         s *= 2
 
 
@@ -184,14 +195,18 @@ def _tier(events, by_stage, stage, counts):
     return [(None, 1.0)]
 
 
-def full_readout(prog: Program, cone_events: FrozenSet[int],
+def full_readout(prog: Program, cone_names: FrozenSet[str],
                  outcome: str, readout, budget: int,
-                 max_steps: int = 100_000) -> float:
+                 max_steps: int = 5_000) -> float:
     """VALIDATION (§5 gate 1): the FULL program enumerated exactly,
     counting cone events; mass absorbs at the readout — ("cone", N): N
-    cone events fired; ("frame",): no cone event enabled — or at full
-    quiescence. Independent of `quotient`/`cone_readout`."""
+    cone events fired, or none can fire (settled) if that comes first;
+    ("frame",): none can fire — or at full quiescence. Independent of `quotient`/`cone_readout`. Cone events
+    are named (ground names are unique), so a masked or pruned program
+    keeps its membership."""
     events = prog.events()
+    cone_events = frozenset(i for i, (_, _, ev) in enumerate(events)
+                            if ev.name in cone_names)
     by_stage: Dict[tuple, list] = {}
     for i, (k, s, ev) in enumerate(events):
         by_stage.setdefault((s, k), []).append((i, ev))
@@ -207,10 +222,12 @@ def full_readout(prog: Program, cone_events: FrozenSet[int],
         for (stage, kappa, c), p in dist.items():
             counts = dict(kappa)
             choices = _tier(events, by_stage, stage, counts)
-            absorb = (readout[0] == "cone" and c >= readout[1]) or \
-                choices == [(None, 1.0)] or (
-                    readout[0] == "frame"
-                    and not any(e in cone_events for e, _ in choices))
+            # @N reads after N cone events OR when no cone event can
+            # fire, whichever is first (the cone has settled: the
+            # quotient's DONE); @frame reads at the latter only
+            settled = not any(e in cone_events for e, _ in choices)
+            absorb = choices == [(None, 1.0)] or settled or (
+                readout[0] == "cone" and c >= readout[1])
             if absorb:
                 hit += p * (counts.get(a, 0) > 0)
                 continue
@@ -224,8 +241,8 @@ def full_readout(prog: Program, cone_events: FrozenSet[int],
                                       budget)
         dist = new
     if dist:
-        raise RuntimeError("full readout did not absorb within "
-                           f"{max_steps} steps")
+        raise NotSettled(f"the full world did not reach the readout within "
+                         f"{max_steps} events — read at @N cone steps")
     return 1.0 - hit if neg else hit
 
 
