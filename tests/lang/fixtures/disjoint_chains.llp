@@ -1,0 +1,39 @@
+% spec 11 §5 gate 3: a chain B (b0 -> b1 -> b2) beside four one-shot
+% events e1..e4 on their own tokens — resource-DISJOINT by construction
+% (no atom of one is read or written by the other). Blocking an e-event
+% can change P(b2) only through a global event-count horizon (they
+% compete for steps), never through causation: @N cone steps must read
+% PN = 0, a short global N leaks.
+catalog disjoint-chains 1.
+provenance hand "spec 11 bias fixture" "2026-10-08".
+layers (story).
+stages (go).
+namespace w produce (story).
+pred b0 : w.
+pred b1 : w.
+pred b2 : w.
+pred x1 : w.
+pred x2 : w.
+pred x3 : w.
+pred x4 : w.
+pred y : w.
+stage go {
+  %% the chain's first link.
+  b_one [story] : b0 -o b1.
+  %% the chain's second link.
+  b_two [story] : b1 -o b2.
+  %% noise, on its own token.
+  e1 [story] : x1 -o y.
+  %% noise, on its own token.
+  e2 [story] : x2 -o y.
+  %% noise, on its own token.
+  e3 [story] : x3 -o y.
+  %% noise, on its own token.
+  e4 [story] : x4 -o y.
+}
+#init b0 1
+#init x1 1
+#init x2 1
+#init x3 1
+#init x4 1
+#steps 6
