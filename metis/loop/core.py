@@ -28,10 +28,20 @@ def load_records(path) -> List[dict]:
 
 # ---- Gates ---------------------------------------------------------
 
+def base_shaped(llp: str) -> bool:
+    """A candidate that declares its own stages and extends nothing is
+    a BASE catalog, not a pack."""
+    import re
+    return (not re.search(r"(?m)^\s*extends\s", llp)
+            and bool(re.search(r"(?m)^\s*stages\s*\(", llp)))
+
+
 def admit(text: str, llp: str, base_path=None,
           scenarios: Sequence[Dict[str, int]] = (),
-          steps: int = 6) -> Formalization:
-    base = load_llp(base_path) if base_path else None
+          steps: int = 6, mode: str = "pack") -> Formalization:
+    """Gate a candidate: as a PACK against the base (mode "pack"), or as
+    a BASE EDIT (mode "revise" — no base, as `revise` gates)."""
+    base = load_llp(base_path) if base_path and mode == "pack" else None
     return admit_text_pack(text, llp, base=base,
                            scenarios=tuple(scenarios), steps=steps)
 
@@ -143,13 +153,15 @@ class FormalizeResult:
     report: Optional[Formalization] = None
     history: List[Tuple[str, List[str]]] = field(default_factory=list)
     prompts: List[str] = field(default_factory=list)   # sent, in order
+    mode: str = "pack"                  # how the last round was gated
 
 
 def formalize_loop(text: str, vocabulary: str, backend: Sequence[str],
                    base_path=None, scenarios=(), steps: int = 6,
                    max_rounds: int = 4,
                    system: str = None, repair: str = "diagnostics",
-                   start: Optional[str] = None) -> FormalizeResult:
+                   start: Optional[str] = None,
+                   mode: str = "pack") -> FormalizeResult:
     """text -> candidate -> gates -> findings -> repair, <= max_rounds.
     The candidate is UNTRUSTED; only the gate verdict is.
 
@@ -158,7 +170,11 @@ def formalize_loop(text: str, vocabulary: str, backend: Sequence[str],
     vocabulary; "full" — every round re-sends vocabulary + findings
     (the pre-D5 prompt, kept for measurement).
     start: a first candidate to repair instead of drafting one (round 1
-    is then this candidate's gate verdict — repair-only measurement)."""
+    is then this candidate's gate verdict — repair-only measurement).
+    mode: "pack" gates every round as a pack against the base;
+    "revise" as a base edit; "auto" per round — a base-shaped candidate
+    (own stages, no extends) as revise, else as a pack (a blank world
+    passes "revise": there is nothing to extend)."""
     if repair not in ("diagnostics", "full"):
         raise ValueError(f"repair must be 'diagnostics' or 'full', "
                          f"got {repair!r}")
@@ -179,12 +195,16 @@ def formalize_loop(text: str, vocabulary: str, backend: Sequence[str],
                                        system)
             prompts.append(prompt)
             llp = run_backend(backend, prompt)
+        how = mode if mode != "auto" else (
+            "revise" if base_shaped(llp) else "pack")
         rep = admit(text, llp, base_path=base_path,
-                    scenarios=scenarios, steps=steps)
+                    scenarios=scenarios, steps=steps, mode=how)
         history.append((llp, list(rep.findings)))
         if rep.ok:
-            return FormalizeResult(True, n, llp, rep, history, prompts)
-    return FormalizeResult(False, max_rounds, llp, rep, history, prompts)
+            return FormalizeResult(True, n, llp, rep, history, prompts,
+                                   how)
+    return FormalizeResult(False, max_rounds, llp, rep, history, prompts,
+                           how)
 
 
 # ---- Explanation / replay ------------------------------------------

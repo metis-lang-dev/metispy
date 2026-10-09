@@ -25,6 +25,16 @@ def _clamp(tok: str) -> Tuple[str, int]:
     return (atom, int(val))
 
 
+def squash_atoms(line: str) -> str:
+    """`#init at(e0, f0) 1` -> `#init at(e0,f0) 1`: whitespace inside an
+    atom's parentheses is formatting, never a token boundary (models
+    and people write the spaced form naturally)."""
+    import re
+    return re.sub(r"\(([^()]*)\)",
+                  lambda m: "(" + re.sub(r"\s+", "", m.group(1)) + ")",
+                  line)
+
+
 def embedded_case(text: str) -> Dict:
     """Scan a .llp source for '#'-directive lines; return the case as
     {init, steps, seeds, unknowns, queries, liks}."""
@@ -32,7 +42,7 @@ def embedded_case(text: str) -> Dict:
             "unknowns": [], "queries": [], "liks": [],
             "interactive": []}
     for raw in text.splitlines():
-        line = raw.strip()
+        line = squash_atoms(raw.strip())
         if not line.startswith("#"):
             continue
         parts = line[1:].split()

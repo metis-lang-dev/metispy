@@ -62,6 +62,8 @@ edit [RULE]         open the file (VS Code terminal: `code`; else
 trace               replay the file's embedded '#'-case, fresh from
                     #init (= metisc --run); session state untouched
 save [PATH]         session state as '#'-directives (stdout or file)
+transcript [FILE]   lab-notebook log of this session (terminal only;
+                    'transcript off' closes it)
 log                 fired events this session
 ctx [tokens|rules|trace]
                     the context at this stop (Pwndbg's context; the
@@ -143,6 +145,28 @@ def _source_name(name, spans):
         return name
     base = re.sub(r"-\d+$", "", name)
     return base if base in spans else name
+
+
+class _Tee(io.TextIOBase):
+    """stdout for one logged command: written through AND kept."""
+
+    def __init__(self, under):
+        self.under, self.buf = under, io.StringIO()
+
+    def write(self, s):
+        self.buf.write(s)
+        return self.under.write(s)
+
+    def flush(self):
+        self.under.flush()
+
+    def getvalue(self):
+        return self.buf.getvalue()
+
+
+def _now_s():
+    import time as _time
+    return _time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 class Repl(LoopVerbs, Cmd):
@@ -1585,6 +1609,9 @@ class Repl(LoopVerbs, Cmd):
             if not line or line.rstrip("\n") == tag:
                 break
             lines.append(line)
+        if self.__dict__.get("_tlog") is not None:
+            self.__dict__.setdefault("_theredocs", []).append(
+                "".join(lines))
         return "".join(lines)
 
     def _loop_say(self, res):
@@ -1869,13 +1896,18 @@ class Repl(LoopVerbs, Cmd):
             for l in block:
                 self._say(l)
             return
-        body = [l for l in self.text.splitlines()
+        # the ACCEPTED base (a revision replaced the served file's
+        # world — a blank world's file is not what was born)
+        body = [l for l in self._base_src().splitlines()
                 if not l.lstrip().startswith("#")]
         while body and not body[-1].strip():
             body.pop()
         Path(path).write_text("\n".join(body + block) + "\n")
+        packs = len(self.loop.accepted)
         self._say(f"wrote {path} (catalog + {len(block)} directives) "
-                  f"— replay: metisc --run {path}")
+                  f"— replay: metisc --run {path}"
+                  + (f" — NOTE: {packs} accepted pack(s) are not in it; "
+                     "`export DIR` writes base + packs" if packs else ""))
 
     def do_log(self, arg):
         """fired events this session; forced/do rows and the state do's
@@ -2048,13 +2080,105 @@ class Repl(LoopVerbs, Cmd):
     def onecmd(self, line):
         """Ctrl-C cancels the RUNNING command (a long `query`, a
         stuck backend), never the shell — exit stays quit/ctrl-d. A
-        command that raises is reported, and the session survives."""
+        command that raises is reported, and the session survives.
+        With a transcript open, each TOP-LEVEL command is logged with
+        its output (an instrument's inner fork/do/back is not)."""
+        tlog = self.__dict__.get("_tlog")
+        depth = self.__dict__.get("_tdepth", 0)
+        verb = line.strip().split(" ", 1)[0]
+        logging = tlog is not None and depth == 0 and verb not in (
+            "transcript", "quit", "exit", "EOF")
+        self._tdepth = depth + 1
+        if logging:
+            self._theredocs = []
+            keep, tee = self.stdout, _Tee(self.stdout)
+            self.stdout = tee
         try:
             return super().onecmd(line)
         except KeyboardInterrupt:
             self._say("(interrupted)")
         except Exception as e:
             self._say(f"error ({type(e).__name__}): {e}")
+        finally:
+            self._tdepth = depth
+            if logging:
+                self.stdout = keep
+                self._tlog_command(line, verb, tee.getvalue())
+
+    # -- the lab notebook (terminal only) -------------------------------
+
+    def do_transcript(self, arg):
+        """transcript [FILE] | transcript off — a lab-notebook log of the
+        session: every command + output, heredoc bodies, the system
+        prompts in effect and their changes, candidate snapshots after
+        llp/load/formalize, gate reports and accepts. FILE defaults to
+        metis-transcript-YYYYmmdd-HHMMSS.md here. TERMINAL ONLY — the
+        web/shared console never writes the operator's disk (D4)."""
+        if not getattr(self, "terminal", False):
+            self._say("transcript is terminal-only: this session is not "
+                      "the interactive `metis` shell (D4 — the web "
+                      "console never writes the operator's disk)")
+            return
+        a = arg.strip()
+        tlog = self.__dict__.get("_tlog")
+        if a == "off":
+            if tlog is None:
+                self._say("no transcript open")
+                return
+            tlog.write(f"\n---\n_transcript closed {_now_s()}_\n")
+            tlog.close()
+            self._say(f"transcript closed: {self._tpath}")
+            self._tlog = None
+            return
+        if not a and tlog is not None:
+            self._say(f"transcript open: {self._tpath} — "
+                      "'transcript off' closes it")
+            return
+        if tlog is not None:
+            tlog.close()
+        import time as _time
+        path = Path(a or _time.strftime(
+            "metis-transcript-%Y%m%d-%H%M%S.md")).expanduser()
+        f = open(path, "a", buffering=1)
+        from metis.loop import prompts
+        f.write(f"# metis transcript — {self.path.name}\n\n"
+                f"- opened {_now_s()}\n"
+                f"- catalog {self.doc.catalog.name}, key {self.key}\n"
+                f"- llm seat: {self.llm or '(default)'}\n"
+                f"- stage {self.stage}, {len(self.fired)} fired\n")
+        for kind in prompts.KINDS:
+            self._tlog_prompt(f, kind, "in effect")
+        self._tlog, self._tpath = f, path
+        self._say(f"transcript open: {path}")
+
+    def _tlog_prompt(self, f, kind, why):
+        from metis.loop import prompts
+        text, src = prompts.resolve(kind, self.sys_prompts.get(kind))
+        f.write(f"\n### system prompt `{kind}` ({why}; source: {src})\n\n"
+                "```text\n" + text.rstrip() + "\n```\n")
+
+    def _tlog_command(self, line, verb, out):
+        f = self._tlog
+        if f is None:
+            return
+        f.write(f"\n## {_now_s()} — `{line.strip()}`\n")
+        for body in self.__dict__.get("_theredocs", []):
+            f.write("\nheredoc:\n\n```text\n" + body.rstrip("\n")
+                    + "\n```\n")
+        if out.strip():
+            f.write("\n```text\n" + out.rstrip("\n") + "\n```\n")
+        rest = line.strip()[len(verb):].strip()
+        if verb in ("formalize", "narrate") and rest.startswith("system") \
+                and "<<" in rest:
+            self._tlog_prompt(f, verb, "changed")
+        elif verb in ("llp", "load", "formalize") and self.loop.cand:
+            f.write("\n#### candidate snapshot (after "
+                    f"`{verb}`)\n\n```llp\n"
+                    + self.loop.cand.rstrip("\n") + "\n```\n")
+        elif verb == "accept":
+            f.write(f"\n**accepted** — the world is now key {self.key}\n")
+        elif verb == "llm":
+            f.write(f"\n_llm seat: {self.llm}_\n")
 
     def do_quit(self, arg):
         """leave the shell"""
@@ -2109,6 +2233,8 @@ class Repl(LoopVerbs, Cmd):
         assignment (sets the count, unlike assert's add), #query
         runs, #steps/#seeds/#unknown/#lik update the case that
         `query` defaults and `save` write out."""
+        from metis.lang.directives import squash_atoms
+        s = squash_atoms(s)
         parts = s[1:].split()
         if not parts:
             return
@@ -2275,6 +2401,9 @@ def main(argv=None):
         print("cannot serve %s:\n  %s"
               % (args.llp, "\n  ".join(findings)), file=sys.stderr)
         return 1
+    repl.terminal = True    # `transcript` writes the OPERATOR's own disk
+    #                         — the interactive terminal only (never the
+    #                         --json wire / web console: D4)
     while True:
         try:
             repl.cmdloop()

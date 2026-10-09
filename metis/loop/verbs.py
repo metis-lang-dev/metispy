@@ -130,9 +130,12 @@ class LoopVerbs:
 
             def backend(prompt, _ep=ep):
                 return complete(_ep, prompt)
-        init = self._scene_init()
+        init = self._scene_init() or self._cand_case_init()
         base_path = self.path
         tmp = None
+        # a blank world has nothing to extend: its candidate IS a base
+        blank = not getattr(self, "events_tbl", True)
+        mode = "revise" if blank else "auto"
         if self.loop.base_src:
             import tempfile
             tmp = tempfile.NamedTemporaryFile(
@@ -147,16 +150,52 @@ class LoopVerbs:
                 scenarios=[init] if init else (),
                 steps=self._scene_steps(),
                 system=getattr(self, "sys_prompts",
-                               {}).get("formalize"))
+                               {}).get("formalize"),
+                mode=mode)
         finally:
             if tmp is not None:
                 import os
                 os.unlink(tmp.name)
         self.loop.cand, self.loop.report = res.llp, res.report
-        self.loop.revision = False
+        # gated as a base edit -> accept REPLACES the world, as `revise`
+        self.loop.revision = res.ok and res.mode == "revise"
         return {"ok": res.ok, "backend": spec, "rounds": res.rounds,
+                "gated_as": ("revise (base edit)" if res.mode == "revise"
+                             else "pack"),
                 "findings": (res.report.findings if res.report
                              else [])}
+
+    def _cand_case_init(self) -> Dict[str, int]:
+        """The candidate's own #init (a born world's scenario), when it
+        carries one."""
+        from metis.lang.directives import DirectiveError, embedded_case
+        try:
+            return {a: n for a, n in
+                    embedded_case(self.loop.cand)["init"].items() if n > 0}
+        except (DirectiveError, ValueError):
+            return {}
+
+    def _adopt_cand_case(self) -> Dict:
+        """F5: a revision's own #init/#steps become the session's case
+        when the session has none — and a blank world starts there."""
+        from metis.lang.directives import DirectiveError, embedded_case
+        try:
+            case = embedded_case(self.loop.cand)
+        except (DirectiveError, ValueError):
+            return {}
+        adopted = {}
+        init = {a: n for a, n in case["init"].items() if n > 0}
+        if init and not self._scene_init():
+            self.case["init"] = dict(init)
+            adopted["init"] = dict(init)
+            if not any(n > 0 for n in getattr(self, "counts", {}).values()):
+                self.counts = dict(init)       # the born world starts here
+                if hasattr(self, "_rebase"):
+                    self._rebase()
+        if case["steps"] and not self.case["steps"]:
+            self.case["steps"] = case["steps"]
+            adopted["steps"] = case["steps"]
+        return adopted
 
     def cmd_gate(self, arg):
         """Gate the candidate as a PACK against the served world."""
@@ -179,7 +218,7 @@ class LoopVerbs:
         the served world; measure diff on the scene shown)."""
         if not self.loop.cand.strip():
             return {"ok": False, "error": "no candidate — llp first"}
-        init = self._scene_init()
+        init = self._scene_init() or self._cand_case_init()
         rep = admit_text_pack(self.loop.text, self.loop.cand,
                               base=None,
                               scenarios=(init,) if init else (),
@@ -250,11 +289,17 @@ class LoopVerbs:
             self.loop.revision = False
             self.loop.base_src = self.loop.cand
             new_world = rep.doc.catalog
+            adopt = True
         else:
             new_world = (rep.merged if rep.merged is not None
                          else rep.doc.catalog)
             self.loop.accepted.append(self.loop.cand)
+            adopt = False
         self._reserve(new_world)
+        if adopt:
+            adopted = self._adopt_cand_case()
+            if adopted:
+                out["adopted_directives"] = adopted
         self.loop.cand, self.loop.report = "", None
         out["accepted_packs"] = len(self.loop.accepted)
         out["key"] = self.key

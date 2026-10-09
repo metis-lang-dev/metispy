@@ -60,6 +60,21 @@ def _final_marginals(prog, steps) -> Tuple[Dict[str, float], int, list]:
     return marg, len(pr.final), names
 
 
+def _unchecked(llp: str, e) -> str:
+    """The repair signal a first-error parser starves: where parsing
+    STOPPED and how much of the candidate was never checked (a
+    model repairing line 2 should know lines 3..N are unvetted)."""
+    import re
+    m = re.match(r"\s*(\d+):", str(e))
+    total = llp.count("\n") + (0 if llp.endswith("\n") else 1)
+    if not m or total <= int(m.group(1)):
+        return ""
+    k = int(m.group(1))
+    return (f" — parsing stopped at line {k}; lines {k + 1}..{total} of "
+            "the candidate are UNCHECKED (repair the whole source, not "
+            "only this line)")
+
+
 def admit_text_pack(text: str, llp: str,
                     base: Optional[CatalogDoc] = None,
                     scenarios: Tuple[Dict[str, int], ...] = (),
@@ -81,7 +96,7 @@ def admit_text_pack(text: str, llp: str,
     try:
         cat = parse(llp, file="<candidate>")   # names the slices' source
     except (ParseError, Exception) as e:
-        r.findings.append(f"parse: {e}")
+        r.findings.append(f"parse: {e}" + _unchecked(llp, e))
         return r
     from . import ast as A
     try:
