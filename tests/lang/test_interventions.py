@@ -225,8 +225,10 @@ def test_whatif_refusals_leave_the_session_alone():
     assert "usage: whatif" in say("whatif 1 query wolf")
     assert "fork K needs" in say("whatif 9 do(~blow_stick) query wolf")
     assert world(r) == before
-    say("fork 1")
-    assert "already forked" in say("whatif 1 do(~blow_stick) query wolf")
+    say("fork 1")      # instruments work INSIDE a user fork (own shelf)
+    before_fork = world(r)
+    assert "WHATIF at #1" in say("whatif 1 do(~blow_stick) query wolf")
+    assert world(r) == before_fork and r.fork_at == 1
 
 
 def test_query_honours_masks_and_says_so():
@@ -272,8 +274,11 @@ def test_necessity_refusals():
     r, say = three_brick()
     assert "usage: necessity K [ATOM]" in say("necessity")
     assert "needs an event of the graph: #1..#6" in say("necessity 9 x")
-    say("fork 2")
-    assert "already forked" in say("necessity 1 brickhouse")
+    say("fork 2")      # inside a user fork: answers, fork intact
+    before_fork = world(r)
+    out = say("necessity 1 brickhouse")
+    assert "NECESSITY of #1" in out or "needs" in out or "does not" in out
+    assert world(r) == before_fork and r.fork_at == 2
 
 
 def test_counts_at_replays_the_actual_world():
@@ -448,4 +453,54 @@ def test_causation_over_budget_samples_and_forced_exact_refuses(
         ref = say(f"{verb} 4 brickhouse 3 exact")
         assert "`exact` was forced" in ref
         assert world(r) == before
+
+
+# -- the architect's REPL friction (2026-10-09) -------------------------
+
+def test_instruments_have_their_own_shelf_inside_a_user_fork():
+    """mask-and-wander, THEN ask: necessity/whatif fork onto a private
+    shelf; the user's fork (shelf, cut, wandered world) is untouched."""
+    r, say = three_brick()
+    actual = list(r.fired)
+    say("fork 3")
+    say("do ~blow_stick")
+    say("run 2")                                   # wander
+    wandered = world(r)
+    shelf_fired = list(r.shelf["fired"])
+    out = say("whatif 3 do(~build_brick) query brickhouse")
+    assert out.startswith("WHATIF at #3")
+    k = len(r.fired)
+    nec = say(f"necessity {k} " + (sorted(r._forward_cone_atoms(k))
+                                   or ["brickhouse"])[0])
+    assert "already forked" not in nec
+    assert world(r) == wandered and r.fork_at == 3
+    assert list(r.shelf["fired"]) == shelf_fired
+    say("back")
+    assert list(r.fired) == actual
+    assert "already forked" in (say("fork 1"), say("fork 1"))[1]
+
+
+def test_likelihood_footer_names_the_masks_it_was_drawn_under():
+    r, say = shell()
+    say("do ~build_brick")
+    say("run 2")
+    log = say("log")
+    assert "under do ~build_brick" in log
+    assert r.ctx()["likelihood"]["under_masks"] == ["build_brick"]
+    r2, say2 = shell()
+    say2("run 2")
+    assert "under do" not in say2("log")
+
+
+def test_a_zero_event_cone_reads_as_impossible_not_as_p_zero():
+    r, say = shell()
+    say("do ~build_brick")                 # the only brickhouse producer
+    q = say("query brickhouse")
+    assert "= 0  (impossible — no event can produce brickhouse under " \
+        "the active masks)" in q
+    assert "tracking 1 of" in q and "0 of 6 events" in q
+    r2, say2 = three_brick()
+    out = say2("necessity 4 brickhouse")
+    assert "(blocked through the readout) — impossible — no event can " \
+        "produce brickhouse under the active masks" in out
 

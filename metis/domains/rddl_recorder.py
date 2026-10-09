@@ -27,7 +27,16 @@ Two passes, kept apart on purpose:
 The horizon per transition (`steps`) is a knob, default 1: one tick
 read as one metis step — the naive mapping, deliberately NOT the
 synchronous-tick idiom (the experiment records whether the loop
-discovers it)."""
+discovers it). `steps="frame"` reads the transition when the catalog
+SETTLES (nothing can fire; ForwardProjection to a cap, settled mass
+required) — the readout iteration 1's handshake asked for.
+
+Two more generic, catalog-agnostic options (iteration 1's findings):
+`negatives` maps a FALSE boolean fluent to `not_<name>(args)` in both
+the initial state and the observed vocabulary (linear logic cannot
+test absence — the formalizer invented complement atoms for exactly
+this); `tick_token` adds one `tick` atom to every transition's initial
+state (a resource a catalog may use to structure a step, or ignore)."""
 import json
 import os
 from pathlib import Path
@@ -140,10 +149,18 @@ def read_transitions(path) -> Iterable[dict]:
                 yield json.loads(line)
 
 
+def neg_of(key: str) -> str:
+    return "not_" + atom_of(key)
+
+
+FRAME_CAP = 64
+
+
 def surprise_sink(catalog_path, transitions: Iterable[dict],
-                  vocabulary: List[str], out_jsonl, steps: int = 1,
+                  vocabulary: List[str], out_jsonl, steps=1,
                   rare: float = 0.05, max_states: int = 200_000,
-                  with_actions: bool = True) -> Dict:
+                  with_actions: bool = True, negatives: bool = False,
+                  tick_token: bool = False) -> Dict:
     """Replay each transition against the catalog; write surprise
     records (kind unmodeled|rare) to `out_jsonl` (overwritten). Returns
     {transitions, surprises, per_episode {ep: n}, kinds}."""
@@ -153,20 +170,42 @@ def surprise_sink(catalog_path, transitions: Iterable[dict],
     doc = compile_catalog(resolve_includes(parse(p.read_text()),
                                            p.parent))
     vocab_atoms = [atom_of(k) for k in vocabulary]
+    if negatives:
+        vocab_atoms += [neg_of(k) for k in vocabulary]
+    frame = steps == "frame"
+    horizon = FRAME_CAP if frame else int(steps)
     per_ep: Dict[int, int] = {}
     kinds: Dict[str, int] = {}
+    unsettled = 0
     n = 0
+    Path(out_jsonl).parent.mkdir(parents=True, exist_ok=True)
     with open(out_jsonl, "w") as f:
         for tr in transitions:
             n += 1
             init = {atom_of(k): 1 for k in tr["state"]}
+            nxt = {atom_of(k) for k in tr["next"]}
+            if negatives:
+                on, on2 = set(tr["state"]), set(tr["next"])
+                init.update({neg_of(k): 1 for k in vocabulary
+                             if k not in on})
+                nxt |= {neg_of(k) for k in vocabulary if k not in on2}
             if with_actions:
                 init.update({atom_of(k): 1 for k in tr["action"]})
-            nxt = {atom_of(k) for k in tr["next"]}
+            if tick_token:
+                init["tick"] = 1
             observed = {a: (1 if a in nxt else 0) for a in vocab_atoms}
             prog = doc.catalog.ground(init)
+            if frame:
+                from metis.kernel import ForwardProjection
+                from metis.kernel.filter import DONE
+                pr = ForwardProjection(prog, horizon,
+                                       max_states=max_states,
+                                       keep_history=False)
+                if sum(p for (st, _), p in pr.final.items()
+                       if st == DONE) < 1 - 1e-9:
+                    unsettled += 1
             rec = surprise_record(
-                prog, steps, observed, rare_ratio=rare,
+                prog, horizon, observed, rare_ratio=rare,
                 max_states=max_states,
                 meta={"source": f"{tr['domain']} i{tr['instance']} "
                                 f"ep{tr['episode']} seed{tr['seed']} "
@@ -180,7 +219,37 @@ def surprise_sink(catalog_path, transitions: Iterable[dict],
                 kinds[rec["kind"]] = kinds.get(rec["kind"], 0) + 1
                 f.write(json.dumps(rec) + "\n")
     return {"transitions": n, "surprises": sum(per_ep.values()),
-            "per_episode": per_ep, "kinds": kinds}
+            "per_episode": per_ep, "kinds": kinds,
+            "readout": "frame" if frame else f"{horizon} step(s)",
+            "unsettled": unsettled}
+
+
+def _batch(ns) -> int:
+    d = Path(ns.dir)
+    tag = ns.tag or (f"i{ns.instance}-{ns.agent}-s{ns.seed}"
+                     f"-n{ns.episodes}")
+    tr_path = d / "transitions" / f"{tag}.jsonl"
+    if tr_path.exists():
+        print(json.dumps({"error": f"{tr_path} exists — pick another "
+                                   "--seed or --tag (batches never "
+                                   "overwrite recorded episodes)"}))
+        return 1
+    out = {"record": record_episodes(ns.problem, ns.instance, ns.episodes,
+                                     tr_path, ns.seed, ns.agent,
+                                     str(d / "gym-logs"))}
+    if ns.catalog:
+        trs = list(read_transitions(tr_path))
+        _, env = load_problem(ns.problem, ns.instance)
+        steps = ns.steps if ns.steps == "frame" else int(ns.steps)
+        sink = d / "sinks" / f"{tag}--{Path(ns.catalog).stem}.jsonl"
+        out["sink"] = surprise_sink(
+            ns.catalog, trs, state_vocabulary(env), sink, steps, ns.rare,
+            negatives=ns.negatives, tick_token=ns.tick_token)
+        out["sink"]["path"] = str(sink)
+        out["sink"]["surprises_per_episode"] = round(
+            out["sink"]["surprises"] / max(1, ns.episodes), 3)
+    print(json.dumps(out))
+    return 0
 
 
 def main(argv=None) -> int:
@@ -199,13 +268,36 @@ def main(argv=None) -> int:
     r.add_argument("--agent", default="random")
     r.add_argument("--out", required=True)
     r.add_argument("--log-dir")
+    b = sub.add_parser(
+        "batch", help="one episodic batch: record REAL episodes, then "
+        "(with --catalog) replay them into a surprise sink")
+    b.add_argument("--problem", required=True)
+    b.add_argument("--instance", default="1")
+    b.add_argument("--episodes", type=int, default=5)
+    b.add_argument("--seed", type=int, default=1)
+    b.add_argument("--agent", default="random")
+    b.add_argument("--dir", required=True,
+                   help="experiment directory: gym-logs/, transitions/, "
+                        "sinks/ are written under it")
+    b.add_argument("--tag", default="",
+                   help="file-name tag (default i<inst>-<agent>-s<seed>-n<N>)")
+    b.add_argument("--catalog")
+    b.add_argument("--steps", default="1")
+    b.add_argument("--rare", type=float, default=0.05)
+    b.add_argument("--negatives", action="store_true")
+    b.add_argument("--tick-token", action="store_true")
     s = sub.add_parser("sink")
     s.add_argument("--catalog", required=True)
     s.add_argument("--transitions", required=True)
     s.add_argument("--out", required=True)
-    s.add_argument("--steps", type=int, default=1)
+    s.add_argument("--steps", default="1",
+                   help="N metis steps per tick, or 'frame' (settle)")
     s.add_argument("--rare", type=float, default=0.05)
+    s.add_argument("--negatives", action="store_true")
+    s.add_argument("--tick-token", action="store_true")
     ns = ap.parse_args(argv)
+    if ns.cmd == "batch":
+        return _batch(ns)
     if ns.cmd == "record":
         print(json.dumps(record_episodes(
             ns.problem, ns.instance, ns.episodes, ns.out, ns.seed,
@@ -216,8 +308,11 @@ def main(argv=None) -> int:
         print(json.dumps({"error": "no transitions"}))
         return 1
     _, env = load_problem(trs[0]["domain"], trs[0]["instance"])
+    steps = ns.steps if ns.steps == "frame" else int(ns.steps)
     print(json.dumps(surprise_sink(ns.catalog, trs, state_vocabulary(env),
-                                   ns.out, ns.steps, ns.rare)))
+                                   ns.out, steps, ns.rare,
+                                   negatives=ns.negatives,
+                                   tick_token=ns.tick_token)))
     return 0
 
 

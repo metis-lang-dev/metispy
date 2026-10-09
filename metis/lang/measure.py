@@ -337,6 +337,21 @@ def parse_tail(tokens: List[str]) -> Tuple[Optional[tuple], str]:
     return readout, tier
 
 
+def structural(prep: Prepared, outcome: str) -> str:
+    """A cone with NO events: nothing (under the active masks, from
+    this state) can produce or consume the outcome's atom — its value
+    is fixed, a structural PROOF, not a probability. -> "" or the
+    phrase to print beside P."""
+    if prep.cone.events:
+        return ""
+    a, neg = outcome.lstrip("!"), outcome.startswith("!")
+    present = prep.arm.counts.get(a, 0) > 0
+    holds = present != neg
+    what = ("no event can consume" if present else
+            "no event can produce") + f" {a} under the active masks"
+    return (f"certain — {what}" if holds else f"impossible — {what}")
+
+
 def pval(p: float, ci: Optional[float]) -> str:
     if abs(p) < 1e-12:
         p = 0.0

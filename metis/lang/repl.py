@@ -30,7 +30,8 @@ from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.lang.cone import NotSettled
 from metis.lang.measure import (Arm, cone_names, footer, measure,
-                                parse_tail, pval, readout_text)
+                                parse_tail, pval, readout_text,
+                                structural)
 from metis.loop.verbs import LoopState, LoopVerbs, fmt as _loop_fmt
 from metis.loop.wire import _note
 from metis.lang.directives import (DirectiveError, embedded_case,
@@ -343,8 +344,10 @@ class Repl(LoopVerbs, Cmd):
         ws = self._candidates() if ws is None else ws
         total = sum(w for _, w in ws)
         w = dict(ws).get(i)
-        self.fired_how.append({"how": how,
-                               "p": (w / total) if w and total else None})
+        h = {"how": how, "p": (w / total) if w and total else None}
+        if self.masks:            # the tier this p was drawn from
+            h["masks"] = sorted(self.masks)
+        self.fired_how.append(h)
         kind, _, ev = self.events_tbl[i]
         for q, n in ev.consume.items():
             self.counts[q] = self.counts.get(q, 0) - n
@@ -584,8 +587,18 @@ class Repl(LoopVerbs, Cmd):
                       "reach it)")
             return
         self.shelf = self._snapshot_world()
-        # deterministic prefix replay from the graph's base
-        _, stage, counts = self._base
+        self._fork_to(k)
+        self._say(f"forked at #{k} — the actual world (#{n}) is shelved; "
+                  "'back' returns to it. The future from here is "
+                  "re-randomized, not replayed.")
+        self.do_state("")
+
+    def _fork_to(self, k):
+        """The session becomes exactly post-#k: deterministic prefix
+        replay from the graph's base (the caller checked base <= k <=
+        tip and shelved what it must)."""
+        n = len(self.fired)
+        k0, stage, counts = self._base
         counts = dict(counts)
         for kind, _, ev in self.fired_rows[k0:k]:
             for q, m in ev.consume.items():
@@ -603,10 +616,30 @@ class Repl(LoopVerbs, Cmd):
         self.ledger = [d for d in self.ledger if d["k"] <= k]
         self.undo_stack = []
         self.fork_at = k
-        self._say(f"forked at #{k} — the actual world (#{n}) is shelved; "
-                  "'back' returns to it. The future from here is "
-                  "re-randomized, not replayed.")
-        self.do_state("")
+
+    # the INSTRUMENTS' private shelf (spec 10 D1 amendment): whatif /
+    # necessity / sufficiency fork and come back on their own, so they
+    # work inside a user fork (mask-and-wander, then ask) — the
+    # user-facing `fork` stays one-shelf.
+    def _ifork(self, k):
+        """-> None, or the refusal (K outside [base, tip])."""
+        k0, n = self._base[0], len(self.fired)
+        if not k0 <= k <= n:
+            return (f"fork K needs #{k0} <= K <= #{n}: before #{k0} lies "
+                    "an edit no event explains (undo/reset to reach it)")
+        self._ishelf = (self._snapshot_world(), self.shelf, self.fork_at)
+        self._fork_to(k)
+        return None
+
+    def _iback(self):
+        w, shelf, fork_at = self.__dict__.pop("_ishelf")
+        self.stage, self.counts = w["stage"], w["counts"]
+        self.fired, self.fired_rows = w["fired"], w["fired_rows"]
+        self.fired_how, self._base = w["fired_how"], w["base"]
+        self._base_do, self.undo_stack = w["base_do"], w["undo"]
+        self.ledger, self.rng = w["ledger"], w["rng"]
+        self.masks = w["masks"]
+        self.shelf, self.fork_at = shelf, fork_at
 
     def do_back(self, arg):
         """back — leave the fork: restore the shelved actual world
@@ -652,10 +685,6 @@ class Repl(LoopVerbs, Cmd):
                       "[@N|@frame|N] [exact|sampled|full] | "
                       "whatif K do(X)... run N")
             return
-        if self.shelf is not None:
-            self._say("already forked — 'back' first (whatif forks and "
-                      "comes back by itself)")
-            return
         k = int(m["k"])
         dos = [d.strip() for d in
                re.findall(r"do\(\s*([^()]+?)\s*\)", m["dos"])]
@@ -681,16 +710,16 @@ class Repl(LoopVerbs, Cmd):
         actual = {"counts": dict(self.counts), "n": n,
                   "rows": list(self.fired[k:]),
                   "how": [h["how"] for h in self.fired_how[k:]]}
-        said = self._quiet(f"fork {k}")
-        if self.shelf is None:                # fork refused: say why
-            self._say(said.strip())
+        refused = self._ifork(k)
+        if refused:
+            self._say(refused)
             return
         try:
             if m["mode"] == "run":
                 return self._whatif_run(k, dos, horizon, actual)
             got = self._apply_dos(k, dos)
         finally:
-            self._quiet("back")
+            self._iback()
         if isinstance(got, str):
             self._say(got)
             return
@@ -810,9 +839,13 @@ class Repl(LoopVerbs, Cmd):
             f"{readout_text(ans.readouts[0])} after #{k}",
             f"  in fact      {vals[0]:<{w}}the actual world, #{at}",
             f"  with do      {vals[1]:<{w}}counterfactual"
-            + (f" ({forced} forced)" if forced else ""),
+            + (f" ({forced} forced)" if forced else "")
+            + (f" — {structural(ans.preps[1], atom)}"
+               if structural(ans.preps[1], atom) else ""),
             f"  by chance    {vals[2]:<{w}}no intervention: same fork, "
-            "same readout",
+            "same readout"
+            + (f" — {structural(ans.preps[0], atom)}"
+               if structural(ans.preps[0], atom) else ""),
             "  interventions: " + "; ".join(done)]
         delta = pc - pb
         tol = max(1e-12, (cb or 0) + (cc or 0))
@@ -889,8 +922,6 @@ class Repl(LoopVerbs, Cmd):
             return usage
         k, n, k0 = int(parts[0].lstrip("#")), len(self.fired), \
             self._base[0]
-        if self.shelf is not None:
-            return f"already forked — 'back' first ({verb} forks itself)"
         if not k0 < k <= n:
             return (f"{verb} K needs an event of the graph: "
                     f"#{k0 + 1}..#{n} (the fork is at K-1)")
@@ -945,7 +976,9 @@ class Repl(LoopVerbs, Cmd):
     def _cause_arms(self, k, op):
         """Fork at k-1: (baseline arm, the arm after `do op`) or a
         refusal str; the session comes back untouched."""
-        self._quiet(f"fork {k - 1}")
+        refused = self._ifork(k - 1)
+        if refused:
+            return refused
         try:
             base = self._snap()
             before = len(self.ledger)
@@ -955,7 +988,7 @@ class Repl(LoopVerbs, Cmd):
             forced = () if op[0] == "~" else (self.fired[-1],)
             return base, self._snap(forced)
         finally:
-            self._quiet("back")
+            self._iback()
 
     def do_necessity(self, arg):
         """necessity K [ATOM] [@N|@frame|N] [exact|sampled|full] — PN:
@@ -1015,9 +1048,13 @@ class Repl(LoopVerbs, Cmd):
             f"  {'in fact':<{lw}}{vals[0]:<{w}}#{k} fired; the actual "
             f"world, #{at}",
             f"  {'without #' + str(k):<{lw}}{vals[1]:<{w}}fork at "
-            f"#{k - 1}, do ~{ev} (blocked through the readout)",
+            f"#{k - 1}, do ~{ev} (blocked through the readout)"
+            + (f" — {structural(ans.preps[1], atom)}"
+               if structural(ans.preps[1], atom) else ""),
             f"  {'by chance':<{lw}}{vals[2]:<{w}}from #{k - 1}, nothing "
-            "blocked",
+            "blocked"
+            + (f" — {structural(ans.preps[0], atom)}"
+               if structural(ans.preps[0], atom) else ""),
             f"  ⇒ PN ≈ {pval(pn, cc)}: #{k} {ev} was {word} for {y} — "
             f"had it not fired, {y} would fail with probability "
             f"{pval(pn, cc)} (it holds in fact; by chance from #{k - 1}: "
@@ -1119,9 +1156,11 @@ class Repl(LoopVerbs, Cmd):
             return
         under = (f" | do ~{', ~'.join(sorted(self.masks))}"
                  if self.masks else "")
+        proof = structural(ans.preps[0], atom)
         self._say("\n".join(
             [f"P[{self._y(atom)} at {readout_text(ans.readouts[0])}"
-             f"{under}] = {pval(ans.ps[0], ans.cis[0])}"]
+             f"{under}] = {pval(ans.ps[0], ans.cis[0])}"
+             + (f"  ({proof})" if proof else "")]
             + footer(ans, ["here"])))
 
     def _here_prog(self):
@@ -1467,8 +1506,11 @@ class Repl(LoopVerbs, Cmd):
 
     def _ctx_interventions(self):
         lik, ns, nf = self.likelihood()
+        under = sorted({m for h in self.fired_how
+                        if h.get("how") == "sampled"
+                        for m in h.get("masks", ())})
         return {"likelihood": {"value": lik, "sampled": ns,
-                               "forced": nf},
+                               "forced": nf, "under_masks": under},
                 "masks": sorted(self.masks),
                 "base_do": list(self._base_do),
                 "fork": ({"at": self.fork_at,
@@ -1933,10 +1975,16 @@ class Repl(LoopVerbs, Cmd):
                 out.append(f"  {k + 1}. {self.fired[k]}"
                            + tag.get(h["how"], ""))
         lik, ns, nf = self.likelihood()
+        # the masks that renormalized the sampled tiers: the number is
+        # the INTERVENED measure's, so say under which interventions
+        under = sorted({m for h in self.fired_how
+                        if h.get("how") == "sampled"
+                        for m in h.get("masks", ())})
         out.append(f"likelihood {lik:.6g} over {ns} sampled step"
-                   f"{'' if ns == 1 else 's'}" + (
-                       f" ({nf} forced/do excluded — conditioning, "
-                       "not sampling)" if nf else ""))
+                   f"{'' if ns == 1 else 's'}"
+                   + (f" under do ~{', ~'.join(under)}" if under else "")
+                   + (f" ({nf} forced/do excluded — conditioning, "
+                      "not sampling)" if nf else ""))
         self._say("\n".join(out))
 
     def do_graph(self, arg):
