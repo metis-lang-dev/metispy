@@ -173,3 +173,22 @@ def test_load_keeps_the_candidate_verbatim(tmp_path):
     assert out["ok"]
     base = (tmp_path / "x" / "base.llp").read_text()
     assert '%% "it moves between rooms"' in base and "#init" in base
+
+
+def test_formalize_green_report_warns_on_unbound_ports(tmp_path):
+    """formalize gates prior-only (the seat cannot bind ports), but its
+    green report names the ports accept will need bound."""
+    import sys
+    seat = tmp_path / "seat.py"
+    seat.write_text("import sys\nsys.stdin.read()\nprint(open(%r).read())\n"
+                    % str(tmp_path / "cand.llp"))
+    ported = BORN.replace("pred tick : t.",
+                          "pred tick : t.\nweight pgo reads {}.").replace(
+        "-o at(r2).", "-o at(r2) @w pgo.")
+    (tmp_path / "cand.llp").write_text(ported)
+    r, _ = blank(tmp_path)
+    r.cmd_text("a toy")
+    res = r.cmd_formalize(f"command:{sys.executable} {seat}")
+    assert res["ok"], res
+    assert any("unbound weight port(s) pgo" in w
+               for w in res.get("warnings", [])), res

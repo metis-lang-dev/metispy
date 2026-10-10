@@ -163,11 +163,29 @@ class LoopVerbs:
         self.loop.cand, self.loop.report = res.llp, res.report
         # gated as a base edit -> accept REPLACES the world, as `revise`
         self.loop.revision = res.ok and res.mode == "revise"
-        return {"ok": res.ok, "backend": spec, "rounds": res.rounds,
-                "gated_as": ("revise (base edit)" if res.mode == "revise"
-                             else "pack"),
-                "findings": (res.report.findings if res.report
-                             else [])}
+        out = {"ok": res.ok, "backend": spec, "rounds": res.rounds,
+               "gated_as": ("revise (base edit)" if res.mode == "revise"
+                            else "pack"),
+               "findings": (res.report.findings if res.report
+                            else [])}
+        # the repair rounds gate PRIOR-ONLY (the seat cannot bind ports,
+        # a binding-demanding loop would spin) — but say what accept
+        # will need, so the green report is not a surprise refusal later
+        doc = getattr(res.report, "doc", None) if res.ok else None
+        if doc is not None and doc.ports.weight_refs:
+            from metis.lang.compiler import merge_ports
+            ports = (doc.ports if res.mode == "revise"
+                     else merge_ports(self.doc.ports, doc.ports))
+            bound = set(self._gate_registry())
+            unbound = sorted({r.factor for r in ports.weight_refs.values()}
+                             - bound)
+            if unbound:
+                w = (f"unbound weight port(s) {', '.join(unbound)} — "
+                     "gated prior-only; accept needs them bound "
+                     "(`plugin SPEC` / `metis --plugin SPEC`)")
+                res.report.warnings.append(w)
+                out["warnings"] = [w]
+        return out
 
     def _cand_case_init(self) -> Dict[str, int]:
         """The candidate's own #init (a born world's scenario), when it
