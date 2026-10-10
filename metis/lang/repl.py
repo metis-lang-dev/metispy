@@ -297,7 +297,8 @@ class Repl(LoopVerbs, Cmd):
         warn = "".join(f"warning: {w}\n" for w in self.doc.warnings)
         warn += "".join(f"warning: {w}\n" for w in self._port_warns)
         if self.plugin is not None:
-            warn += (f"plugin {self.plugin_spec} attached — "
+            warn += (f"plugin {self.plugin_spec} "
+                     f"({type(self.plugin).__name__}) attached — "
                      f"{len(self.doc.ports.weights)} weight port(s); "
                      "the env ticks when the world is quiet\n")
         self.intro = warn + (
@@ -404,9 +405,10 @@ class Repl(LoopVerbs, Cmd):
                                        else ()))
                 err = PortError(missing)
                 how = ("plugin " + spec + " does not bind it" if spec
-                       else "no plugin binds it: add '#plugin "
-                       "pkg.mod:factory' to the file, `plugin SPEC` in "
-                       "the shell, or [ports] plugin in the dot file"
+                       else "no plugin binds it: serve it with `metis "
+                       "--plugin pkg.mod:factory FILE` (catalog-served "
+                       "files), or put '#plugin pkg.mod:factory' in a "
+                       "scene file"
                        + ("" if self.terminal else
                           " (plugins attach in the terminal shell only)"))
                 err.findings = [f"unbound weight port '{m}' — {how}"
@@ -2713,6 +2715,10 @@ class Repl(LoopVerbs, Cmd):
                 f"- opened {_now_s()}\n"
                 f"- catalog {self.doc.catalog.name}, key {self.key}\n"
                 f"- llm seat: {self.llm or '(default)'}\n"
+                f"- plugin: " + (f"{self.plugin_spec} "
+                                 f"({type(self.plugin).__name__})"
+                                 if self.plugin is not None else "(none)")
+                + "\n"
                 f"- stage {self.stage}, {len(self.fired)} fired\n")
         for kind in prompts.KINDS:
             self._tlog_prompt(f, kind, "in effect")
@@ -2985,6 +2991,12 @@ def main(argv=None):
     ap.add_argument("--version", action="store_true",
                     help="toolchain provenance (package, source+git, "
                          "python, config), then exit")
+    ap.add_argument("--plugin", metavar="SPEC",
+                    help="attach a port plugin (pkg.mod:factory or "
+                         "file.py:factory, relative to the catalog's "
+                         "folder) — binds the catalog's weight ports and "
+                         "drives its env; overrides the file's #plugin. "
+                         "Terminal only (D4)")
     ap.add_argument("--json", action="store_true",
                     help="the JSON-lines wrapper wire: one {op, arg} "
                          "per stdin line, one JSON result per line "
@@ -3003,6 +3015,10 @@ def main(argv=None):
         print(f"no catalog given — serving a blank scratch world "
               f"({scratch}); revise/accept to build it, save/export "
               f"to keep it", file=sys.stderr)
+    if args.json and args.plugin:
+        print("--plugin is terminal-only: the --json wire never imports "
+              "operator code (D4)", file=sys.stderr)
+        return 2
     if args.json:
         from metis.loop.wire import serve_json
         try:
@@ -3030,7 +3046,8 @@ def main(argv=None):
         # terminal=True: `transcript` writes the OPERATOR's own disk and
         # `plugin`/#plugin imports operator code — the interactive
         # terminal only (never the --json wire / web console: D4)
-        repl = Repl(args.llp, seed=args.seed, terminal=True)
+        repl = Repl(args.llp, seed=args.seed, terminal=True,
+                    plugin=args.plugin)
     except Exception as e:
         findings = getattr(e, "findings", None) or [str(e)]
         print("cannot serve %s:\n  %s"

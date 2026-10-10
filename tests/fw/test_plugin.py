@@ -400,3 +400,29 @@ def test_beat_stage_ticks_on_settle_entry(tmp_path):
     assert r.fired[:4] == ["use", "rest", "do +job", "wake"]
     assert r.counts.get("did") == 3
     assert r.plugin.beats == r.fired.count("rest")
+
+
+# -- the --plugin flag: catalog-served files attach at session level -----
+
+def test_main_plugin_flag_serves_a_port_catalog(tmp_path, monkeypatch,
+                                                capsys):
+    from metis.lang.repl import main
+    p = _world(tmp_path, SENSOR, "sensor_env.py", SENSOR_ENV)
+    p.write_text(p.read_text().replace("#plugin sensor_env.py:make\n", ""))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    # without the flag: refused, and the message teaches both routes
+    assert main([str(p)]) == 1
+    err = capsys.readouterr().err
+    assert "metis --plugin pkg.mod:factory FILE" in err
+    assert "'#plugin pkg.mod:factory' in a scene file" in err
+    # with it: served, the banner and the transcript record it
+    t = tmp_path / "t.md"
+    monkeypatch.setattr("sys.stdin", io.StringIO(
+        f"transcript {t}\nquery crash\ntranscript off\nquit\n"))
+    assert main(["--plugin", "sensor_env.py:make", str(p)]) == 0
+    out = capsys.readouterr().out
+    assert "plugin sensor_env.py:make (Env) attached" in out
+    assert "] = 0.3" in out
+    assert "- plugin: sensor_env.py:make (Env)" in t.read_text()
+    # the --json wire never imports operator code (D4)
+    assert main(["--json", "--plugin", "sensor_env.py:make", str(p)]) == 2
