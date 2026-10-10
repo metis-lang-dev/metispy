@@ -68,9 +68,10 @@ def check_plugin(obj) -> None:
 
 def load_plugin(spec: str, case: dict, base_dir=None):
     """`package.module:factory` (or `path/to/file.py:factory`, relative
-    to `base_dir` — the catalog's folder) -> factory(case), checked.
-    The catalog's folder is importable, so a plugin can live beside
-    its catalog."""
+    to `base_dir` — the catalog's folder, else the working directory)
+    -> factory(case), checked. The catalog's folder and the working
+    directory are importable, so a plugin can live beside its catalog
+    or beside the session that serves a derived world."""
     mod_name, sep, fac = spec.strip().partition(":")
     if not sep or not mod_name or not fac:
         raise PluginError(f"plugin spec {spec!r}: want "
@@ -79,6 +80,8 @@ def load_plugin(spec: str, case: dict, base_dir=None):
     try:
         if mod_name.endswith(".py"):
             path = (base / mod_name).resolve()
+            if not path.exists() and (Path.cwd() / mod_name).exists():
+                path = (Path.cwd() / mod_name).resolve()
             name = f"metis_plugin_{path.stem}_{abs(hash(str(path)))}"
             sp = importlib.util.spec_from_file_location(name, path)
             if sp is None or sp.loader is None:
@@ -86,8 +89,9 @@ def load_plugin(spec: str, case: dict, base_dir=None):
             mod = importlib.util.module_from_spec(sp)
             sp.loader.exec_module(mod)
         else:
-            if str(base) not in sys.path:
-                sys.path.insert(0, str(base))
+            for d in (str(Path.cwd()), str(base)):   # base wins
+                if d not in sys.path:
+                    sys.path.insert(0, d)
             mod = importlib.import_module(mod_name)
             mod = importlib.reload(mod)      # `plugin SPEC` re-reads it
     except PluginError:

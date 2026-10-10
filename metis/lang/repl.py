@@ -2177,7 +2177,7 @@ class Repl(LoopVerbs, Cmd):
                 return
             idx, (stage, kappa) = run_trace(
                 self.prog, self.case["steps"] or 6, seed,
-                policy=self.pricer.policy(self.prog)
+                policy=self.pricer.policy(self.prog, canonical=True)
                 if self.pricer else None)
             rows = [self.events_tbl[i] for i in idx]
             hows, bdo = None, ()          # a fresh sampled trace

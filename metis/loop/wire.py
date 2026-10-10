@@ -109,11 +109,13 @@ def _scene_prog(shell, init=None):
     return prog
 
 
-def _scene_policy(shell, prog):
+def _scene_policy(shell, prog, canonical=False):
     """The session's weight ports over a scene program (None without
-    ports): the scene readouts price like the instruments do."""
+    ports): the scene readouts price like the instruments do.
+    canonical=True for run_trace (it indexes canonical_events)."""
     pricer = getattr(shell, "pricer", None)
-    return pricer.policy(prog) if pricer is not None else None
+    return (pricer.policy(prog, canonical=canonical)
+            if pricer is not None else None)
 
 
 def _op_trace(shell, arg):
@@ -121,7 +123,8 @@ def _op_trace(shell, arg):
     prog = _scene_prog(shell)
     seed = int(arg) if arg.strip() else 1
     idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
-                                    seed, policy=_scene_policy(shell, prog))
+                                    seed, policy=_scene_policy(shell, prog,
+                                                        canonical=True))
     events = canonical_events(prog)
     out = {"ok": True, "seed": seed,
            "events": [f"{events[i][1]}/{events[i][2].name}"
@@ -269,7 +272,8 @@ def _op_narrate(shell, arg):
         seed = int(parts[0]) if parts else 1
         idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
                                         seed,
-                                        policy=_scene_policy(shell, prog))
+                                        policy=_scene_policy(
+                                            shell, prog, canonical=True))
         events = canonical_events(prog)
         rows = [events[i] for i in idx]
         source = "seed"

@@ -136,3 +136,22 @@ def test_transcript_is_terminal_only_and_logs_the_session(tmp_path):
     # the web wire never reaches it: not an intent verb
     from metis.loop.wire import INTENT_VERBS
     assert "transcript" not in INTENT_VERBS
+
+
+def test_accept_survives_an_over_budget_revision_diff(tmp_path):
+    """Wildfire step 2: accepting an admitted revision computed the
+    exact before/after diff and died on StateBudgetExceeded — the diff
+    is a readout, never the gate (revise already said so)."""
+    from metis.kernel import StateBudgetExceeded
+    r, out = blank(tmp_path)
+    r.cmd_text("a toy")
+    r.cmd_llp(BORN)
+    assert r.cmd_revise("")["ok"]
+
+    def blow(rep):
+        raise StateBudgetExceeded(3, 6, 11, 10)
+    r._revision_diff = blow
+    res = r.cmd_accept("")
+    assert res["ok"] and res["diffs"] == []
+    assert "too large" in res["diff_note"]
+    assert r.doc.catalog.name == "toy"

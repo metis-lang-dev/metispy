@@ -36,7 +36,26 @@ Two more generic, catalog-agnostic options (iteration 1's findings):
 the initial state and the observed vocabulary (linear logic cannot
 test absence — the formalizer invented complement atoms for exactly
 this); `tick_token` adds one `tick` atom to every transition's initial
-state (a resource a catalog may use to structure a step, or ignore)."""
+state (a resource a catalog may use to structure a step, or ignore).
+
+Pricing tier (the Wildfire experiment's finding: a lockstep catalog
+that walks every cell interleaves its per-cell work, and the exact
+filter's intermediate states multiply past any budget): `tier`
+"exact" (the default — the kernel filter, as before), "sampled"
+(Monte Carlo: `samples` reference-sampler runs from the transition's
+state, likelihood = the fraction whose readout matches the
+observation, with a 95% Wilson half-width), or "auto" (exact, falling
+back to sampled when the filter refuses its budget). Every record says
+which tier priced it. A sampled zero is "no sampled run matched" — the
+record carries n and ci so a reader can tell it from a proof.
+`frame_cap` bounds the settle readout (a step of a big lockstep world
+can take more than the old fixed 64 events).
+
+Weight ports (PLUGIN-PORTS.md): `plugin` (a port-plugin spec, resolved
+beside the catalog) binds the catalog's ports; `overlay` (a notch table
+— {"rows": [{port, args, row, notched}]}, as notch writes it) rides on
+top, newest first. Both tiers price with them; a catalog with an
+unbound port is refused up front (the BT.cpp rule)."""
 import json
 import os
 from pathlib import Path
@@ -156,24 +175,96 @@ def neg_of(key: str) -> str:
 FRAME_CAP = 64
 
 
+def _overlay_table(path):
+    """A notch table file -> {port: fn(args, counts)} overlays keyed by
+    (args, read-scope presence row)."""
+    rows = json.loads(Path(path).read_text())["rows"]
+    tables: Dict[str, Dict] = {}
+    for r in rows:
+        key = (tuple(r["args"]), tuple(tuple(x) for x in r["row"]))
+        tables.setdefault(r["port"], {})[key] = float(r["notched"])
+
+    def make(t):
+        def ov(args, counts):
+            for (a, row), v in t.items():
+                if a == tuple(args) and all(
+                        (counts.get(x, 0) > 0) == bool(b) for x, b in row):
+                    return v
+            return None
+        return ov
+    return {f: make(t) for f, t in tables.items()}
+
+
+def port_pricer(doc, plugin=None, base_dir=None, overlay=None):
+    """The catalog's PortPricer from a plugin spec (+ a notch overlay),
+    or None for a catalog without weight ports."""
+    if not doc.ports.weight_refs:
+        return None
+    from metis.fw.registry import Registry
+    from metis.lang import PortPricer
+    reg = Registry()
+    if plugin:
+        from metis.fw.plugin import load_plugin
+        load_plugin(plugin, {}, base_dir).bind(reg)
+    for f, ov in (_overlay_table(overlay).items() if overlay else ()):
+        reg.overlay(f, ov)
+    return PortPricer(doc.ports, reg.weight_bindings(),
+                      horn=doc.catalog.horn_db())
+
+
+def _sampled_likelihood(prog, horizon, frame, observed, samples, seed,
+                        pricer=None):
+    """(likelihood, half-width, unsettled runs): reference-sampler runs
+    from the program's initial state; a run matches when every observed
+    atom's presence equals the observation at the readout."""
+    import math
+    from metis.kernel.filter import DONE
+    from metis.kernel.refsample import run_trace
+    hits = unsettled = 0
+    pol = pricer.policy(prog, canonical=True) if pricer else None
+    for k in range(samples):
+        _, (stage, kappa) = run_trace(prog, horizon, seed + k, policy=pol)
+        if frame and stage != DONE:
+            unsettled += 1
+            continue
+        c = dict(kappa)
+        hits += all((c.get(a, 0) > 0) == bool(v)
+                    for a, v in observed.items())
+    n = samples
+    p = hits / n
+    z = 1.96
+    half = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+            / (1 + z * z / n))
+    return p, half, unsettled
+
+
 def surprise_sink(catalog_path, transitions: Iterable[dict],
                   vocabulary: List[str], out_jsonl, steps=1,
                   rare: float = 0.05, max_states: int = 200_000,
                   with_actions: bool = True, negatives: bool = False,
-                  tick_token: bool = False) -> Dict:
+                  tick_token: bool = False, tier: str = "exact",
+                  samples: int = 2000, frame_cap: int = FRAME_CAP,
+                  seed: int = 1, plugin: Optional[str] = None,
+                  overlay=None) -> Dict:
     """Replay each transition against the catalog; write surprise
     records (kind unmodeled|rare) to `out_jsonl` (overwritten). Returns
-    {transitions, surprises, per_episode {ep: n}, kinds}."""
+    {transitions, surprises, per_episode {ep: n}, kinds, tiers}."""
+    from metis.kernel.filter import StateBudgetExceeded
+    from metis.kernel.nets import program_key
     from metis.kernel.record import surprise_record
+    if tier not in ("exact", "sampled", "auto"):
+        raise ValueError(f"tier: exact | sampled | auto, not {tier!r}")
     from metis.lang import compile_catalog, parse, resolve_includes
     p = Path(catalog_path)
     doc = compile_catalog(resolve_includes(parse(p.read_text()),
                                            p.parent))
+    pricer = port_pricer(doc, plugin, p.parent, overlay)
     vocab_atoms = [atom_of(k) for k in vocabulary]
     if negatives:
         vocab_atoms += [neg_of(k) for k in vocabulary]
     frame = steps == "frame"
-    horizon = FRAME_CAP if frame else int(steps)
+    horizon = int(frame_cap) if frame else int(steps)
+    tiers: Dict[str, int] = {}
     per_ep: Dict[int, int] = {}
     kinds: Dict[str, int] = {}
     unsettled = 0
@@ -195,24 +286,47 @@ def surprise_sink(catalog_path, transitions: Iterable[dict],
                 init["tick"] = 1
             observed = {a: (1 if a in nxt else 0) for a in vocab_atoms}
             prog = doc.catalog.ground(init)
-            if frame:
-                from metis.kernel import ForwardProjection
-                from metis.kernel.filter import DONE
-                pr = ForwardProjection(prog, horizon,
-                                       max_states=max_states,
-                                       keep_history=False)
-                if sum(p for (st, _), p in pr.final.items()
-                       if st == DONE) < 1 - 1e-9:
-                    unsettled += 1
-            rec = surprise_record(
-                prog, horizon, observed, rare_ratio=rare,
-                max_states=max_states,
-                meta={"source": f"{tr['domain']} i{tr['instance']} "
-                                f"ep{tr['episode']} seed{tr['seed']} "
-                                f"t{tr['t']}",
-                      "episode": tr["episode"], "t": tr["t"],
-                      "action": tr["action"], "reward": tr["reward"],
-                      "catalog": str(p)})
+            meta = {"source": f"{tr['domain']} i{tr['instance']} "
+                              f"ep{tr['episode']} seed{tr['seed']} "
+                              f"t{tr['t']}",
+                    "episode": tr["episode"], "t": tr["t"],
+                    "action": tr["action"], "reward": tr["reward"],
+                    "catalog": str(p)}
+            rec = None
+            if tier != "sampled":
+                try:
+                    if frame:
+                        from metis.kernel import ForwardProjection
+                        from metis.kernel.filter import DONE
+                        pr = ForwardProjection(
+                            prog, horizon, max_states=max_states,
+                            keep_history=False,
+                            policy=pricer.policy(prog) if pricer else None)
+                        if sum(q for (st, _), q in pr.final.items()
+                               if st == DONE) < 1 - 1e-9:
+                            unsettled += 1
+                    rec = surprise_record(
+                        prog, horizon, observed, rare_ratio=rare,
+                        max_states=max_states, meta=meta,
+                        policy=pricer.policy(prog) if pricer else None)
+                    rec["tier"] = "exact"
+                except StateBudgetExceeded:
+                    if tier == "exact":
+                        raise
+            if rec is None:
+                like, half, uns = _sampled_likelihood(
+                    prog, horizon, frame, observed, samples,
+                    seed * 1_000_003 + n, pricer)
+                unsettled += uns > 0
+                kind = ("unmodeled" if like == 0.0 else
+                        "rare" if like < rare else None)
+                rec = {"format": "metis-surprise", "version": 1,
+                       "program_key": program_key(prog),
+                       "steps": horizon, "init": dict(prog.init),
+                       "observed": dict(observed), "likelihood": like,
+                       "kind": kind, "meta": meta, "tier": "sampled",
+                       "n": samples, "ci": half}
+            tiers[rec["tier"]] = tiers.get(rec["tier"], 0) + 1
             per_ep.setdefault(tr["episode"], 0)
             if rec["kind"]:
                 per_ep[tr["episode"]] += 1
@@ -221,7 +335,7 @@ def surprise_sink(catalog_path, transitions: Iterable[dict],
     return {"transitions": n, "surprises": sum(per_ep.values()),
             "per_episode": per_ep, "kinds": kinds,
             "readout": "frame" if frame else f"{horizon} step(s)",
-            "unsettled": unsettled}
+            "unsettled": unsettled, "tiers": tiers}
 
 
 def _batch(ns) -> int:
@@ -244,7 +358,9 @@ def _batch(ns) -> int:
         sink = d / "sinks" / f"{tag}--{Path(ns.catalog).stem}.jsonl"
         out["sink"] = surprise_sink(
             ns.catalog, trs, state_vocabulary(env), sink, steps, ns.rare,
-            negatives=ns.negatives, tick_token=ns.tick_token)
+            negatives=ns.negatives, tick_token=ns.tick_token,
+            tier=ns.tier, samples=ns.samples, frame_cap=ns.frame_cap,
+            plugin=ns.plugin, overlay=ns.overlay)
         out["sink"]["path"] = str(sink)
         out["sink"]["surprises_per_episode"] = round(
             out["sink"]["surprises"] / max(1, ns.episodes), 3)
@@ -295,6 +411,19 @@ def main(argv=None) -> int:
     s.add_argument("--rare", type=float, default=0.05)
     s.add_argument("--negatives", action="store_true")
     s.add_argument("--tick-token", action="store_true")
+    for q in (b, s):
+        q.add_argument("--tier", default="exact",
+                       choices=("exact", "sampled", "auto"),
+                       help="exact filter | sampled (Monte Carlo) | auto "
+                            "(exact, sampled when it refuses its budget)")
+        q.add_argument("--samples", type=int, default=2000)
+        q.add_argument("--frame-cap", type=int, default=FRAME_CAP)
+        q.add_argument("--plugin", default=None,
+                       help="port plugin binding the catalog's weight "
+                            "ports (pkg.mod:factory | file.py:factory, "
+                            "beside the catalog)")
+        q.add_argument("--overlay", default=None,
+                       help="a notch table (JSON) over the plugin's base")
     ns = ap.parse_args(argv)
     if ns.cmd == "batch":
         return _batch(ns)
@@ -312,7 +441,11 @@ def main(argv=None) -> int:
     print(json.dumps(surprise_sink(ns.catalog, trs, state_vocabulary(env),
                                    ns.out, steps, ns.rare,
                                    negatives=ns.negatives,
-                                   tick_token=ns.tick_token)))
+                                   tick_token=ns.tick_token,
+                                   tier=ns.tier, samples=ns.samples,
+                                   frame_cap=ns.frame_cap,
+                                   plugin=ns.plugin,
+                                   overlay=ns.overlay)))
     return 0
 
 

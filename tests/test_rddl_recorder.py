@@ -88,6 +88,81 @@ def test_frame_readout_and_tick_token(tmp_path):
 
 
 
+def test_sampled_tier_agrees_and_auto_falls_back(tmp_path):
+    """The sampled tier prices like the exact filter (within its ci),
+    and `auto` falls back to it when the filter refuses its budget —
+    each record says which tier priced it."""
+    cat = tmp_path / "toy.llp"
+    cat.write_text(CAT)
+    stay = tr([], [], [])                   # nobody arrived: P = 0.5
+    rare = 0.6                              # make P = 0.5 a "rare" record
+    ex = surprise_sink(cat, [stay], VOCAB, tmp_path / "e.jsonl",
+                       steps="frame", negatives=True, tick_token=True,
+                       rare=rare)
+    sa = surprise_sink(cat, [stay], VOCAB, tmp_path / "s.jsonl",
+                       steps="frame", negatives=True, tick_token=True,
+                       rare=rare, tier="sampled", samples=4000)
+    re_ = json.loads((tmp_path / "e.jsonl").read_text())
+    rs = json.loads((tmp_path / "s.jsonl").read_text())
+    assert ex["tiers"] == {"exact": 1} and sa["tiers"] == {"sampled": 1}
+    assert re_["tier"] == "exact" and re_["likelihood"] == pytest.approx(0.5)
+    assert rs["tier"] == "sampled" and rs["n"] == 4000
+    assert abs(rs["likelihood"] - 0.5) <= rs["ci"] + 1e-9
+    au = surprise_sink(cat, [stay], VOCAB, tmp_path / "a.jsonl",
+                       steps="frame", negatives=True, tick_token=True,
+                       rare=rare, tier="auto", max_states=1)
+    assert au["tiers"] == {"sampled": 1}
+    with pytest.raises(Exception):          # exact never silently degrades
+        surprise_sink(cat, [stay], VOCAB, tmp_path / "x.jsonl",
+                      steps="frame", negatives=True, tick_token=True,
+                      max_states=1)
+
+
+PORTED = CAT.replace(
+    "pred tick : w.",
+    "pred tick : w.\nweight parr(F) reads {}.").replace(
+    "-o (waiting(F) @w 0.5 | not_waiting(F) @w 0.5).",
+    "-o (waiting(F) @w parr(F) | not_waiting(F) @w ~parr(F)).")
+
+PORTS_PY = """
+class P:
+    def __init__(self, case): pass
+    def bind(self, reg): reg.weight("parr", lambda a, c: 0.2)
+    def tick(self, counts): return None
+    def on_event(self, name, args): pass
+    def snapshot(self): return None
+    def restore(self, snap): pass
+
+def make(case):
+    return P(case)
+"""
+
+
+def test_sink_prices_weight_ports_with_plugin_and_overlay(tmp_path):
+    """A ported catalog: unbound -> refused; --plugin prices both tiers
+    with the base (P[nobody arrives] = 0.8); a notch overlay rides on
+    top (0.6 -> P = 0.4)."""
+    cat = tmp_path / "toy.llp"
+    cat.write_text(PORTED)
+    (tmp_path / "ports_py.py").write_text(PORTS_PY)
+    stay = tr([], [], [])
+    kw = dict(steps="frame", negatives=True, tick_token=True, rare=0.9)
+    with pytest.raises(Exception):
+        surprise_sink(cat, [stay], VOCAB, tmp_path / "u.jsonl", **kw)
+    for tier in ("exact", "sampled"):
+        surprise_sink(cat, [stay], VOCAB, tmp_path / f"{tier}.jsonl",
+                      tier=tier, samples=4000, plugin="ports_py:make", **kw)
+        r = json.loads((tmp_path / f"{tier}.jsonl").read_text())
+        assert abs(r["likelihood"] - 0.8) <= (r.get("ci") or 1e-9), tier
+    ov = tmp_path / "notch.json"
+    ov.write_text(json.dumps({"rows": [{"port": "parr", "args": ["f1"],
+                                         "row": [], "notched": 0.6}]}))
+    surprise_sink(cat, [stay], VOCAB, tmp_path / "o.jsonl",
+                  plugin="ports_py:make", overlay=ov, **kw)
+    r = json.loads((tmp_path / "o.jsonl").read_text())
+    assert r["likelihood"] == pytest.approx(0.4)
+
+
 def _have_rddl():
     try:
         import pyRDDLGym  # noqa: F401

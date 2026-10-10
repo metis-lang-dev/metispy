@@ -797,10 +797,17 @@ class PortPricer:
             return None
         return 1.0 - f if self.site(name)[2] else f
 
-    def policy(self, program):
-        """An index-keyed CHOICE policy for one concrete program (the
-        filter / run_trace hook shape)."""
-        names = [ev.name for _, _, ev in program.events()]
+    def policy(self, program, canonical: bool = False):
+        """An index-keyed CHOICE policy for one concrete program. The
+        index space differs by consumer: the filter (ForwardProjection,
+        sample_eval) indexes `program.events()`; the reference sampler
+        (refsample.run_trace) indexes `canonical_events(program)` — pass
+        canonical=True for it."""
+        if canonical:
+            from metis.kernel.refsample import canonical_events
+            names = [ev.name for _, _, ev in canonical_events(program)]
+        else:
+            names = [ev.name for _, _, ev in program.events()]
 
         def pol(stage, counts, ws):
             out = []

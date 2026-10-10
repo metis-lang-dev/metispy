@@ -426,3 +426,32 @@ def test_main_plugin_flag_serves_a_port_catalog(tmp_path, monkeypatch,
     assert "- plugin: sensor_env.py:make (Env)" in t.read_text()
     # the --json wire never imports operator code (D4)
     assert main(["--json", "--plugin", "sensor_env.py:make", str(p)]) == 2
+
+
+def test_policy_index_space_matches_its_consumer(tmp_path):
+    """The filter indexes program.events(); run_trace indexes
+    canonical_events(program) — a pricer policy handed to the wrong one
+    prices the wrong events. Both declaration orders, rss = 0: `hit`
+    must never fire in either consumer."""
+    from metis.kernel import ForwardProjection
+    from metis.kernel.refsample import run_trace
+    for order in ("hit-first", "pass-first"):
+        src = SENSOR.replace("READS", "gclose").replace(
+            "#plugin sensor_env.py:make\n", "")
+        if order == "pass-first":
+            a = src.index('  %% "the hazard fires')
+            b = src.index('  %% "the tick passes clean"')
+            c = src.index("}", b)
+            src = src[:a] + src[b:c] + src[a:b] + src[c:]
+        p = tmp_path / f"{order}.llp"
+        p.write_text(src)
+        doc = load_llp(p)
+        pricer = PortPricer(doc.ports, {"rss": lambda a, c: 0.0},
+                            horn=doc.catalog.horn_db())
+        prog = doc.catalog.ground({"ck": 1, "gclose": 1})
+        fins = ForwardProjection(prog, 2, policy=pricer.policy(prog)).final
+        assert all("crash" not in str(s) for s in fins), order
+        pol = pricer.policy(prog, canonical=True)
+        for seed in range(50):
+            _, (_, kappa) = run_trace(prog, 2, seed, policy=pol)
+            assert "crash" not in dict(kappa), (order, seed)

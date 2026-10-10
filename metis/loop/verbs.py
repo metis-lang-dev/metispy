@@ -293,7 +293,14 @@ class LoopVerbs:
             return {"ok": False, "error": "nothing admitted — gate first"}
         out = {"ok": True}
         if self.loop.revision:
-            out["diffs"] = self._revision_diff(rep)
+            try:
+                out["diffs"] = self._revision_diff(rep)
+            except StateBudgetExceeded as e:
+                # the diff is a readout, never the gate: an over-budget
+                # scene must not block an admitted revision (as revise)
+                out["diffs"] = []
+                out["diff_note"] = (f"scene too large for the exact "
+                                    f"before/after diff: {e}")
             out["dropped_packs"] = len(self.loop.accepted)
             self.loop.accepted = []
             self.loop.revision = False
