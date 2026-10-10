@@ -69,10 +69,14 @@ def _fixture(name):
 def blank_shell(tmp_path):
     import io
 
+    from metis.fw.registry import Registry
     from metis.lang.repl import Repl
     p = tmp_path / "blank.llp"
     p.write_text(BLANK)
-    return Repl(p, seed=1, stdout=io.StringIO())
+    # MEADOW's `@w pk / @w ~pk` pair: an unbound port is a gate finding
+    # (PLUGIN-PORTS.md); pk = 0.5 keeps the pair's old 1:1 split
+    return Repl(p, seed=1, stdout=io.StringIO(),
+                registry=Registry().weight("pk", 0.5))
 
 
 # -- core seams (unchanged from the metis-loop repo) -----------------

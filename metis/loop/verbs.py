@@ -209,7 +209,8 @@ class LoopVerbs:
         rep = admit_text_pack(self.loop.text, self.loop.cand,
                               base=base,
                               scenarios=(init,) if init else (),
-                              steps=self._scene_steps())
+                              steps=self._scene_steps(),
+                              registry=self._gate_registry())
         self.loop.report, self.loop.revision = rep, False
         return self._gate_out(rep)
 
@@ -222,7 +223,8 @@ class LoopVerbs:
         rep = admit_text_pack(self.loop.text, self.loop.cand,
                               base=None,
                               scenarios=(init,) if init else (),
-                              steps=self._scene_steps())
+                              steps=self._scene_steps(),
+                              registry=self._gate_registry())
         self.loop.report, self.loop.revision = rep, rep.ok
         out = self._gate_out(rep)
         out["revision"] = True
@@ -234,6 +236,14 @@ class LoopVerbs:
                 out["diff_note"] = (f"scene too large for the exact "
                                     f"before/after diff: {e}")
         return out
+
+    def _gate_registry(self):
+        """The session's resolved weight bindings for gate scenarios
+        (PLUGIN-PORTS.md point 5): the plugin's registry, overlays
+        included; {} without one — a candidate's @w port is then
+        unbound, a finding."""
+        reg = getattr(self, "registry", None)
+        return reg.weight_bindings() if reg is not None else {}
 
     def _gate_out(self, rep):
         import json
@@ -288,14 +298,16 @@ class LoopVerbs:
             self.loop.accepted = []
             self.loop.revision = False
             self.loop.base_src = self.loop.cand
-            new_world = rep.doc.catalog
+            new_world, ports = rep.doc.catalog, rep.doc.ports
             adopt = True
         else:
             new_world = (rep.merged if rep.merged is not None
                          else rep.doc.catalog)
+            from metis.lang.compiler import merge_ports
+            ports = merge_ports(self.doc.ports, rep.doc.ports)
             self.loop.accepted.append(self.loop.cand)
             adopt = False
-        self._reserve(new_world)
+        self._reserve(new_world, ports)
         if adopt:
             adopted = self._adopt_cand_case()
             if adopted:
@@ -359,9 +371,12 @@ class LoopVerbs:
             return {"ok": False, "error": "no record — record first"}
         r = self.loop.records[self.loop.rec_idx]
         prog = self._world().ground(self._scene_init())
+        pricer = getattr(self, "pricer", None)
         try:
             out = recover(r, prog, steps=r.get("steps"),
-                          max_states=STATE_BUDGET)
+                          max_states=STATE_BUDGET,
+                          policy=pricer.policy(prog) if pricer else None,
+                          plugin=getattr(self, "plugin", None))
         except StateBudgetExceeded as e:
             return {"ok": False, "error": str(e)}
         logged = r.get("likelihood", 0.0)
@@ -369,6 +384,7 @@ class LoopVerbs:
         return {"ok": True, "logged_likelihood": logged,
                 "likelihood": now, "explains": out["explains"],
                 "explanation_events": out.get("explanation_events"),
+                **({"env": out["env"]} if out.get("env") else {}),
                 "fixed": bool(now > 0 >= logged)}
 
     def cmd_mine(self, arg):

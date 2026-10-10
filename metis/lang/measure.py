@@ -29,7 +29,14 @@ Tiers, auto-selected:
   target or the time budget runs out; the answer says n and ± ci.
 
 Every answer carries its tier and why, the cone line, the quotient key
-and the readout."""
+and the readout.
+
+WEIGHT PORTS (PLUGIN-PORTS.md): with a `price` (a PortPricer, or one
+per arm — each arm prices under ITS env snapshot), the exact tier runs
+on the masked, reachability-pruned WHOLE world (the cone still names
+the readout's events): a port's declared read scope may name atoms the
+quotient drops, so the quotient is never priced. Port values are
+constants per arm snapshot — no env tick happens inside a measure."""
 import math
 import time
 from dataclasses import replace
@@ -42,7 +49,7 @@ from metis.kernel.refsample import SplitMix64
 from metis.kernel.weight import choice_weight
 
 from .cone import (Cone, NotSettled, cone_line, cone_readout,
-                   full_readout, qkey, quotient, sweep)
+                   full_readout, priced, qkey, quotient, sweep)
 
 import re
 
@@ -53,6 +60,7 @@ class Arm(NamedTuple):
     masks: frozenset
     spent: int = 0          # forced events already applied (global)
     spent_names: tuple = ()  # their names (cone-step accounting)
+    env: object = None       # the env snapshot the arm prices under
 
 
 class Prepared(NamedTuple):
@@ -150,7 +158,8 @@ def _holds_final(final, outcome):
     return 1.0 - p if neg else p
 
 
-def exact_arm(prog, prep, outcome, readout, budget, full=False):
+def exact_arm(prog, prep, outcome, readout, budget, full=False,
+              price=None):
     """(p, how) on the exact tier; StateBudgetExceeded propagates."""
     if readout[0] == "global":
         w = _world(prog, prep)
@@ -158,13 +167,15 @@ def exact_arm(prog, prep, outcome, readout, budget, full=False):
             return (float(_holds_counts(prep.arm.counts, outcome)),
                     "exact (now)")
         pr = ForwardProjection(w, readout[1], max_states=budget,
-                               keep_history=False)
+                               keep_history=False,
+                               policy=price.policy(w) if price else None)
         return _holds_final(pr.final, outcome), "exact (full world)"
-    if full:
+    if full or price is not None:
         w = replace(_world(prog, prep))
         return (full_readout(w, cone_names(prog, prep.cone), outcome,
-                             readout, budget),
-                "exact (full world, validation)")
+                             readout, budget, price=price),
+                "exact (full world, validation)" if price is None
+                else "exact (priced world)")
     p, _ = cone_readout(prep.q, outcome, readout, budget)
     return p, "exact (cone)"
 
@@ -180,7 +191,11 @@ class _Sim:
     """One arm's sampler: the quotient (cone/frame readouts) or the
     pruned whole world (global readout), the normative CHOICE."""
 
-    def __init__(self, prog: Program, outcome, readout, frame_cap=1024):
+    def __init__(self, prog: Program, outcome, readout, frame_cap=1024,
+                 price=None, cone_ns=None):
+        # priced: the pruned whole world, stepping per CONE event
+        # (cone_ns) like full_readout — the quotient is never priced
+        self.price, self.cone_ns = price, cone_ns
         self.events = prog.events()
         self.by = {}
         for i, (k, s, ev) in enumerate(self.events):
@@ -192,30 +207,45 @@ class _Sim:
     def draw(self, rng) -> bool:
         stage, c = self.stage0, dict(self.init)
         settled = self.readout[0] != "frame"
-        for _ in range(self.steps):
+        cone_ns = self.cone_ns
+        n_cone, budget = 0, self.steps
+        if cone_ns is not None:
+            budget = 64 * max(1, self.steps) + 4096   # out-of-cone slack
+        for _ in range(budget):
             if stage == DONE:
                 settled = True
                 break
-            pick = None
+            if cone_ns is not None and self.readout[0] != "frame" \
+                    and n_cone >= self.steps:
+                break
+            pick, ws, kind = None, [], None
             for kind in ("clause", "link"):
                 ws = [(ev, choice_weight(ev, c))
                       for ev in self.by.get((stage, kind), ())]
                 ws = [(ev, w) for ev, w in ws if w > 0]
+                if ws and self.price is not None and kind == "clause":
+                    ws = priced(ws, lambda ev: ev.name, c, self.price)
                 if ws:
-                    t = rng.unit() * sum(w for _, w in ws)
-                    acc = 0.0
-                    pick = ws[-1][0]
-                    for ev, w in ws:
-                        acc += w
-                        if t < acc:
-                            pick = ev
-                            break
-                    if kind == "link":
-                        stage = pick.post
                     break
+            if ws and cone_ns is not None and not any(
+                    ev.name in cone_ns for ev, _ in ws):
+                ws = []          # no cone event can fire: settled
+            if ws:
+                t = rng.unit() * sum(w for _, w in ws)
+                acc = 0.0
+                pick = ws[-1][0]
+                for ev, w in ws:
+                    acc += w
+                    if t < acc:
+                        pick = ev
+                        break
+                if kind == "link":
+                    stage = pick.post
             if pick is None:
                 settled = True
                 break                         # quiescent: absorbed
+            if cone_ns is not None and pick.name in cone_ns:
+                n_cone += 1
             for q, n in pick.consume.items():
                 c[q] = c.get(q, 0) - n
             for q, n in pick.produce.items():
@@ -236,13 +266,19 @@ def wilson_half(k: int, n: int, z: float = 1.96) -> float:
 
 
 def sampled(prog, preps, outcome, readouts, target=0.01, seconds=5.0,
-            n_min=400, n_max=200_000, seed=1, batch=200):
+            n_min=400, n_max=200_000, seed=1, batch=200, prices=None):
     """CRN-paired Monte Carlo over the arms -> ([(p, half)], n, secs).
     Draw i of every arm uses SplitMix64 seeded from (seed, i): the SAME
     random numbers in each arm — variance reduction for the difference
     estimator only; each arm's estimate is of its own marginal."""
     sims = []
-    for prep, ro in zip(preps, readouts):
+    prices = prices or [None] * len(preps)
+    for prep, ro, pz in zip(preps, readouts, prices):
+        if pz is not None:
+            sims.append(_Sim(_world(prog, prep), outcome, ro, price=pz,
+                             cone_ns=None if ro[0] == "global"
+                             else cone_names(prog, prep.cone)))
+            continue
         w = _world(prog, prep) if ro[0] == "global" else prep.q
         sims.append(_Sim(w, outcome, ro))
     hits = [0] * len(sims)
@@ -277,10 +313,16 @@ AUTO_BUDGET = 100_000   # the auto tier's exact attempt: fail FAST, then
 
 def measure(prog: Program, arms: List[Arm], outcome: str, readout,
             tier: str = "auto", budget: int = 500_000,
-            cache: Optional[dict] = None, seed: int = 1) -> Answer:
+            cache: Optional[dict] = None, seed: int = 1,
+            price=None) -> Answer:
     """Answer one question over its arms (the instruments' core). tier:
     auto (exact below budget, else sampled) | exact (may refuse: raises
-    StateBudgetExceeded) | sampled | full (exact, unrestricted)."""
+    StateBudgetExceeded) | sampled | full (exact, unrestricted).
+    `price`: a PortPricer, or a list of them (one per arm)."""
+    prices = (list(price) if isinstance(price, (list, tuple))
+              else [price] * len(arms))
+    if any(p is not None for p in prices):
+        cache = None        # port values ride on env state: never cached
     preps = [prepare(prog, a, outcome) for a in arms]
     base_names = cone_names(prog, preps[0].cone)
     if callable(readout):        # D1's default: from the question's cone
@@ -290,7 +332,7 @@ def measure(prog: Program, arms: List[Arm], outcome: str, readout,
     if tier != "sampled":
         try:
             ps, hows = [], []
-            for prep, ro in zip(preps, ros):
+            for prep, ro, pz in zip(preps, ros, prices):
                 # D4: the quotient key identifies a QUOTIENT computation
                 # only — global and full answers depend on the whole
                 # world (two arms can share a quotient and differ
@@ -303,7 +345,7 @@ def measure(prog: Program, arms: List[Arm], outcome: str, readout,
                     p, how = exact_arm(
                         prog, prep, outcome, ro,
                         min(budget, AUTO_BUDGET) if tier == "auto"
-                        else budget, full=tier == "full")
+                        else budget, full=tier == "full", price=pz)
                     if cache is not None and ck is not None:
                         cache[ck] = (p, how)
                 ps.append(p)
@@ -313,7 +355,8 @@ def measure(prog: Program, arms: List[Arm], outcome: str, readout,
             if tier in ("exact", "full"):
                 raise
             why, refusal = f"exact refused: {e}", e
-    res, n, secs = sampled(prog, preps, outcome, ros, seed=seed)
+    res, n, secs = sampled(prog, preps, outcome, ros, seed=seed,
+                           prices=prices)
     return Answer([p for p, _ in res], [h for _, h in res],
                   f"sampled n={n}, 95% ± ci ({secs:.1f} s)", why, preps,
                   ros, n, refusal)

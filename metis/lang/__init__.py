@@ -12,7 +12,8 @@ Generic like the kernel: this package never imports metis.domains
 
 from .parser import parse, parse_file                          # noqa: F401
 from .ast import pretty                                        # noqa: F401
-from .compiler import (CatalogDoc, LangError, compile_catalog,  # noqa: F401
-                       factor_hooks, ground_reads, load_llp,
+from .compiler import (CatalogDoc, LangError, PortPricer,      # noqa: F401
+                       compile_catalog, factor_hooks, ground_reads,
+                       load_llp,
                        resolve_includes, weight_policy)
 from .pack import to_pack, from_pack                           # noqa: F401

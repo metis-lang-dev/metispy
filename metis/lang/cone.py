@@ -180,15 +180,33 @@ def cone_readout(q: Program, outcome: str, readout, budget: int,
         s *= 2
 
 
-def _tier(events, by_stage, stage, counts):
+def priced(ws, name_of, counts, price):
+    """[(key, w)] reweighted by the weight ports (None factor = an
+    unpriced event, kept; a zero factor drops the candidate) — the
+    clause-tier rule every tier shares."""
+    out = []
+    for k, w in ws:
+        f = price.factor(name_of(k), counts)
+        if f is None:
+            out.append((k, w))
+        elif f > 0:
+            out.append((k, w * f))
+    return out
+
+
+def _tier(events, by_stage, stage, counts, price=None):
     """The normative CHOICE (clauses of the stage, else its links) —
-    re-stated plainly for the validation enumerator."""
+    re-stated plainly for the validation enumerator. `price` (a
+    PortPricer) applies the weight ports to the clause tier, exactly
+    as the sampler's policy hook does."""
     if stage == DONE:
         return [(None, 1.0)]
     for kind in ("clause", "link"):
         ws = [(i, choice_weight(ev, counts))
               for i, ev in by_stage.get((stage, kind), ())]
         ws = [(i, w) for i, w in ws if w > 0]
+        if ws and price is not None and kind == "clause":
+            ws = priced(ws, lambda i: events[i][2].name, counts, price)
         tot = sum(w for _, w in ws)
         if tot > 0:
             return [(i, w / tot) for i, w in ws]
@@ -197,7 +215,7 @@ def _tier(events, by_stage, stage, counts):
 
 def full_readout(prog: Program, cone_names: FrozenSet[str],
                  outcome: str, readout, budget: int,
-                 max_steps: int = 5_000) -> float:
+                 max_steps: int = 5_000, price=None) -> float:
     """VALIDATION (§5 gate 1): the FULL program enumerated exactly,
     counting cone events; mass absorbs at the readout — ("cone", N): N
     cone events fired, or none can fire (settled) if that comes first;
@@ -221,7 +239,7 @@ def full_readout(prog: Program, cone_names: FrozenSet[str],
         new: Dict[tuple, float] = {}
         for (stage, kappa, c), p in dist.items():
             counts = dict(kappa)
-            choices = _tier(events, by_stage, stage, counts)
+            choices = _tier(events, by_stage, stage, counts, price)
             # @N reads after N cone events OR when no cone event can
             # fire, whichever is first (the cone has settled: the
             # quotient's DONE); @frame reads at the latter only

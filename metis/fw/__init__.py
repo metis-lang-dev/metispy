@@ -9,3 +9,5 @@ tests/test_genericity.py)."""
 from .registry import PortError, Registry           # noqa: F401
 from .blackboard import Blackboard                  # noqa: F401
 from .evaluator import Evaluator, catalog_domain    # noqa: F401
+from .plugin import (PluginError, PortPlugin,       # noqa: F401
+                     load_plugin)

@@ -109,12 +109,19 @@ def _scene_prog(shell, init=None):
     return prog
 
 
+def _scene_policy(shell, prog):
+    """The session's weight ports over a scene program (None without
+    ports): the scene readouts price like the instruments do."""
+    pricer = getattr(shell, "pricer", None)
+    return pricer.policy(prog) if pricer is not None else None
+
+
 def _op_trace(shell, arg):
     from metis.kernel.refsample import canonical_events, run_trace
     prog = _scene_prog(shell)
     seed = int(arg) if arg.strip() else 1
     idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
-                                    seed)
+                                    seed, policy=_scene_policy(shell, prog))
     events = canonical_events(prog)
     out = {"ok": True, "seed": seed,
            "events": [f"{events[i][1]}/{events[i][2].name}"
@@ -141,9 +148,11 @@ def _op_map(shell, arg):
     except ValueError:
         return {"ok": False, "error": "usage: map [STEPS]"}
     try:
-        pr = ForwardProjection(_scene_prog(shell), steps,
+        prog = _scene_prog(shell)
+        pr = ForwardProjection(prog, steps,
                                max_states=STATE_BUDGET,
-                               keep_history=False)
+                               keep_history=False,
+                               policy=_scene_policy(shell, prog))
     except StateBudgetExceeded as e:
         from metis.kernel.diagnostics import budget_note
         retry = f"map {max(1, e.step - 1)}"
@@ -166,10 +175,12 @@ def _op_marginals(shell, arg):
     from metis.kernel import (STATE_BUDGET, ForwardProjection,
                               StateBudgetExceeded)
     try:
-        pr = ForwardProjection(_scene_prog(shell),
+        prog = _scene_prog(shell)
+        pr = ForwardProjection(prog,
                                shell.case["steps"] or 6,
                                max_states=STATE_BUDGET,
-                               keep_history=False)
+                               keep_history=False,
+                               policy=_scene_policy(shell, prog))
     except StateBudgetExceeded as e:
         from metis.kernel.diagnostics import budget_note
         n = shell.case["steps"] or 6
@@ -257,7 +268,8 @@ def _op_narrate(shell, arg):
         prog = _scene_prog(shell)
         seed = int(parts[0]) if parts else 1
         idx, (stage, kappa) = run_trace(prog, shell.case["steps"] or 6,
-                                        seed)
+                                        seed,
+                                        policy=_scene_policy(shell, prog))
         events = canonical_events(prog)
         rows = [events[i] for i in idx]
         source = "seed"

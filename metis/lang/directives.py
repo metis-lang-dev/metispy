@@ -40,7 +40,7 @@ def embedded_case(text: str) -> Dict:
     {init, steps, seeds, unknowns, queries, liks}."""
     case = {"init": {}, "steps": 0, "seeds": 0,
             "unknowns": [], "queries": [], "liks": [],
-            "interactive": []}
+            "interactive": [], "plugin": ""}
     for raw in text.splitlines():
         line = squash_atoms(raw.strip())
         if not line.startswith("#"):
@@ -67,6 +67,13 @@ def embedded_case(text: str) -> Dict:
             # itself is the external chooser, so the directive is
             # recorded but drives nothing here.
             case["interactive"].append(args[0])
+        elif key == "plugin" and len(args) == 1:
+            # scene-level like #init: the port plugin that binds the
+            # catalog's weight ports and drives its env
+            # (PLUGIN-PORTS.md). Recorded here; only the interactive
+            # TERMINAL shell imports it (D4) — every other reader of
+            # the case ignores it.
+            case["plugin"] = args[0]
         else:
             raise DirectiveError(f"bad directive: {line}")
     return case

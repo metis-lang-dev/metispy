@@ -714,6 +714,106 @@ def factor_hooks(program, ports: Ports, registry: Dict[str, object],
     return table.get
 
 
+def merge_ports(a: Ports, b: Ports) -> Ports:
+    """A pack's ports over its base's (the merged world's port
+    surface — weight refs and read scopes included)."""
+    return Ports(weights={**a.weights, **b.weights},
+                 guards={**a.guards, **b.guards},
+                 inputs=a.inputs + tuple(p for p in b.inputs
+                                         if p not in a.inputs),
+                 outputs=a.outputs + tuple(p for p in b.outputs
+                                           if p not in a.outputs),
+                 weight_refs={**a.weight_refs, **b.weight_refs},
+                 reads={**a.reads, **b.reads})
+
+
+class PortPricer:
+    """Name-keyed port pricing — the ONE resolution of `@w f(args)`
+    every interactive tier shares (the REPL sampler, the measure's
+    exact and sampled tiers, gate scenarios). Keyed by ground event
+    NAME, not by an event index, so masked/pruned/quotient programs
+    price identically.
+
+    G5: with `scoped`, a binding sees its counts through ScopedCounts
+    over the GROUND declared read-scope — an out-of-scope read raises
+    ScopeViolation here exactly as factor_hooks makes it raise in the
+    factored tier. A port with no `reads` declaration is opaque: it
+    sees the whole multiset (and is listed in `.opaque`; it cannot be
+    factored). The interactive tier passes the scope atoms' true
+    counts (the factored tier synthesizes presence bits): a binding
+    that reads presence (`counts.get(a, 0) > 0`) agrees in both."""
+
+    def __init__(self, ports: Ports, registry: Dict[str, object],
+                 horn=None, scoped: bool = True):
+        missing = {ref.factor for ref in ports.weight_refs.values()
+                   if ref.factor not in registry}
+        if missing:
+            raise LangError([f"unbound weight port '{m}'"
+                             for m in sorted(missing)])
+        self.ports, self.registry, self.horn = ports, registry, horn
+        self.scoped = scoped
+        self.opaque = sorted({r.factor for r in ports.weight_refs.values()
+                              if r.factor not in ports.reads})
+        self._sites: Dict[str, Optional[tuple]] = {}
+
+    def site(self, name: str) -> Optional[tuple]:
+        """(factor, args, complement, scope|None) for a ground clause
+        name, or None when its rule references no port."""
+        if name in self._sites:
+            return self._sites[name]
+        ref = self.ports.weight_refs.get(name.split("[", 1)[0])
+        out = None
+        if ref is not None:
+            subst = _tag_subst(name)
+            args = tuple(subst.get(a, a) for a in ref.args)
+            scope = None
+            if self.scoped and ref.factor in self.ports.reads:
+                guarded = any(p.guards for p in
+                              self.ports.reads[ref.factor])
+                if self.horn is not None or not guarded:
+                    scope = frozenset(ground_reads(
+                        self.ports, ref.factor, args, self.horn))
+            out = (ref.factor, args, ref.complement, scope)
+        self._sites[name] = out
+        return out
+
+    def raw(self, name: str, counts) -> Optional[float]:
+        """The port's value f (before the complement) for an event in
+        state `counts`, or None for an unpriced event."""
+        s = self.site(name)
+        if s is None:
+            return None
+        factor, args, _compl, scope = s
+        if scope is not None:
+            from metis.kernel.factorize import ScopedCounts
+            counts = ScopedCounts(scope, {a: counts[a] for a in scope
+                                          if counts.get(a, 0) > 0})
+        return float(self.registry[factor](args, counts))
+
+    def factor(self, name: str, counts) -> Optional[float]:
+        """The CHOICE multiplier (complement applied), or None."""
+        f = self.raw(name, counts)
+        if f is None:
+            return None
+        return 1.0 - f if self.site(name)[2] else f
+
+    def policy(self, program):
+        """An index-keyed CHOICE policy for one concrete program (the
+        filter / run_trace hook shape)."""
+        names = [ev.name for _, _, ev in program.events()]
+
+        def pol(stage, counts, ws):
+            out = []
+            for i, w in ws:
+                f = self.factor(names[i], counts)
+                if f is None:
+                    out.append((i, w))
+                elif f > 0:
+                    out.append((i, w * f))
+            return out
+        return pol
+
+
 def weight_policy(program, ports: Ports, registry: Dict[str, object]):
     """CHOICE policy resolving @w factor references against a registry
     {factor: callable(args_tuple, counts) -> float}. Unbound factors

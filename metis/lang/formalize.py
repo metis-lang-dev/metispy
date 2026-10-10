@@ -10,10 +10,12 @@ from typing import Dict, List, Optional, Tuple
 from metis.kernel import (STATE_BUDGET, ForwardProjection,
                           StateBudgetExceeded, program_key)
 from metis.kernel.catalog import Catalog, CatalogError
-from metis.kernel.factorize import FactoredProgram, FactorizeError
+from metis.kernel.factorize import (FactoredProgram, FactorizeError,
+                                    ScopeViolation)
 from metis.kernel.posterior import map_derivation
 
-from .compiler import CatalogDoc, LangError, compile_catalog
+from .compiler import (CatalogDoc, LangError, PortPricer,
+                       compile_catalog, merge_ports)
 from .parser import ParseError, parse
 
 
@@ -45,9 +47,11 @@ class Formalization:
     scenarios: List[Scenario] = field(default_factory=list)
 
 
-def _final_marginals(prog, steps) -> Tuple[Dict[str, float], int, list]:
+def _final_marginals(prog, steps, pricer=None
+                     ) -> Tuple[Dict[str, float], int, list]:
     pr = ForwardProjection(prog, steps, max_states=STATE_BUDGET,
-                           keep_history=False)
+                           keep_history=False,
+                           policy=pricer.policy(prog) if pricer else None)
     marg: Dict[str, float] = {}
     for (_, kappa), p in pr.final.items():
         for atom, n in kappa:
@@ -78,14 +82,22 @@ def _unchecked(llp: str, e) -> str:
 def admit_text_pack(text: str, llp: str,
                     base: Optional[CatalogDoc] = None,
                     scenarios: Tuple[Dict[str, int], ...] = (),
-                    steps: int = 6) -> Formalization:
+                    steps: int = 6,
+                    registry: Optional[Dict[str, object]] = None
+                    ) -> Formalization:
     """Run a formalizer's candidate through the full gate chain.
 
     Returns a report: `ok` + findings on gate failure; on success
     the compiled doc, the merged catalog (when `base`), the (rule,
     doc) approval pairs, the class-F classification, and per
     scenario the ground key, exact measure diff vs the base (what
-    the new rules CHANGED), and the MAP event read-back."""
+    the new rules CHANGED), and the MAP event read-back.
+
+    `registry` (the session's resolved weight bindings — the REPL's
+    plugin, overlays included): scenario runs are PRICED by it, and a
+    candidate referencing a port it does not bind is a FINDING (gate
+    fails, nothing crashes) — as is a binding reading outside its
+    declared scope. None keeps the prior-only scenario semantics."""
     r = Formalization(text=text)
     if not text.strip():
         r.findings.append("empty source text — the text is the "
@@ -173,6 +185,22 @@ def admit_text_pack(text: str, llp: str,
     if refs:
         r.reads_declared = refs <= set(r.doc.ports.reads)
 
+    # ports: the merged world prices with the session's bindings
+    pricer = None
+    if registry is not None:
+        ports = (merge_ports(base.ports, r.doc.ports) if base is not None
+                 else r.doc.ports)
+        if ports.weight_refs:
+            try:
+                pricer = PortPricer(ports, registry,
+                                    horn=merged_cat.horn_db())
+            except LangError as e:
+                r.findings.extend(
+                    f"{f} — the session's plugin does not bind it (bind "
+                    "it in the plugin, or drop the @w reference)"
+                    for f in getattr(e, "findings", [str(e)]))
+                return r
+
     # classification + per-scenario semantics
     for init in scenarios:
         sc = Scenario(init=dict(init))
@@ -189,17 +217,23 @@ def admit_text_pack(text: str, llp: str,
                 if getattr(e, "diagnostic", None) is not None:
                     r.diagnostics.append(e.diagnostic)
         try:
-            marg, sc.support, sc.map_events = _final_marginals(prog,
-                                                               steps)
+            marg, sc.support, sc.map_events = _final_marginals(
+                prog, steps, pricer)
             if base is not None:
                 base_prog = base.catalog.ground(dict(init))
-                base_marg, _, _ = _final_marginals(base_prog, steps)
+                base_marg, _, _ = _final_marginals(base_prog, steps,
+                                                   pricer)
                 atoms = sorted(set(marg) | set(base_marg))
                 sc.diffs = [
                     (a, base_marg.get(a, 0.0), marg.get(a, 0.0))
                     for a in atoms
                     if abs(base_marg.get(a, 0.0)
                            - marg.get(a, 0.0)) > 1e-12]
+        except ScopeViolation as e:
+            r.findings.append(f"scenario {sc.key[:12]}…: {e} — a weight "
+                              "binding read outside its declared `reads`")
+            r.diagnostics.append(e.diagnostic)
+            return r
         except StateBudgetExceeded as e:
             # semantics out of exact reach is a WARNING on the
             # report, never a dead gate: the statics verdicts above

@@ -116,6 +116,22 @@ narrate system|user show the system / certified-material prompt
                     home is ~/.config/metis/prompts/narrate.txt
                     (likewise `formalize system [<<EOF]` /
                     prompts/formalize.txt — narrators differ)
+ports (PLUGIN-PORTS.md) — real values and time behind the catalog;
+operator code, so TERMINAL ONLY (D4):
+plugin [SPEC|off]   show / attach (pkg.mod:factory | file.py:factory)
+                    / detach the port plugin (also '#plugin SPEC' in
+                    the file, or [ports] plugin in the dot file)
+ports               declared weight ports: bound?, read scope, the
+                    rules referencing them
+port F(ARGS)        evaluate one binding against the current counts
+                    (scoped: an out-of-scope read raises)
+tick [N]            advance the env N beats by hand (its do-lines join
+                    the trace as [env] rows); step/run tick on their
+                    own when the world is quiet — quiet, not dead
+notch [ALPHA]       fit the ports from this session's sampled steps
+                    (Dirichlet per read-scope row), print the row
+                    sheet; `notch accept` ships it as an OVERLAY
+                    (never a catalog edit), `notch pop` drops one
 key                 canonical program_key of the serving catalog
 version             what is running: package, source+git, python,
                     config dot file, llm endpoint
@@ -148,6 +164,52 @@ def _source_name(name, spans):
     return base if base in spans else name
 
 
+def _ground_args(name):
+    """`rule[X=a,Y=b]` -> ('a', 'b'): a fired event's ground arguments,
+    as on_event receives them."""
+    if "[" not in name:
+        return ()
+    tag = name.split("[", 1)[1].rstrip("]")
+    return tuple(kv.split("=", 1)[-1] for kv in tag.split(",") if kv)
+
+
+class _EnvPricer:
+    """The session pricer bound to ONE env snapshot: before a binding
+    runs, the plugin's env is restored to the arm's snapshot (lazily —
+    only when another arm's env is loaded). Port values are constants
+    per arm: no tick happens inside a measure."""
+
+    def __init__(self, repl, snap):
+        self.repl, self.snap = repl, snap
+        self.base = repl.pricer
+
+    def _ensure(self):
+        r = self.repl
+        if r.plugin is not None and self.snap is not None and \
+                r.__dict__.get("_env_live") is not self.snap:
+            r.plugin.restore(self.snap)
+            r._env_live = self.snap
+
+    def site(self, name):
+        return self.base.site(name)
+
+    def raw(self, name, counts):
+        self._ensure()
+        return self.base.raw(name, counts)
+
+    def factor(self, name, counts):
+        self._ensure()
+        return self.base.factor(name, counts)
+
+    def policy(self, program):
+        pol = self.base.policy(program)
+
+        def bound(stage, counts, ws):
+            self._ensure()
+            return pol(stage, counts, ws)
+        return bound
+
+
 class _Tee(io.TextIOBase):
     """stdout for one logged command: written through AND kept."""
 
@@ -173,8 +235,30 @@ def _now_s():
 class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
-    def __init__(self, path, seed=1, **kw):
+    def __init__(self, path, seed=1, terminal=False, plugin=None,
+                 registry=None, **kw):
         super().__init__(**kw)
+        # the interactive TERMINAL shell (main() passes True): the only
+        # session that writes the operator's disk (transcript) or
+        # imports operator code (plugin) — D4
+        self.terminal = terminal
+        # port plugins (PLUGIN-PORTS.md): the plugin, its spec, the
+        # registry it bound, the session's pricer (None = no ports);
+        # _envs[j] = the env snapshot after j fired rows (kept beside
+        # the world so fork/back/undo/whatif restore it); _env0 = the
+        # env as attached (reset returns to it)
+        # `registry`: an embedding HOST's in-process bindings (no
+        # operator code imported — allowed off the terminal); a plugin,
+        # when one attaches, replaces it
+        self.plugin, self.plugin_spec = None, ""
+        self.registry, self.pricer = registry, None
+        self._envs, self._env0 = [], None
+        self._notch = None              # a fitted, not yet shipped fit
+        self._overlays = []             # shipped notch overlays (names)
+        # `plugin SPEC|off` (or the constructor) pins the spec over the
+        # file's #plugin / the dot file's [ports] plugin; None = unpinned
+        self._plugin_pin = plugin
+        self._port_warns = []
         self.path = Path(path)
         self.rng = SplitMix64(seed)
         self.undo_stack = []
@@ -211,6 +295,11 @@ class Repl(LoopVerbs, Cmd):
             flat = (f"{len(self.counts)} atoms, {toks} tokens "
                     f"— 'state' tabulates them")
         warn = "".join(f"warning: {w}\n" for w in self.doc.warnings)
+        warn += "".join(f"warning: {w}\n" for w in self._port_warns)
+        if self.plugin is not None:
+            warn += (f"plugin {self.plugin_spec} attached — "
+                     f"{len(self.doc.ports.weights)} weight port(s); "
+                     "the env ticks when the world is quiet\n")
         self.intro = warn + (
             f"metis shell — {self.path.name} "
             f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
@@ -227,6 +316,9 @@ class Repl(LoopVerbs, Cmd):
 
     def _load(self, initial=False):
         text, doc, case = self._compile()
+        # ports bind BEFORE anything is committed: an unbound port
+        # refuses to serve (initial) / keeps the old catalog (reload)
+        self._bind(doc, case, initial=initial)
         # a new world: the old world's runtime notes no longer speak
         self.__dict__["notes"] = []
         self.text, self.doc, self.case = text, doc, case
@@ -248,11 +340,15 @@ class Repl(LoopVerbs, Cmd):
             self.atoms |= set(ev.consume) | set(ev.produce) \
                 | set(ev.persist)
 
-    def _reserve(self, catalog):
+    def _reserve(self, catalog, ports=None):
         """Re-serve a merged/revised catalog LIVE (loop accept):
         new ground, events, key, atoms; counts and stage carry over
-        exactly as `reload` does."""
-        self.doc = replace(self.doc, catalog=catalog)
+        exactly as `reload` does. `ports`: the new world's port
+        surface (a pack's merged over the base's)."""
+        doc = replace(self.doc, catalog=catalog,
+                      **({"ports": ports} if ports is not None else {}))
+        self._bind(doc, self.case)
+        self.doc = doc
         self.__dict__["notes"] = []     # a new world: old notes retire
         self.prog = catalog.ground(dict(self.case["init"]))
         self.events_tbl = canonical_events(self.prog)
@@ -265,11 +361,132 @@ class Repl(LoopVerbs, Cmd):
             self.atoms |= set(ev.consume) | set(ev.produce) \
                 | set(ev.persist)
 
+    # -- ports: the plugin, the registry, the pricer (PLUGIN-PORTS.md) --
+
+    def _bind(self, doc, case, initial=False):
+        """Resolve the plugin spec (pin > #plugin > [ports] plugin),
+        import + bind it if it changed, and build the session pricer
+        for `doc`'s weight ports. Raises (PluginError, or PortError on
+        an unbound port — fail fast, the BT.cpp rule) WITHOUT touching
+        the session; commits only on success. Plugins are operator
+        code: a non-terminal session never imports one (D4)."""
+        from metis.fw.plugin import load_plugin
+        from metis.fw.registry import PortError, Registry
+        from metis.lang.compiler import LangError, PortPricer
+        from metis.loop import config
+        warns = []
+        spec = self._plugin_pin
+        if spec is None:
+            spec = case.get("plugin") or config.get("ports", "plugin", "")
+        spec = (spec or "").strip()
+        if spec and not self.terminal:
+            warns.append(f"plugin {spec} not attached — plugins are "
+                         "terminal-only (D4: this session never imports "
+                         "operator code)")
+            spec = ""
+        plugin, reg = self.plugin, self.registry
+        if spec != self.plugin_spec or (spec and plugin is None):
+            plugin, reg = None, None
+            if spec:
+                plugin = load_plugin(spec, case, self.path.parent)
+                reg = Registry()
+                plugin.bind(reg)
+        pricer = None
+        if doc.ports.weight_refs:
+            try:
+                pricer = PortPricer(
+                    doc.ports, reg.weight_bindings() if reg else {},
+                    horn=doc.catalog.horn_db())
+            except LangError as e:
+                missing = sorted({r.factor for r in
+                                  doc.ports.weight_refs.values()}
+                                 - set(reg.weight_bindings() if reg
+                                       else ()))
+                err = PortError(missing)
+                how = ("plugin " + spec + " does not bind it" if spec
+                       else "no plugin binds it: add '#plugin "
+                       "pkg.mod:factory' to the file, `plugin SPEC` in "
+                       "the shell, or [ports] plugin in the dot file"
+                       + ("" if self.terminal else
+                          " (plugins attach in the terminal shell only)"))
+                err.findings = [f"unbound weight port '{m}' — {how}"
+                                for m in missing] or list(
+                                    getattr(e, "findings", [str(e)]))
+                raise err from None
+            for f in pricer.opaque:
+                warns.append(f"weight port '{f}' declares no `reads` — "
+                             "opaque: it sees the whole multiset (not "
+                             "factorizable)")
+        attach = plugin is not self.plugin
+        self.plugin, self.registry, self.pricer = plugin, reg, pricer
+        self.plugin_spec = spec if plugin is not None else ""
+        self._port_warns = warns
+        if attach:
+            self._env_attach()
+
+    def _rebuild_pricer(self):
+        """After the registry's overlay chain changed (notch)."""
+        from metis.lang.compiler import PortPricer
+        if self.doc.ports.weight_refs and self.registry is not None:
+            self.pricer = PortPricer(self.doc.ports,
+                                     self.registry.weight_bindings(),
+                                     horn=self.doc.catalog.horn_db())
+
+    def _env_snap(self):
+        return self.plugin.snapshot() if self.plugin is not None else None
+
+    def _env_attach(self):
+        """A (new) plugin: its env as attached is the env of every
+        position so far (the honest best: it was not there before)."""
+        snap = self._env_snap()
+        self._env0 = snap
+        self._envs = ([snap] * (len(self.fired) + 1)
+                      if self.plugin is not None else [])
+
+    def _env_to(self, snap):
+        if self.plugin is not None and snap is not None:
+            self.plugin.restore(snap)
+
+    def _env_push(self):
+        if self.plugin is not None:
+            self._envs.append(self._env_snap())
+
+    def _tick(self):
+        """One env beat (the INPUT face): plugin.tick(counts) -> its
+        do-lines applied as ONE exogenous row (kind "exo", how "exo":
+        conditioning, excluded from the likelihood like a do), the env
+        snapshot recorded beside it. A tick REVIVES a quiescent world
+        (G6: a shop with no customers is quiet, not dead). -> the row
+        name, or None when the env's episode is over (tick -> None)."""
+        from metis.fw.plugin import exo_event
+        if self.plugin is None:
+            return None
+        dos = self.plugin.tick(dict(self.counts))
+        if dos is None:
+            return None
+        ev, after = exo_event(list(dos), self.counts)
+        if self.stage == DONE:
+            self.stage = self.__dict__.get("_quiet_stage") \
+                or self.prog.init_stage
+        self.counts = after
+        self.fired_how.append({"how": "exo", "p": None})
+        self.fired.append(ev.name)
+        self.fired_rows.append(("exo", self.stage, ev))
+        self._env_push()
+        return ev.name
+
+    def _latch_done(self):
+        """Nothing can fire: remember the stage (a tick may revive it),
+        then latch DONE."""
+        if self.stage != DONE:
+            self._quiet_stage = self.stage
+        self.stage = DONE
+
     def _mark(self):
         self.undo_stack.append(
             (self.stage, dict(self.counts), len(self.fired), self._base,
              frozenset(self.masks), len(self.ledger), list(self._base_do),
-             self.fork_at))
+             self.fork_at, self._env_snap()))
 
     def _rebase(self):
         """The current state becomes the causality graph's base: an
@@ -292,13 +509,15 @@ class Repl(LoopVerbs, Cmd):
         """(L, sampled, forced): the trace likelihood is the product of
         the SAMPLED steps' tier probabilities; forced/do steps are
         conditioning, not sampling (spec 07 P2, spec 10 P2), and are
-        excluded — never priced as if chance had chosen them."""
+        excluded — never priced as if chance had chosen them. Env
+        (exo) rows are exogenous input: excluded too, and counted in
+        neither (`log` says how many)."""
         lik, ns, nf = 1.0, 0, 0
         for h in self.fired_how:
             if h["how"] == "sampled":
                 lik *= h["p"] if h["p"] is not None else 0.0
                 ns += 1
-            else:
+            elif h["how"] != "exo":
                 nf += 1
         return lik, ns, nf
 
@@ -334,6 +553,10 @@ class Repl(LoopVerbs, Cmd):
                   if k == kind and s == self.stage
                   and not self._masked(ev.name)]
             ws = [(i, w) for i, w in ws if w > 0]
+            if ws and self.pricer is not None and kind == "clause":
+                from metis.lang.cone import priced
+                ws = priced(ws, lambda i: self.events_tbl[i][2].name,
+                            self.counts, self.pricer)
             if ws:
                 return ws
         return []
@@ -347,8 +570,17 @@ class Repl(LoopVerbs, Cmd):
         h = {"how": how, "p": (w / total) if w and total else None}
         if self.masks:            # the tier this p was drawn from
             h["masks"] = sorted(self.masks)
-        self.fired_how.append(h)
         kind, _, ev = self.events_tbl[i]
+        site = self.pricer.site(ev.name) if self.pricer else None
+        if site is not None and how == "sampled":
+            # notch's sufficient statistic: the port, its read-scope
+            # row and its value at the moment chance chose this event
+            factor, args, compl, scope = site
+            row = tuple(sorted((a, int(self.counts.get(a, 0) > 0))
+                               for a in (scope or ())))
+            h["site"] = (factor, args, compl, row,
+                         self.pricer.raw(ev.name, self.counts))
+        self.fired_how.append(h)
         for q, n in ev.consume.items():
             self.counts[q] = self.counts.get(q, 0) - n
         for q, n in ev.produce.items():
@@ -358,13 +590,24 @@ class Repl(LoopVerbs, Cmd):
             self.stage = ev.post
         self.fired.append(ev.name)
         self.fired_rows.append(self.events_tbl[i])
+        if self.plugin is not None:
+            # the OUTPUT face: the fired event actuates the env
+            self.plugin.on_event(ev.name, _ground_args(ev.name))
+            self._env_push()
+            beat = getattr(self.plugin, "beat_stage", None)
+            if kind == "link" and beat and ev.post == beat:
+                self._tick()          # settle entry: one env beat
         return ev.name
 
     def _sample(self):
         """One normative selection step (06-sampler-wire §4)."""
         ws = self._candidates()
         if not ws:
-            self.stage = DONE
+            if self.plugin is not None:
+                name = self._tick()       # quiet, not dead (G6)
+                if name is not None:
+                    return name
+            self._latch_done()
             return None
         total = 0.0
         for _, w in ws:
@@ -388,7 +631,10 @@ class Repl(LoopVerbs, Cmd):
         """enabled transitions of the firing tier, numbered"""
         ws = self._candidates()
         if not ws:
-            self._say(f"quiescent (stage {self.stage})")
+            self._say(f"quiescent (stage {self.stage})"
+                      + (f" — the env ticks on step/run (plugin "
+                         f"{self.plugin_spec}); quiet, not dead"
+                         if self.plugin is not None else ""))
             return
         kind = self.events_tbl[ws[0][0]][0]
         total = sum(w for _, w in ws)
@@ -402,7 +648,18 @@ class Repl(LoopVerbs, Cmd):
         """fire candidate k or by name; no argument = sampled"""
         ws = self._candidates()
         if not ws:
-            self.stage = DONE
+            if self.plugin is not None:
+                self._mark()
+                name = self._tick()
+                if name is not None:
+                    self._say(f"quiet — the env ticked: {name}  [env]")
+                    return
+                self.undo_stack.pop()
+                self._latch_done()
+                self._say("quiescent, and the env's episode is over "
+                          "(tick returned None) — nothing can fire")
+                return
+            self._latch_done()
             self._say("quiescent — nothing can fire")
             return
         self._mark()
@@ -486,6 +743,7 @@ class Repl(LoopVerbs, Cmd):
         a = arg.strip()
         if not a:
             k0 = self._base[0]
+            n_exo = sum(1 for h in self.fired_how if h["how"] == "exo")
             rows = [f"  {d['k']:>3}  do {d['op']}" for d in self.ledger]
             self._say("\n".join(
                 ["interventions this session (after occurrence k):"]
@@ -493,7 +751,9 @@ class Repl(LoopVerbs, Cmd):
                 + [f"masks: {' '.join(sorted(self.masks)) or '(none)'}",
                    f"base #{k0}: " + (
                        "do " + ", ".join(self._base_do)
-                       if self._base_do else "not an intervention")]))
+                       if self._base_do else "not an intervention")]
+                + ([f"exogenous (env) rows: {n_exo} — 'log' marks "
+                    "them [env]"] if n_exo else [])))
             return
         if a[0] in "+-":
             prev = list(self._base_do) \
@@ -562,7 +822,8 @@ class Repl(LoopVerbs, Cmd):
             "fired_how": self.fired_how, "base": self._base,
             "base_do": self._base_do, "undo": self.undo_stack,
             "masks": self.masks, "ledger": self.ledger,
-            "rng": self.rng})
+            "rng": self.rng, "envs": self._envs,
+            "env": self._env_snap()})
 
     def do_fork(self, arg):
         """fork [K] — branch at occurrence K (default: here): the actual
@@ -616,6 +877,10 @@ class Repl(LoopVerbs, Cmd):
         self.ledger = [d for d in self.ledger if d["k"] <= k]
         self.undo_stack = []
         self.fork_at = k
+        if self.plugin is not None:
+            # the counterfactual sees the env AS IT WAS at #k
+            del self._envs[k + 1:]
+            self._env_to(self._envs[k])
 
     # the INSTRUMENTS' private shelf (spec 10 D1 amendment): whatif /
     # necessity / sufficiency fork and come back on their own, so they
@@ -640,6 +905,8 @@ class Repl(LoopVerbs, Cmd):
         self.ledger, self.rng = w["ledger"], w["rng"]
         self.masks = w["masks"]
         self.shelf, self.fork_at = shelf, fork_at
+        self._envs = w["envs"]
+        self._env_to(w["env"])
 
     def do_back(self, arg):
         """back — leave the fork: restore the shelved actual world
@@ -654,6 +921,8 @@ class Repl(LoopVerbs, Cmd):
         self._base_do, self.undo_stack = w["base_do"], w["undo"]
         self.ledger, self.rng = w["ledger"], w["rng"]
         self.masks = w["masks"]       # the fork's own masks are gone
+        self._envs = w["envs"]
+        self._env_to(w["env"])        # and the actual world's env
         self._say(f"back in the actual world (#{len(self.fired)})")
         self.do_state("")
 
@@ -747,7 +1016,7 @@ class Repl(LoopVerbs, Cmd):
 
     def _snap(self, forced=()):
         return Arm(self.stage, dict(self.counts), frozenset(self.masks),
-                   len(forced), tuple(forced))
+                   len(forced), tuple(forced), self._env_snap())
 
     def _remainder_readout(self, f, default=None):
         """D1: @N with N = the actual remainder's (events after #f) cone
@@ -793,8 +1062,21 @@ class Repl(LoopVerbs, Cmd):
         if cache.get("_key") != self.key:      # a new world: retire
             cache.clear()
             cache["_key"] = self.key
-        ans = measure(self.prog, arms, outcome, ro, tier, STATE_BUDGET,
-                      cache)
+        if self.pricer is None:
+            ans = measure(self.prog, arms, outcome, ro, tier,
+                          STATE_BUDGET, cache)
+        else:
+            # each arm prices under ITS env snapshot (a counterfactual
+            # arm sees the forked env); the live env comes back after
+            keep = self._env_snap()
+            try:
+                ans = measure(self.prog, arms, outcome, ro, tier,
+                              STATE_BUDGET, cache,
+                              price=[_EnvPricer(self, a.env)
+                                     for a in arms])
+            finally:
+                self._env_to(keep)
+                self.__dict__.pop("_env_live", None)
         if ans.refusal is not None and line:
             # spec 08 step 3 stands: the exact tier's refusal is a
             # runtime note even when the sampled tier then answered
@@ -1152,6 +1434,8 @@ class Repl(LoopVerbs, Cmd):
             self._say(str(e))
             return
         except Exception as e:
+            if getattr(e, "diagnostic", None) is not None:
+                raise                 # a structured finding (G5): onecmd
             self._say(f"filter failed: {e!r}")
             return
         under = (f" | do ~{', ~'.join(sorted(self.masks))}"
@@ -1202,9 +1486,11 @@ class Repl(LoopVerbs, Cmd):
             return 1.0 - self._presence(atom[1:], steps)
         if self.stage == DONE or steps <= 0:
             return float(self.counts.get(atom, 0) > 0)
-        pr = ForwardProjection(self._here_prog(), steps,
-                               max_states=STATE_BUDGET,
-                               keep_history=False)
+        prog = self._here_prog()
+        pr = ForwardProjection(prog, steps, max_states=STATE_BUDGET,
+                               keep_history=False,
+                               policy=self.pricer.policy(prog)
+                               if self.pricer else None)
         return sum(q for (_, k), q in pr.final.items()
                    if any(a == atom and n > 0 for a, n in k))
 
@@ -1222,10 +1508,14 @@ class Repl(LoopVerbs, Cmd):
             self._say("nothing to undo")
             return
         (self.stage, self.counts, k, self._base, masks, nl, base_do,
-         self.fork_at) = self.undo_stack.pop()
+         self.fork_at, env) = self.undo_stack.pop()
         del self.fired[k:]
         del self.fired_rows[k:]
         del self.fired_how[k:]
+        if self.plugin is not None and env is not None:
+            del self._envs[k + 1:]
+            self._envs[k] = env
+            self._env_to(env)
         self.masks, self._base_do = set(masks), list(base_do)
         del self.ledger[nl:]
         self.do_state("")
@@ -1237,6 +1527,9 @@ class Repl(LoopVerbs, Cmd):
         self.counts = dict(self.case["init"])
         self.masks = set()
         self._rebase()
+        if self.plugin is not None:   # the env returns to as attached
+            self._env_to(self._env0)
+            self._envs[-1] = self._env0
         self.do_state("")
 
     def do_reload(self, arg):
@@ -1465,8 +1758,10 @@ class Repl(LoopVerbs, Cmd):
         cands = self._candidates()
         total = sum(w for _, w in cands) or 1.0
         kinds = {self.events_tbl[i][0] for i, _ in cands}
-        status = ("done" if self.stage == DONE or not cands
-                  else "quiescent" if kinds == {"link"} else "running")
+        status = ("done" if self.stage == DONE
+                  or not cands and self.plugin is None
+                  else "quiescent" if kinds == {"link"} or not cands
+                  else "running")
         rules = []
         lines = self.text.splitlines()
         for name in sorted(rel["stage"],
@@ -1752,7 +2047,12 @@ class Repl(LoopVerbs, Cmd):
 
     def do_accept(self, arg):
         """admitted candidate joins the served world — re-served
-        LIVE (new key/events; counts and stage carry over)"""
+        LIVE (new key/events; counts and stage carry over). With no
+        candidate admitted and a notch fit pending, ships the fit as an
+        overlay (`notch accept`)."""
+        rep = self.loop.report
+        if self._notch is not None and not (rep and rep.ok):
+            return self._notch_accept()
         self._loop_say(self.cmd_accept(arg))
 
     def do_sink(self, arg):
@@ -1873,9 +2173,10 @@ class Repl(LoopVerbs, Cmd):
             except ValueError:
                 self._say("usage: narrate [system|user] [SEED]")
                 return
-            idx, (stage, kappa) = run_trace(self.prog,
-                                            self.case["steps"] or 6,
-                                            seed)
+            idx, (stage, kappa) = run_trace(
+                self.prog, self.case["steps"] or 6, seed,
+                policy=self.pricer.policy(self.prog)
+                if self.pricer else None)
             rows = [self.events_tbl[i] for i in idx]
             hows, bdo = None, ()          # a fresh sampled trace
         else:
@@ -1921,8 +2222,10 @@ class Repl(LoopVerbs, Cmd):
                       "file or as a sent line")
 
     def _directive_block(self):
-        lines = [f"#init {a} {n}"
-                 for a, n in sorted(self.counts.items())]
+        lines = [f"#plugin {self.plugin_spec}"] if self.plugin_spec \
+            else []
+        lines += [f"#init {a} {n}"
+                  for a, n in sorted(self.counts.items())]
         if self.case["steps"]:
             lines.append(f"#steps {self.case['steps']}")
         if self.case["seeds"]:
@@ -1957,7 +2260,7 @@ class Repl(LoopVerbs, Cmd):
         if not self.fired and not self.ledger:
             self._say("(nothing fired yet)")
             return
-        tag = {"forced": "  [forced]", "do": "  [do]"}
+        tag = {"forced": "  [forced]", "do": "  [do]", "exo": "  [env]"}
         state = {}
         for d in self.ledger:
             if d["op"][0] in "+-~":
@@ -1975,6 +2278,7 @@ class Repl(LoopVerbs, Cmd):
                 out.append(f"  {k + 1}. {self.fired[k]}"
                            + tag.get(h["how"], ""))
         lik, ns, nf = self.likelihood()
+        n_exo = sum(1 for h in self.fired_how if h["how"] == "exo")
         # the masks that renormalized the sampled tiers: the number is
         # the INTERVENED measure's, so say under which interventions
         under = sorted({m for h in self.fired_how
@@ -1984,7 +2288,9 @@ class Repl(LoopVerbs, Cmd):
                    f"{'' if ns == 1 else 's'}"
                    + (f" under do ~{', ~'.join(under)}" if under else "")
                    + (f" ({nf} forced/do excluded — conditioning, "
-                      "not sampling)" if nf else ""))
+                      "not sampling)" if nf else "")
+                   + (f" ({n_exo} env row{'' if n_exo == 1 else 's'} — "
+                      "exogenous input, not chance)" if n_exo else ""))
         self._say("\n".join(out))
 
     def do_graph(self, arg):
@@ -2115,6 +2421,214 @@ class Repl(LoopVerbs, Cmd):
         self._say("\n".join(version_lines()
                             + [self._llm_status(self.llm)]))
 
+    # -- port plugins (PLUGIN-PORTS.md) — terminal only (D4) ----------
+
+    def _terminal_only(self, verb):
+        if getattr(self, "terminal", False):
+            return False
+        self._say(f"{verb} is terminal-only: this session is not the "
+                  "interactive `metis` shell (D4 — the web/shared console "
+                  "never imports operator code)")
+        return True
+
+    def do_plugin(self, arg):
+        """plugin [SPEC|off] — show the attached port plugin, attach
+        one (pkg.mod:factory | file.py:factory; re-imports it, fresh
+        env), or detach it. Refused when the catalog's ports would be
+        left unbound. TERMINAL ONLY (D4)."""
+        if self._terminal_only("plugin"):
+            return
+        a = arg.strip()
+        if not a:
+            if self.plugin is None:
+                self._say("no plugin attached"
+                          + (" — the catalog declares weight ports; "
+                             "they are unbound" if self.doc.ports.weights
+                             else ""))
+                return
+            beat = getattr(self.plugin, "beat_stage", None)
+            self._say(f"plugin {self.plugin_spec} "
+                      f"({type(self.plugin).__name__}); ticks at "
+                      "quiescence" + (f" and on entry to stage {beat}"
+                                      if beat else "")
+                      + f"; {len(self._envs)} env snapshot(s) kept; "
+                      f"{len(self._overlays)} overlay(s) shipped")
+            return
+        pin = "" if a == "off" else a
+        old = (self._plugin_pin, self.plugin_spec)
+        self._plugin_pin = pin
+        if pin and pin == self.plugin_spec:
+            self.plugin_spec = ""          # same spec: re-import, fresh
+        try:
+            self._bind(self.doc, self.case)
+        except Exception as e:
+            self._plugin_pin = old[0]
+            self.plugin_spec = old[1]
+            findings = getattr(e, "findings", None) or [str(e)]
+            self._say("plugin not changed:\n  " + "\n  ".join(findings))
+            return
+        self._overlays = []
+        self._notch = None
+        for w in self._port_warns:
+            self._say(f"warning: {w}")
+        self._say(f"plugin {self.plugin_spec} attached — env snapshot "
+                  "taken; reset returns to it" if self.plugin is not None
+                  else "plugin detached")
+
+    def do_ports(self, arg):
+        """ports — the declared weight ports: bound or not, the
+        overlay depth, the declared read scope, the rules referencing
+        them"""
+        ports = self.doc.ports
+        if not ports.weights:
+            self._say("no weight ports declared")
+            return
+        bound = set(self.registry.weight_bindings()) if self.registry \
+            else set()
+        users = {}
+        for rule, ref in sorted(ports.weight_refs.items()):
+            users.setdefault(ref.factor, []).append(
+                ("~" if ref.complement else "") + rule)
+        out = []
+        for f, params in sorted(ports.weights.items()):
+            head = f + (f"({','.join(params)})" if params else "")
+            depth = len(self.registry._overlays.get(f, ())) \
+                if self.registry else 0
+            reads = ports.reads.get(f)
+            scope = ("{" + ", ".join(_read_text(r) for r in reads) + "}"
+                     if reads is not None else "(opaque — no reads)")
+            out.append(f"  {head:<18} {'bound' if f in bound else 'UNBOUND'}"
+                       + (f" +{depth} overlay(s)" if depth else "")
+                       + f"  reads {scope}  ·  @w by "
+                       + (" ".join(users.get(f, [])) or "(no rule)"))
+        self._say("\n".join(
+            [f"weight ports ({self.plugin_spec or 'no plugin'}):"] + out))
+
+    def do_port(self, arg):
+        """port F(ARGS) — evaluate one binding against the current
+        counts, through its declared scope (a debug probe; an
+        out-of-scope read raises, as in every tier)"""
+        from metis.lang.compiler import ground_reads
+        m = re.match(r"^\s*([\w-]+)\s*(?:\(([^()]*)\))?\s*$", arg)
+        if not m:
+            self._say("usage: port F(ARGS)")
+            return
+        f = m[1]
+        args = tuple(x.strip() for x in (m[2] or "").split(",")
+                     if x.strip())
+        if f not in self.doc.ports.weights:
+            self._say(f"no weight port {f!r} — 'ports' lists them")
+            return
+        binds = self.registry.weight_bindings() if self.registry else {}
+        if f not in binds:
+            self._say(f"port {f} is UNBOUND")
+            return
+        want = len(self.doc.ports.weights[f])
+        if len(args) != want:
+            self._say(f"port {f} takes {want} argument(s)")
+            return
+        counts = dict(self.counts)
+        scope = None
+        if f in self.doc.ports.reads:
+            from metis.kernel.factorize import ScopedCounts
+            scope = ground_reads(self.doc.ports, f, args,
+                                 self.doc.catalog.horn_db())
+            counts = ScopedCounts(frozenset(scope),
+                                  {a: n for a, n in self.counts.items()
+                                   if a in scope})
+        v = binds[f](args, counts)
+        self._say(f"{f}({','.join(args)}) = {v:g}   (scope: "
+                  + (" ".join(f"{a}={self.counts.get(a, 0)}"
+                              for a in scope) if scope else
+                     "{}" if scope is not None else "opaque")
+                  + (f"; plugin {self.plugin_spec}" if self.plugin else "")
+                  + ")")
+
+    def do_tick(self, arg):
+        """tick [N] — advance the env N beats by hand: each beat's
+        do-lines join the trace as one [env] row (exogenous input:
+        conditioning, out of the likelihood)"""
+        if self.plugin is None:
+            self._say("no plugin attached — nothing ticks")
+            return
+        try:
+            n = int(arg.strip() or "1")
+        except ValueError:
+            self._say("usage: tick [N]")
+            return
+        self._mark()
+        names = []
+        for _ in range(n):
+            name = self._tick()
+            if name is None:
+                names.append("(env episode over)")
+                break
+            names.append(name)
+        self._say("  ".join(names))
+        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
+
+    def do_notch(self, arg):
+        """notch [ALPHA] — fit the weight ports from this session's
+        SAMPLED steps (forced/do/env rows are conditioning, never
+        evidence): per (port, args, read-scope row), a Bernoulli on the
+        complement pair, prior = the mean value the base predicted,
+        posterior mean (alpha*p0 + s)/(alpha + n). Prints the row
+        sheet; `notch accept` (or `accept` with no candidate pending)
+        ships it as an OVERLAY on the registry — never a catalog edit;
+        `notch pop` drops the newest overlay."""
+        a = arg.strip()
+        if a == "accept":
+            return self._notch_accept()
+        if a == "pop":
+            if not self._overlays:
+                self._say("no notch overlay shipped")
+                return
+            for f in self._overlays.pop():
+                self.registry.pop_overlay(f)
+            self._rebuild_pricer()
+            self._say(f"overlay dropped ({len(self._overlays)} left)")
+            return
+        if self.pricer is None:
+            self._say("no weight ports to notch")
+            return
+        try:
+            alpha = float(a) if a else 10.0
+        except ValueError:
+            self._say("usage: notch [ALPHA] | notch accept | notch pop")
+            return
+        fit = notch_rows(self.fired_how, alpha, self.doc.ports)
+        if not fit["rows"]:
+            self._say("nothing to fit — no SAMPLED step chose a paired "
+                      "priced event this session (step/run first)"
+                      + "".join(f"\n  refused {r}" for r in fit["refused"]))
+            return
+        self._notch = fit
+        self._say(fit["sheet"].rstrip("\n"))
+        self._say(f"({fit['n']} sampled exposure(s); "
+                  + (f"refused: {'; '.join(fit['refused'])}; "
+                     if fit["refused"] else "")
+                  + "`notch accept` ships it as an overlay)")
+
+    def _notch_accept(self):
+        fit = self._notch
+        if fit is None:
+            self._say("no notch fit pending — `notch` first")
+            return
+        shipped = []
+        for f, table in sorted(fit["tables"].items()):
+            def ov(args, counts, _t=table, _f=f):
+                row = tuple(sorted((x, int(counts.get(x, 0) > 0))
+                                   for x in fit["scopes"][(_f, args)]))
+                return _t.get((tuple(args), row))
+            self.registry.overlay(f, ov)
+            shipped.append(f)
+        self._overlays.append(shipped)
+        self._notch = None
+        self._rebuild_pricer()
+        self._say(f"overlay shipped on {', '.join(shipped)} (depth "
+                  f"{len(self._overlays)}) — the catalog is unchanged "
+                  f"(key {self.key[:12]}…); `notch pop` drops it")
+
     def do_key(self, arg):
         """canonical program_key of the serving catalog"""
         self._say(self.key)
@@ -2146,7 +2660,13 @@ class Repl(LoopVerbs, Cmd):
         except KeyboardInterrupt:
             self._say("(interrupted)")
         except Exception as e:
-            self._say(f"error ({type(e).__name__}): {e}")
+            d = getattr(e, "diagnostic", None)
+            if d is not None:         # e.g. G5 reads-undeclared: listed
+                _note(self, d)        # by `findings`
+            self._say(f"error ({type(e).__name__}): {e}"
+                      + (" — a weight binding read outside its declared "
+                         "`reads` (G5); `ports` shows the scopes"
+                         if type(e).__name__ == "ScopeViolation" else ""))
         finally:
             self._tdepth = depth
             if logging:
@@ -2298,6 +2818,10 @@ class Repl(LoopVerbs, Cmd):
                 self._rebase()
                 self.case["init"][atom] = n
                 self._say(f"{atom}:{n}")
+            elif key == "plugin" and len(args) == 1:
+                self.do_plugin(args[0])
+                if self.plugin_spec == args[0]:
+                    self.case["plugin"] = args[0]
             elif key == "steps" and len(args) == 1:
                 self.case["steps"] = int(args[0])
                 self._say(f"steps {args[0]}")
@@ -2333,6 +2857,66 @@ class Repl(LoopVerbs, Cmd):
         return sorted({self.events_tbl[i][2].name
                        for i, _ in self._candidates()
                        if self.events_tbl[i][2].name.startswith(text)})
+
+
+def _read_text(r):
+    """A read pattern as written: `atom(args) if guard(args)`."""
+    def atom(a):
+        ts = ",".join(str(t.value) for t in a.terms)
+        return f"{a.pred}({ts})" if a.terms else a.pred
+    return atom(r.atom) + (" if " + ", ".join(atom(g) for g in r.guards)
+                           if r.guards else "")
+
+
+def notch_rows(fired_how, alpha=10.0, ports=None):
+    """The session notch (PLUGIN-PORTS.md integration point 6): the
+    PAIRED-site estimator of kernel.notch over the session's recorded
+    sampled steps — each `site` (factor, args, complement, scope row,
+    the port's value then) is one Bernoulli draw of its complement
+    pair: s counts the uncomplemented outcome. Prior p0 = the mean
+    value the BASE predicted at those exposures (an env-driven port
+    varies per step; the row sheet says what the base believed on
+    average), posterior mean (alpha*p0 + s) / (alpha + n). Data is
+    captured at sampling time, so undo/fork/back keep it honest.
+    Only PAIRED ports (referenced as both `@w f` and `@w ~f`) are fitted
+    — a categorical site needs kernel.notch's reference-relative
+    estimator; those are listed as refused, never fitted as Bernoulli."""
+    paired = None
+    if ports is not None:
+        pol = {}
+        for ref in ports.weight_refs.values():
+            pol.setdefault(ref.factor, set()).add(ref.complement)
+        paired = {f for f, cs in pol.items() if cs == {True, False}}
+    acc, refused = {}, set()
+    for h in fired_how:
+        site = h.get("site")
+        if h.get("how") != "sampled" or site is None:
+            continue
+        factor, args, compl, row, f = site
+        if paired is not None and factor not in paired:
+            refused.add(f"{factor}: not a complement pair (@w {factor} / "
+                        f"@w ~{factor}) — categorical sites need "
+                        "kernel.notch")
+            continue
+        n, s, fsum = acc.get((factor, args, row), (0, 0, 0.0))
+        acc[(factor, args, row)] = (n + 1, s + (0 if compl else 1),
+                                    fsum + f)
+    rows, tables, scopes, lines = {}, {}, {}, []
+    total = 0
+    for (factor, args, row), (n, s, fsum) in sorted(acc.items()):
+        p0 = fsum / n
+        post = (alpha * p0 + s) / (alpha + n)
+        rows[(factor, args, row)] = (p0, post, n, s)
+        tables.setdefault(factor, {})[(args, row)] = post
+        scopes[(factor, args)] = tuple(a for a, _ in row)
+        total += n
+        head = factor if not args else f"{factor}({','.join(args)})"
+        cond = " ".join(f"{a}={b}" for a, b in row) or "(no scope)"
+        lines.append(f"{head} | {cond} : {p0:.3f} -> {post:.3f}   "
+                     f"(n={n}, s={s}, a0={alpha:g})")
+    return {"rows": rows, "tables": tables, "scopes": scopes,
+            "sheet": "\n".join(lines) + "\n", "n": total,
+            "refused": sorted(refused)}
 
 
 def _history():
@@ -2443,15 +3027,15 @@ def main(argv=None):
     except ImportError:
         pass                        # line editing degrades gracefully
     try:
-        repl = Repl(args.llp, seed=args.seed)
+        # terminal=True: `transcript` writes the OPERATOR's own disk and
+        # `plugin`/#plugin imports operator code — the interactive
+        # terminal only (never the --json wire / web console: D4)
+        repl = Repl(args.llp, seed=args.seed, terminal=True)
     except Exception as e:
         findings = getattr(e, "findings", None) or [str(e)]
         print("cannot serve %s:\n  %s"
               % (args.llp, "\n  ".join(findings)), file=sys.stderr)
         return 1
-    repl.terminal = True    # `transcript` writes the OPERATOR's own disk
-    #                         — the interactive terminal only (never the
-    #                         --json wire / web console: D4)
     while True:
         try:
             repl.cmdloop()

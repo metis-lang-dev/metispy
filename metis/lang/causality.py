@@ -23,9 +23,11 @@ from typing import Dict, List
 from metis.kernel.nets import CausalGraph
 
 # spec 10: interventions are drawn as such. marks = {occurrence:
-# "forced" | "do" | "fork" | "<how>+fork"}; occurrence 0 = the base,
-# whose label names the state do's it is made of (base_do).
-_TAG = {"forced": "[forced]", "do": "[do]", "fork": "[fork]"}
+# "forced" | "do" | "exo" | "fork" | "<how>+fork"}; occurrence 0 = the
+# base, whose label names the state do's it is made of (base_do); exo =
+# a port plugin's tick (exogenous input, PLUGIN-PORTS.md).
+_TAG = {"forced": "[forced]", "do": "[do]", "exo": "[env]",
+        "fork": "[fork]"}
 
 
 def _tags(mark: str) -> str:

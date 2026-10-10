@@ -50,11 +50,14 @@ These beats were decided OUTSIDE the story's chances. [forced]: the
 player chose it — tell it as the choice that was made, never as luck,
 fate or the dice. [do]: an intervention, a what-if imposed on the
 story — tell it as a supposition ("suppose…", "had…", "in this
-telling…"). A [do +X]/[do -X] start state was set by hand: say so.
+telling…"). [env]: the world outside the rules moved (an arrival, a
+clock, a sensor) — tell it as something that happened TO the story,
+from outside, never as a character's doing. A [do +X]/[do -X] start
+state was set by hand: say so.
 Never present any of these as a character's spontaneous impulse
 unless a rule's doc says so."""
 
-_HOW = {"forced": "[forced]", "do": "[do]"}
+_HOW = {"forced": "[forced]", "do": "[do]", "exo": "[env]"}
 
 
 def material(rows, final_stage: str,
@@ -84,7 +87,7 @@ def material(rows, final_stage: str,
         beats += HONESTY.format(lines="\n".join(
             [f"[do {op}] — the start state, set by hand"
              for op in base_do]
-            + [f"[{(marks or [])[i]}] {rows[i][2].name}"
+            + [f"{_HOW[(marks or [])[i]]} {rows[i][2].name}"
                for i in range(len(rows))
                if (marks or [None] * len(rows))[i] in _HOW]))
     return {"beats": beats,

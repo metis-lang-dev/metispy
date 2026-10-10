@@ -254,7 +254,7 @@ def causal_graph(rows, init, init_stage: str,
     ep = 0                     # D5: a link closes episode ep, opens ep+1
     for k, (kind, stage, ev) in enumerate(rows, 1):
         nodes.append(CausalNode(num[k], ev.name, kind,
-                                stage if kind == "clause" else ev.pre,
+                                ev.pre if kind == "link" else stage,
                                 beat[k], repr(_event_key(kind, stage, ev)),
                                 None if kind == "link" else ep))
         ep += kind == "link"
