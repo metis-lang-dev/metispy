@@ -82,8 +82,12 @@ class LoopVerbs:
         except OSError as e:
             return {"ok": False, "error": f"cannot load {p}: "
                                           f"{e.strerror or e}"}
-        cat = resolve_includes(parse(src), p.parent)
-        self.loop.cand = pretty(cat)
+        parsed = parse(src)
+        cat = resolve_includes(parsed, p.parent)
+        # VERBATIM unless includes were spliced: the pretty-printer
+        # drops %% docs (the approval units) and '#' directives, and
+        # what is gated, accepted and exported must be what was written
+        self.loop.cand = src if cat == parsed else pretty(cat)
         out = {"ok": True, "file": str(p),
                "lines": self.loop.cand.count("\n") + 1}
         from metis.lang.directives import embedded_case
@@ -293,6 +297,13 @@ class LoopVerbs:
             return {"ok": False, "error": "nothing admitted — gate first"}
         out = {"ok": True}
         if self.loop.revision:
+            new_world, ports = rep.doc.catalog, rep.doc.ports
+        else:
+            new_world = (rep.merged if rep.merged is not None
+                         else rep.doc.catalog)
+            from metis.lang.compiler import merge_ports
+            ports = merge_ports(self.doc.ports, rep.doc.ports)
+        if self.loop.revision:
             try:
                 out["diffs"] = self._revision_diff(rep)
             except StateBudgetExceeded as e:
@@ -301,24 +312,27 @@ class LoopVerbs:
                 out["diffs"] = []
                 out["diff_note"] = (f"scene too large for the exact "
                                     f"before/after diff: {e}")
+        # re-serve FIRST: a refusal (an unbound weight port) must leave
+        # the loop state untouched — accept is atomic
+        try:
+            self._reserve(new_world, ports)
+        except Exception as e:
+            findings = getattr(e, "findings", None) or [str(e)]
+            return {"ok": False,
+                    "error": "accept refused — the world was not "
+                             "re-served: " + "; ".join(findings),
+                    "hint": "bind the ports first (`plugin SPEC`, or "
+                            "`metis --plugin SPEC`), then accept again"}
+        if self.loop.revision:
             out["dropped_packs"] = len(self.loop.accepted)
             self.loop.accepted = []
             self.loop.revision = False
             self.loop.base_src = self.loop.cand
-            new_world, ports = rep.doc.catalog, rep.doc.ports
-            adopt = True
-        else:
-            new_world = (rep.merged if rep.merged is not None
-                         else rep.doc.catalog)
-            from metis.lang.compiler import merge_ports
-            ports = merge_ports(self.doc.ports, rep.doc.ports)
-            self.loop.accepted.append(self.loop.cand)
-            adopt = False
-        self._reserve(new_world, ports)
-        if adopt:
             adopted = self._adopt_cand_case()
             if adopted:
                 out["adopted_directives"] = adopted
+        else:
+            self.loop.accepted.append(self.loop.cand)
         self.loop.cand, self.loop.report = "", None
         out["accepted_packs"] = len(self.loop.accepted)
         out["key"] = self.key

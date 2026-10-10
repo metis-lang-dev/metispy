@@ -455,3 +455,29 @@ def test_policy_index_space_matches_its_consumer(tmp_path):
         for seed in range(50):
             _, (_, kappa) = run_trace(prog, 2, seed, policy=pol)
             assert "crash" not in dict(kappa), (order, seed)
+
+
+def test_accept_with_unbound_ports_is_refused_atomically(tmp_path):
+    """A revision whose catalog declares ports nobody binds: accept is
+    refused with the fix in the message, and the loop state is exactly
+    as before (the old world serves, the candidate still pending)."""
+    p = tmp_path / "blank.llp"
+    p.write_text("catalog scratch 1.\nlayers (dyn).\nstages (z).\n"
+                 "stage z {\n}\n")
+    r = Repl(p, stdout=io.StringIO())
+    cand = SENSOR.replace("READS", "gclose").split("#plugin")[0]
+    r.cmd_text("a hazard")
+    r.cmd_llp(cand)
+    from metis.fw.registry import Registry
+    r.registry = Registry().weight("rss", 0.3)   # bound while gating
+    assert r.cmd_revise("")["ok"]
+    r.registry = None                           # ... gone at accept
+    key, base_src = r.key, r.loop.base_src
+    res = r.cmd_accept("")
+    assert not res["ok"] and "unbound weight port 'rss'" in res["error"]
+    assert "--plugin" in res["hint"]
+    assert r.key == key and r.loop.base_src == base_src
+    assert r.loop.revision and r.loop.cand == cand
+    # bound in-process: the same accept now goes through
+    r.registry = Registry().weight("rss", 0.3)
+    assert r.cmd_accept("")["ok"] and r.doc.catalog.name == "sensor"

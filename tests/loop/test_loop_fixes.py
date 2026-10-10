@@ -155,3 +155,21 @@ def test_accept_survives_an_over_budget_revision_diff(tmp_path):
     assert res["ok"] and res["diffs"] == []
     assert "too large" in res["diff_note"]
     assert r.doc.catalog.name == "toy"
+
+
+def test_load_keeps_the_candidate_verbatim(tmp_path):
+    """Tamarisk birth: `load FILE` stored pretty(parse(FILE)) — the %%
+    docs (approval units) and #init/#steps vanished, and accept/export
+    then carried the lossy text. Without includes the candidate is the
+    file, byte for byte."""
+    f = tmp_path / "cand.llp"
+    f.write_text(BORN)
+    r, _ = blank(tmp_path)
+    assert r.cmd_load(str(f))["ok"]
+    assert r.loop.cand == BORN
+    r.cmd_text("a toy")
+    assert r.cmd_revise("")["ok"] and r.cmd_accept("")["ok"]
+    out = r.cmd_export(str(tmp_path / "x"))
+    assert out["ok"]
+    base = (tmp_path / "x" / "base.llp").read_text()
+    assert '%% "it moves between rooms"' in base and "#init" in base
