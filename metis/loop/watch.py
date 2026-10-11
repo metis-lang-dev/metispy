@@ -60,7 +60,8 @@ class Watch:
         self.outbox: List[dict] = []    # intent results, flushed by the wire
         self.results: List[dict] = []   # every intent result (the ledger)
         self.intents = 0
-        self._reset_sigs = set()        # surprises a reset already met
+        self._reset_sigs = {}           # surprise -> (record, beat) of the
+                                        # reset that already met it
         self._explained = {}            # surprise -> the (card, move) that
                                         # explained it (adopted, not served)
         self._checkpoint()
@@ -272,12 +273,17 @@ class Watch:
         rec = self.shell.loop.records[r]
         sig = self._signature(rec)
         if sig in self._reset_sigs:
-            rec.setdefault("refusals", []).append("reset")
+            r0, b0 = self._reset_sigs[sig]
+            gap = " ".join(f"{a} {d:+d}" for a, d in
+                           sorted(rec["meta"]["diff"].items()))
+            text = (f"the same misreading ({gap}) recurred after a reset "
+                    f"of record {r0} at beat {b0}: not a one-off")
+            self._refuse_fact(rec, "reset", text)
             self._result(n, "reset", False,
                          "the same surprise came back after a reset — no "
-                         "more resets; escalate", record=r)
+                         "more resets; escalate", record=r, mined_text=text)
             return
-        self._reset_sigs.add(sig)
+        self._reset_sigs[sig] = (r, self.beat)
         self._close(r, "reset")
         self._result(n, "reset", True,
                      "the reading is set aside as noise; resumed on the "
@@ -309,7 +315,7 @@ class Watch:
             text = (f"{c0} ({m0}) explained this surprise before and it "
                     f"came back: the served world {rec['meta']['path']} "
                     f"lacks {c0}'s {m0}")
-            rec.setdefault("refusals", []).append("explain")
+            self._refuse_fact(rec, "explain", text)
             self._result(n, "explain", False,
                          f"the same surprise came back after {c0} "
                          f"explained it — the served world is not switched "
@@ -364,11 +370,23 @@ class Watch:
                          record=r)
             return
         rec = self.shell.loop.records[r]
-        rec["mined_text"] = text.strip()     # the revision loop's input
-        rec["escalated"] = {"beat": self.beat}
+        # the revision loop's input: the runtime's facts FIRST (a refusal
+        # is authoritative; a model's sentence cannot be trusted to carry
+        # it), then the model's description
+        facts = rec.get("facts", [])
+        rec["mined_text"] = "\n".join(facts + [text.strip()])
+        rec["escalated"] = {"beat": self.beat, "facts": len(facts)}
         self._result(n, "escalate", True,
                      "stamped on the record for the revision loop; still "
                      "observe-only", record=r, chars=len(text.strip()))
+
+    @staticmethod
+    def _refuse_fact(rec, verb, text):
+        """A bound's refusal is a fact about the surprise: kept on the
+        record, ahead of whatever an escalate describes."""
+        rec.setdefault("refusals", []).append(verb)
+        if text not in rec.setdefault("facts", []):
+            rec["facts"].append(text)
 
     def _close(self, r, by, **extra):
         rec = self.shell.loop.records[r]
@@ -522,6 +540,7 @@ def ledger(shell, watch: Optional[Watch] = None) -> dict:
                      "resolution": r.get("resolution"),
                      "refusals": r.get("refusals", []),
                      "escalated": r.get("escalated"),
+                     "facts": r.get("facts", []),
                      "mined_text": r.get("mined_text")})
     out = {"records": recs,
            "results": list(watch.results) if watch is not None else []}

@@ -314,7 +314,15 @@ def test_reset_is_bounded_on_the_same_surprise():
     assert first["status"] == "admitted" and first["record"] == 0
     assert second["status"] == "refused" and second["record"] == 1
     assert "no more resets; escalate" in second["reason"]
+    assert second["mined_text"] == (
+        "the same misreading (pot_onion +1) recurred after a reset of "
+        "record 0 at beat 1: not a one-off")
     assert w.observe_only and w.open == 1
+    # the model calls it a one-off; the record keeps the fact ahead
+    dispatch(sh, "intent", "escalate 1 the reading was noise, a one-off")
+    w.outbox.clear()
+    assert sh.loop.records[1]["mined_text"].splitlines() == [
+        second["mined_text"], "the reading was noise, a one-off"]
     # a reset of an already-closed record is refused, with why
     dispatch(sh, "intent", "reset 0")
     late, = w.outbox
@@ -366,10 +374,12 @@ def test_a_recurring_explained_surprise_is_explained_then_escalated():
     assert "activate is phase 2" in second["reason"]
     assert second["card"] == "kitchen_shared"
     assert "kitchen_shared (partner_load)" in second["mined_text"]
-    dispatch(sh, "intent", "escalate 1 " + second["mined_text"])
+    dispatch(sh, "intent", "escalate 1 the pot has one onion too many")
     esc, = w.outbox
     assert esc["status"] == "admitted"
-    assert sh.loop.records[1]["mined_text"] == second["mined_text"]
+    # the runtime's fact first, the model's description after
+    assert sh.loop.records[1]["mined_text"] == (
+        second["mined_text"] + "\nthe pot has one onion too many")
     assert w.observe_only and w.open == 1
 
 
@@ -384,7 +394,10 @@ def test_ledger_is_the_runtime_account_of_the_run():
     assert r0["resolution"]["by"] == "explain" and r0["since"] == ["load"]
     assert r0["diff"] == {"pot_space": -1, "pot_onion": 1}
     assert r1["refusals"] == ["explain"] and r1["resolution"] is None
-    assert r1["mined_text"] == "the partner loads every order"
+    assert r1["mined_text"].splitlines()[-1] == \
+        "the partner loads every order"
+    assert r1["mined_text"].startswith("kitchen_shared (partner_load)")
+    assert r1["facts"] == [r1["mined_text"].splitlines()[0]]
     assert [x["status"] for x in led["results"]] == [
         "admitted", "refused", "admitted"]
     assert led["watch"]["surprise"] == 1
