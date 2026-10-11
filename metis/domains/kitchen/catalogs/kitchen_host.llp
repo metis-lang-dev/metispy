@@ -1,0 +1,14 @@
+% The Overcooked kitchen served under a scripted host (runtime-wire
+% step 1, metis-agent docs/INTEGRATION.md): orders arrive as the env's
+% tick (+pot_space 3), the env executes every fired intent and reads
+% the kitchen back through observe(). Serve it on the wire with
+%   metis --json --host metis.domains.kitchen.host:make kitchen_host.llp
+% (make_transient / make_wrong_domain / make_novel inject a surprise).
+catalog kitchen 1.
+provenance text "a one-cook kitchen: onions into the pot, cook, plate and serve each order" "2026-10-11".
+include "kitchen.llp".
+#init hand_free 1
+#query served
+#query cooking
+#query held_soup
+#steps 12

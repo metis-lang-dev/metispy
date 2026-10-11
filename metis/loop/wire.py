@@ -334,12 +334,59 @@ def _op_causes(shell, arg):
 def _op_ctx(shell, arg):
     """CONSOLE §4: the aggregate context as data (the band and the
     sections render from it) + its text block; `ctx tokens|rules|
-    trace` narrows the text to one section, the data stays whole."""
+    trace` narrows the text to one section, the data stays whole.
+    `ctx --mirror` (G-E): the tree mirror instead — one line per
+    domain: stage, status, surprise state, #query marginals."""
     a = str(arg).strip()
+    if a == "--mirror":
+        from .watch import mirror, mirror_line
+        rows = mirror(shell, shell.__dict__.get("_watch"))
+        lines = [mirror_line(r) for r in rows]
+        return {"ok": True, "mirror": rows, "lines": lines,
+                "text": "\n".join(lines)}
     if a and a not in shell._CTX_SECTIONS:
-        return {"ok": False, "error": "usage: ctx [tokens|rules|trace]"}
+        return {"ok": False,
+                "error": "usage: ctx [tokens|rules|trace|--mirror]"}
     return {"ok": True, **shell.ctx(),
             "text": "\n".join(shell.ctx_lines(a))}
+
+
+def _op_watch(shell, arg):
+    """G-D: `watch [beats=N] [every=SECONDS]` — the runtime drives the
+    served world under its host and the wire pushes event/quiescence/
+    surprise lines, unpolled, in order (serve_json interleaves them
+    with the answers to other ops). `watch off` stops it, `watch
+    status` reads it. One watch per session; a new `watch` replaces a
+    finished one."""
+    from .watch import Watch
+    a = str(arg).strip()
+    w = shell.__dict__.get("_watch")
+    if a in ("off", "status"):
+        if w is None:
+            return {"ok": True, "watch": "none"}
+        if a == "off":
+            w.done = True
+        return {"ok": True, "watch": "off" if w.done else "on",
+                **w.state()}
+    opts = {}
+    for tok in a.split():
+        k, eq, v = tok.partition("=")
+        if not eq or k not in ("beats", "every"):
+            return {"ok": False, "error": "usage: watch [beats=N] "
+                    "[every=SECONDS] | watch off | watch status"}
+        try:
+            opts[k] = int(v) if k == "beats" else float(v)
+        except ValueError:
+            return {"ok": False, "error": f"watch: bad {k}={v}"}
+    if w is not None and not w.done:
+        return {"ok": False, "error": "watch: already on (watch off "
+                "first)", **w.state()}
+    w = Watch(shell, beats=opts.get("beats"))
+    w.every = opts.get("every", 0.5)
+    return {"ok": True, "watch": "on", "path": w.path,
+            "host": shell.plugin_spec or None, "every": w.every,
+            "beats": w.beats, "stage": shell.stage,
+            "counts": dict(sorted(shell.counts.items()))}
 
 
 def _op_help(shell, arg):
@@ -351,7 +398,8 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "steps": _op_steps, "seed": _op_seed, "llm": _op_llm,
              "narrate": _op_narrate, "help": _op_help,
              "findings": _op_findings, "graph": _op_graph,
-             "why": _op_why, "causes": _op_causes, "ctx": _op_ctx}
+             "why": _op_why, "causes": _op_causes, "ctx": _op_ctx,
+             "watch": _op_watch}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:
@@ -493,20 +541,66 @@ def intent_posting(shell, line: str, session=None) -> dict:
 
 def serve_json(shell, stdin=None, stdout=None) -> int:
     """The JSON-lines wire: {op, arg} per line in, one JSON result
-    per line out (`metis --json FILE`)."""
+    per line out (`metis --json FILE`). While a `watch` runs, its
+    signal lines are written between the answers, one driver step
+    every `every` seconds (0 = as fast as the world moves); at end of
+    input a running watch is driven to its end before the wire
+    closes."""
+    import queue
+    import threading
+    import time
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
-    for line in stdin:
-        line = line.strip()
-        if not line:
+    lines: "queue.Queue" = queue.Queue()
+    eof = object()
+
+    def reader():
+        for line in stdin:
+            lines.put(line)
+        lines.put(eof)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    def emit(obj):
+        print(json.dumps(obj), file=stdout, flush=True)
+
+    closed, due = False, 0.0
+    while True:
+        w = shell.__dict__.get("_watch")
+        active = w is not None and not w.done
+        if closed and not active:
+            return 0
+        item = None
+        if not closed:
+            wait = None if not active else max(0.0, due - time.monotonic())
+            try:
+                item = lines.get(timeout=wait) if wait != 0.0 \
+                    else lines.get_nowait()
+            except queue.Empty:
+                item = None
+        if item is eof:
+            closed = True
             continue
-        try:
-            req = json.loads(line)
-        except ValueError as e:
-            print(json.dumps({"ok": False, "error": str(e)}),
-                  file=stdout, flush=True)
+        if item is not None:
+            line = item.strip()
+            if not line:
+                continue
+            try:
+                req = json.loads(line)
+            except ValueError as e:
+                emit({"ok": False, "error": str(e)})
+                continue
+            emit(dispatch(shell, req.get("op", ""), req.get("arg", "")))
             continue
-        print(json.dumps(dispatch(shell, req.get("op", ""),
-                                  req.get("arg", ""))),
-              file=stdout, flush=True)
-    return 0
+        if active:
+            if closed and w.every:
+                time.sleep(max(0.0, due - time.monotonic()))
+            try:
+                sigs = w.step()
+            except Exception as e:       # the wire outlives its driver
+                w.done = True
+                sigs = [{"signal": "error", "path": w.path,
+                         "error": f"{type(e).__name__}: {e}"}]
+            for sig in sigs:
+                emit(sig)
+            due = time.monotonic() + w.every

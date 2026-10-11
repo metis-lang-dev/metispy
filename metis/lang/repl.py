@@ -236,12 +236,18 @@ class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
     def __init__(self, path, seed=1, terminal=False, plugin=None,
-                 registry=None, **kw):
+                 registry=None, host=False, **kw):
         super().__init__(**kw)
         # the interactive TERMINAL shell (main() passes True): the only
         # session that writes the operator's disk (transcript) or
         # imports operator code (plugin) — D4
         self.terminal = terminal
+        # host=True: a RUNTIME process the operator spawned with
+        # `metis --json --host SPEC` (runtime-wire, INTEGRATION.md):
+        # the constructor's plugin — named on the operator's argv,
+        # never by the file or the wire — attaches off the terminal;
+        # the file's #plugin and the `plugin` verb stay refused (D4)
+        self._host = bool(host and plugin)
         # port plugins (PLUGIN-PORTS.md): the plugin, its spec, the
         # registry it bound, the session's pricer (None = no ports);
         # _envs[j] = the env snapshot after j fired rows (kept beside
@@ -380,7 +386,8 @@ class Repl(LoopVerbs, Cmd):
         if spec is None:
             spec = case.get("plugin") or config.get("ports", "plugin", "")
         spec = (spec or "").strip()
-        if spec and not self.terminal:
+        if spec and not self.terminal and not (
+                self._host and spec == (self._plugin_pin or "").strip()):
             warns.append(f"plugin {spec} not attached — plugins are "
                          "terminal-only (D4: this session never imports "
                          "operator code)")
@@ -2997,6 +3004,12 @@ def main(argv=None):
                          "folder) — binds the catalog's weight ports and "
                          "drives its env; overrides the file's #plugin. "
                          "Terminal only (D4)")
+    ap.add_argument("--host", metavar="SPEC",
+                    help="with --json: the runtime process's host plugin "
+                         "(pkg.mod:factory or file.py:factory) — the env "
+                         "the served world runs against, driven by the "
+                         "wire's `watch` op (runtime-wire). Named on the "
+                         "command line only; the wire never names one")
     ap.add_argument("--json", action="store_true",
                     help="the JSON-lines wrapper wire: one {op, arg} "
                          "per stdin line, one JSON result per line "
@@ -3019,10 +3032,15 @@ def main(argv=None):
         print("--plugin is terminal-only: the --json wire never imports "
               "operator code (D4)", file=sys.stderr)
         return 2
+    if args.host and not args.json:
+        print("--host is the --json runtime's host plugin; the terminal "
+              "shell attaches with --plugin", file=sys.stderr)
+        return 2
     if args.json:
         from metis.loop.wire import serve_json
         try:
-            shell = Repl(args.llp, seed=args.seed)
+            shell = Repl(args.llp, seed=args.seed, plugin=args.host,
+                         host=bool(args.host))
         except Exception as e:
             import json as _json
             findings = getattr(e, "findings", None) or [str(e)]
