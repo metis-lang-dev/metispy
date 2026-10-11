@@ -58,6 +58,7 @@ class Watch:
         self.open: Optional[int] = None  # the open surprise's record id
         self._said: Dict[str, int] = {}  # the last reading diff signalled
         self.outbox: List[dict] = []    # intent results, flushed by the wire
+        self.results: List[dict] = []   # every intent result (the ledger)
         self.intents = 0
         self._reset_sigs = set()        # surprises a reset already met
         self._explained = {}            # surprise -> the (card, move) that
@@ -232,10 +233,12 @@ class Watch:
         return {"ok": True, "intent": n}
 
     def _result(self, n, verb, admitted, reason, **payload):
-        self.outbox.append(self._signal(
+        sig = self._signal(
             "result", intent=n, verb=verb,
             status="admitted" if admitted else "refused", reason=reason,
-            **payload))
+            **payload)
+        self.outbox.append(sig)
+        self.results.append(sig)
 
     def _open_record(self, n, verb, arg):
         try:
@@ -500,3 +503,28 @@ def _witness(prog, init, since, move, observed):
                                       for a, m in observed.items()):
             return path
     return None
+
+
+def ledger(shell, watch: Optional[Watch] = None) -> dict:
+    """The runtime's own account of a watched run (the step-3 report's
+    ledger): every surprise record as logged — kind, the gap, what
+    fired before it, its resolution, refusals and mined_text (the env
+    blob elided to its hash) — and every intent result in order."""
+    recs = []
+    for i, r in enumerate(shell.loop.records):
+        m = r.get("meta", {})
+        recs.append({"record": i, "kind": r.get("kind"),
+                     "likelihood": r.get("likelihood"),
+                     "path": m.get("path"), "beat": m.get("beat"),
+                     "since": m.get("since"), "diff": m.get("diff"),
+                     "steps": r.get("steps"),
+                     "env": (r.get("env") or {}).get("hash"),
+                     "resolution": r.get("resolution"),
+                     "refusals": r.get("refusals", []),
+                     "escalated": r.get("escalated"),
+                     "mined_text": r.get("mined_text")})
+    out = {"records": recs,
+           "results": list(watch.results) if watch is not None else []}
+    if watch is not None:
+        out["watch"] = watch.state()
+    return out

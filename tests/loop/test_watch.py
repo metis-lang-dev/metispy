@@ -365,3 +365,21 @@ def test_a_recurring_explained_surprise_is_explained_then_escalated():
     assert esc["status"] == "admitted"
     assert sh.loop.records[1]["mined_text"] == second["mined_text"]
     assert w.observe_only and w.open == 1
+
+
+def test_ledger_is_the_runtime_account_of_the_run():
+    sh, w, sigs = _triage("make_partner", [
+        "explain {r} kitchen_shared partner_load",
+        "explain {r} kitchen_shared partner_load"])
+    dispatch(sh, "intent", "escalate 1 the partner loads every order")
+    led = dispatch(sh, "ledger", "")
+    assert led["ok"] and [r["record"] for r in led["records"]] == [0, 1]
+    r0, r1 = led["records"]
+    assert r0["resolution"]["by"] == "explain" and r0["since"] == ["load"]
+    assert r0["diff"] == {"pot_space": -1, "pot_onion": 1}
+    assert r1["refusals"] == ["explain"] and r1["resolution"] is None
+    assert r1["mined_text"] == "the partner loads every order"
+    assert [x["status"] for x in led["results"]] == [
+        "admitted", "refused", "admitted"]
+    assert led["watch"]["surprise"] == 1
+    json.dumps(led)

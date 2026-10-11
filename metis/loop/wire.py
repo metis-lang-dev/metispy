@@ -409,6 +409,13 @@ def _op_cards(shell, arg):
             "text": "\n".join(card_line(c) for c in cs)}
 
 
+def _op_ledger(shell, arg):
+    """The runtime ledger of the watched run: records (gap, resolution,
+    refusals, mined_text) and every intent result, in order."""
+    from .watch import ledger
+    return {"ok": True, **ledger(shell, shell.__dict__.get("_watch"))}
+
+
 def _op_help(shell, arg):
     return {"ok": True, "ops": sorted(INTENT_VERBS)}
 
@@ -420,7 +427,7 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "findings": _op_findings, "graph": _op_graph,
              "why": _op_why, "causes": _op_causes, "ctx": _op_ctx,
              "watch": _op_watch, "intent": _op_intent,
-             "cards": _op_cards}
+             "cards": _op_cards, "ledger": _op_ledger}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:
