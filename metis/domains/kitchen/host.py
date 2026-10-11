@@ -252,3 +252,10 @@ def make_hour(case):
     `watch every=0.5 operator=N` so an escalated surprise is resumed by
     the operator and the rest of the schedule can fire."""
     return KitchenHost(case, HOUR_PLAN, orders_every(7), beats=None)
+
+
+def make_episode(case):
+    """One eval episode (runtime-wire step 5): METIS_KITCHEN_EPISODE is
+    its JSON line, from `python -m metis.domains.kitchen.eval episodes`."""
+    from .eval import make_episode as _make
+    return _make(case)
