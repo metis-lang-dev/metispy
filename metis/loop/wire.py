@@ -389,6 +389,26 @@ def _op_watch(shell, arg):
             "counts": dict(sorted(shell.counts.items()))}
 
 
+def _op_intent(shell, arg):
+    """runtime-wire step 3: one intent down — `explain RECORD CARD MOVE`,
+    `reset RECORD`, `escalate RECORD TEXT` — consumed exactly once: the
+    answer is its id, the outcome returns as a `result` signal."""
+    w = shell.__dict__.get("_watch")
+    if w is None:
+        return {"ok": False, "error": "intent: no watch — intents act on "
+                "the records a watch opened"}
+    return w.intent(arg)
+
+
+def _op_cards(shell, arg):
+    """The catalog cards offerable at the served node (provenance text,
+    extends/sibling, the moves each adds, binding slots)."""
+    from .cards import card_line, cards
+    cs = cards(shell)
+    return {"ok": True, "cards": cs,
+            "text": "\n".join(card_line(c) for c in cs)}
+
+
 def _op_help(shell, arg):
     return {"ok": True, "ops": sorted(INTENT_VERBS)}
 
@@ -399,7 +419,8 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "narrate": _op_narrate, "help": _op_help,
              "findings": _op_findings, "graph": _op_graph,
              "why": _op_why, "causes": _op_causes, "ctx": _op_ctx,
-             "watch": _op_watch}
+             "watch": _op_watch, "intent": _op_intent,
+             "cards": _op_cards}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:
@@ -564,6 +585,11 @@ def serve_json(shell, stdin=None, stdout=None) -> int:
     def emit(obj):
         print(json.dumps(obj), file=stdout, flush=True)
 
+    def flush():                    # intent results, in seq order
+        w = shell.__dict__.get("_watch")
+        while w is not None and w.outbox:
+            emit(w.outbox.pop(0))
+
     closed, due = False, 0.0
     while True:
         w = shell.__dict__.get("_watch")
@@ -591,6 +617,7 @@ def serve_json(shell, stdin=None, stdout=None) -> int:
                 emit({"ok": False, "error": str(e)})
                 continue
             emit(dispatch(shell, req.get("op", ""), req.get("arg", "")))
+            flush()
             continue
         if active:
             if closed and w.every:
@@ -603,4 +630,5 @@ def serve_json(shell, stdin=None, stdout=None) -> int:
                          "error": f"{type(e).__name__}: {e}"}]
             for sig in sigs:
                 emit(sig)
+            flush()
             due = time.monotonic() + w.every

@@ -14,7 +14,8 @@ process serves `catalogs/kitchen_host.llp` against.
   reads it after every fired event and on every observe-only beat):
   the env's kitchen over the full vocabulary.
 
-Three injectable surprises, one factory each (`--host
+Three injectable surprises, one factory each (plus make_transient_twice,
+the misread recurring on the 3rd load — the bounded-reset fixture) (`--host
 metis.domains.kitchen.host:make_<kind>`):
 
 - transient: right after the 2nd `load` the sensor misreads the pot
@@ -46,10 +47,14 @@ EFFECTS = {
     "fetch_dish": ({"hand_free": 1}, {"held_dish": 1}),
     "plate": ({"held_dish": 1, "cooking": 1}, {"held_soup": 1}),
     "serve": ({"held_soup": 1}, {"hand_free": 1, "served": 1}),
+    # kitchen_shared's move, when that card is served: the simulated
+    # second cook obliges
+    "partner_load": ({"pot_space": 1}, {"pot_onion": 1}),
 }
 
-INJECT = {"transient": ("load", 2), "wrong_domain": ("load", 1),
-          "novel": ("plate", 1)}
+# kind -> (intent, the occurrences of it the env botches)
+INJECT = {"transient": ("load", (2,)), "wrong_domain": ("load", (1,)),
+          "novel": ("plate", (1,)), "transient_twice": ("load", (2, 3))}
 
 
 def _weights(reg):
@@ -117,8 +122,10 @@ class KitchenHost:
             self.kitchen[a] = self.kitchen.get(a, 0) + n
         self.kitchen = {a: n for a, n in self.kitchen.items() if n > 0}
         self.seen[name] = self.seen.get(name, 0) + 1
-        if self.inject and INJECT[self.inject] == (name, self.seen[name]):
-            self._surprise()
+        if self.inject:
+            what, when = INJECT[self.inject]
+            if name == what and self.seen[name] in when:
+                self._surprise()
 
     def observe(self, counts) -> Dict[str, int]:
         reading = {a: self.kitchen.get(a, 0) for a in ATOMS}
@@ -139,7 +146,7 @@ class KitchenHost:
 
     def _surprise(self):
         k = self.kitchen
-        if self.inject == "transient":
+        if self.inject in ("transient", "transient_twice"):
             self.glitch = True
         elif self.inject == "wrong_domain" and k.get("pot_space", 0) > 0:
             k["pot_space"] -= 1
@@ -167,3 +174,9 @@ def make_wrong_domain(case):
 
 def make_novel(case):
     return KitchenHost(case, inject="novel")
+
+
+def make_transient_twice(case):
+    """The misread comes back on the 3rd load: a 'transient' that
+    recurs after a reset (the bounded-reset fixture)."""
+    return KitchenHost(case, inject="transient_twice")

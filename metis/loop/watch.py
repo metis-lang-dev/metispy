@@ -57,6 +57,9 @@ class Watch:
         self.done = False
         self.open: Optional[int] = None  # the open surprise's record id
         self._said: Dict[str, int] = {}  # the last reading diff signalled
+        self.outbox: List[dict] = []    # intent results, flushed by the wire
+        self.intents = 0
+        self._reset_sigs = set()        # surprises a reset already met
         self._checkpoint()
         shell.__dict__["_watch"] = self  # the mirror reads its state
 
@@ -136,6 +139,7 @@ class Watch:
             self._checkpoint()
             return []
         rec = self._record(reading)
+        rec["meta"]["diff"] = diff
         if rec["kind"] == "unmodeled":
             sh.loop.records.append(rec)
             self.open = len(sh.loop.records) - 1
@@ -192,6 +196,195 @@ class Watch:
             out["consume"] = dict(ev.consume)
             out["produce"] = dict(ev.produce)
         return self._signal("event", **out)
+
+    # -- intents down (step 3): explain / reset / escalate -------------------
+    #
+    # Each intent is consumed exactly once: the op answers with its id and
+    # the outcome returns as ONE `result` signal (admitted or refused, with
+    # the reason). The horizon rule: the served catalog is scored at exactly
+    # k over its own fired path (the record's verdict — it may not explain
+    # by inventing its own moves); a candidate card gets k+1 — the fired
+    # path plus ONE named move of the card, in any interleaving — the same
+    # allowance for every candidate.
+
+    VERBS = ("explain", "reset", "escalate")
+
+    def intent(self, line: str) -> dict:
+        self.intents += 1
+        n = self.intents
+        verb, _, rest = str(line).strip().partition(" ")
+        if verb not in self.VERBS:
+            self._result(n, verb or "?", False,
+                         f"unknown intent '{verb}' — one of "
+                         + ", ".join(self.VERBS))
+        else:
+            try:
+                getattr(self, "_intent_" + verb)(n, rest.strip())
+            except Exception as e:      # refused, never a crash
+                self._result(n, verb, False, f"{type(e).__name__}: {e}")
+        return {"ok": True, "intent": n}
+
+    def _result(self, n, verb, admitted, reason, **payload):
+        self.outbox.append(self._signal(
+            "result", intent=n, verb=verb,
+            status="admitted" if admitted else "refused", reason=reason,
+            **payload))
+
+    def _open_record(self, n, verb, arg):
+        try:
+            r = int(arg)
+        except ValueError:
+            self._result(n, verb, False, f"want a record id, got '{arg}'")
+            return None
+        recs = self.shell.loop.records
+        if not 0 <= r < len(recs):
+            self._result(n, verb, False, f"no record {r}")
+            return None
+        if r != self.open:
+            res = recs[r].get("resolution")
+            self._result(n, verb, False, f"record {r} is not open"
+                         + (f" ({res['by']} at beat {res['beat']})"
+                            if res else ""), record=r)
+            return None
+        return r
+
+    @staticmethod
+    def _signature(rec):
+        """The same surprise: the same domain, the same gap between the
+        reading and the model — whatever fired just before it."""
+        m = rec["meta"]
+        return (m["path"], tuple(sorted(m["diff"].items())))
+
+    def _intent_reset(self, n, arg):
+        r = self._open_record(n, "reset", arg)
+        if r is None:
+            return
+        rec = self.shell.loop.records[r]
+        sig = self._signature(rec)
+        if sig in self._reset_sigs:
+            rec.setdefault("refusals", []).append("reset")
+            self._result(n, "reset", False,
+                         "the same surprise came back after a reset — no "
+                         "more resets; escalate", record=r)
+            return
+        self._reset_sigs.add(sig)
+        self._close(r, "reset")
+        self._result(n, "reset", True,
+                     "the reading is set aside as noise; resumed on the "
+                     "model — the next reading checks it", record=r)
+
+    def _intent_explain(self, n, arg):
+        parts = arg.split()
+        if len(parts) not in (2, 3):
+            self._result(n, "explain", False,
+                         "usage: explain RECORD CARD [MOVE]")
+            return
+        r = self._open_record(n, "explain", parts[0])
+        if r is None:
+            return
+        from .cards import card_program, cards
+        rec = self.shell.loop.records[r]
+        card = next((c for c in cards(self.shell)
+                     if c["name"] == parts[1]), None)
+        if card is None:
+            self._result(n, "explain", False,
+                         f"no card '{parts[1]}' at this node", record=r)
+            return
+        move = parts[2] if len(parts) == 3 else None
+        since = list(rec["meta"]["since"])
+        k = rec["steps"]
+        if card["relation"] == "served":
+            self._result(n, "explain", False,
+                         f"the served world is scored at exactly k={k} over "
+                         "its own fired path: the record's own verdict "
+                         "(unmodeled) — it may not invent its own moves",
+                         record=r, card=card["name"],
+                         horizon={"served": k})
+            return
+        if move is None or move not in card["moves"]:
+            offered = ", ".join(card["moves"]) or "none"
+            self._result(n, "explain", False,
+                         f"a proposal names one move of {card['name']} "
+                         f"beside the fired path ({offered})",
+                         record=r, card=card["name"])
+            return
+        cat, prog = card_program(self.shell, card, rec["init"],
+                                 rec["meta"]["stage"])
+        path = _witness(prog, rec["init"], since, move, rec["observed"])
+        if path is None:
+            self._result(n, "explain", False,
+                         f"{card['name']} with {move} does not reach the "
+                         f"reading from the record over its fired path "
+                         f"{since} (k+1={k + 1})", record=r,
+                         card=card["name"], move=move,
+                         horizon={"served": k, "card": k + 1})
+            return
+        self._serve_card(cat, card)
+        adopted = self._adopt()
+        self._close(r, "explain", card=card["name"], move=move)
+        self._result(n, "explain", True,
+                     f"{card['name']} explains the reading: {' '.join(path)}"
+                     f" — now serving {card['name']}, resumed",
+                     record=r, card=card["name"], move=move, path=path,
+                     horizon={"served": k, "card": k + 1},
+                     adopted=adopted)
+
+    def _intent_escalate(self, n, arg):
+        rid, _, text = arg.partition(" ")
+        r = self._open_record(n, "escalate", rid)
+        if r is None:
+            return
+        if not text.strip():
+            self._result(n, "escalate", False,
+                         "escalate needs the description (mined_text)",
+                         record=r)
+            return
+        rec = self.shell.loop.records[r]
+        rec["mined_text"] = text.strip()     # the revision loop's input
+        rec["escalated"] = {"beat": self.beat}
+        self._result(n, "escalate", True,
+                     "stamped on the record for the revision loop; still "
+                     "observe-only", record=r, chars=len(text.strip()))
+
+    def _close(self, r, by, **extra):
+        rec = self.shell.loop.records[r]
+        rec["resolution"] = {"by": by, "beat": self.beat, **extra}
+        self.open = None
+        self._said = {}
+        self._checkpoint()
+
+    def _adopt(self) -> Dict[str, int]:
+        """The session takes the host's reading as its state — as ONE
+        exogenous row (an edit no event explains, first-class in log/
+        why like a tick's input). -> the edit, {} when none."""
+        from metis.fw.plugin import exo_event
+        sh = self.shell
+        observe = getattr(sh.plugin, "observe", None)
+        if observe is None:
+            return {}
+        reading = dict(observe(dict(sh.counts)))
+        diff = {a: n - sh.counts.get(a, 0) for a, n in reading.items()
+                if n != sh.counts.get(a, 0)}
+        if not diff:
+            return {}
+        lines = [f"{'+' if d > 0 else '-'}{a} {abs(d)}"
+                 for a, d in sorted(diff.items())]
+        ev, after = exo_event(lines, sh.counts)
+        sh.counts = after
+        sh.fired_how.append({"how": "exo", "p": None})
+        sh.fired.append(ev.name)
+        sh.fired_rows.append(("exo", sh.stage, ev))
+        sh._env_push()
+        self.quiet = False
+        return diff
+
+    def _serve_card(self, cat, card):
+        from metis.lang import load_llp
+        sh = self.shell
+        doc = (load_llp(card["file"]) if card["relation"] == "sibling"
+               else None)
+        sh._reserve(cat, ports=doc.ports if doc is not None else None)
+        self.path = cat.name
 
     def state(self) -> dict:
         return {"seq": self.seq, "beat": self.beat, "done": self.done,
@@ -253,3 +446,41 @@ def mirror_line(row: dict) -> str:
                     for q, p in row["beliefs"].items())
     return (f"{row['path']}  stage {row['stage']}  {row['status']}  "
             f"{sur}" + (f"  {bel} @{row['horizon']}" if bel else ""))
+
+
+def _apply(counts: Dict[str, int], ev) -> Optional[Dict[str, int]]:
+    """Fire `ev` on counts, or None if it is not enabled there."""
+    need = dict(ev.consume)
+    for a, m in ev.persist.items():
+        need[a] = max(need.get(a, 0), m)
+    if any(counts.get(a, 0) < m for a, m in need.items()):
+        return None
+    out = dict(counts)
+    for a, m in ev.consume.items():
+        out[a] -= m
+    for a, m in ev.produce.items():
+        out[a] = out.get(a, 0) + m
+    return {a: m for a, m in out.items() if m > 0}
+
+
+def _witness(prog, init, since, move, observed):
+    """The horizon rule's test: some interleaving of the fired path with
+    ONE `move` (k+1 events), each enabled where it stands in the card's
+    world, reaches the reading on every observed atom. -> the path, or
+    None."""
+    events = {}
+    for _, _, ev in prog.events():
+        events.setdefault(ev.name, ev)
+    if move not in events or any(n not in events for n in since):
+        return None
+    for i in range(len(since) + 1):
+        path = since[:i] + [move] + since[i:]
+        counts = dict(init)
+        for name in path:
+            counts = _apply(counts, events[name])
+            if counts is None:
+                break
+        if counts is not None and all(counts.get(a, 0) == m
+                                      for a, m in observed.items()):
+            return path
+    return None

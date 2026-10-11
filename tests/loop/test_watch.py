@@ -207,3 +207,133 @@ def test_host_is_argv_only_and_d4_holds(tmp_path, monkeypatch, capsys):
     lines = capsys.readouterr().out.splitlines()
     assert json.loads(lines[0])["host"] == HOST + "make"
     assert json.loads(lines[-1])["episode_over"]
+
+
+# -- step 3, the metis-line half: cards and intents under the horizon rule
+
+def _triage(factory, intents, per_surprise=None):
+    """Run a watch; on each surprise, send the next intent(s) (formatted
+    with the record id) and collect their result signals in order."""
+    sh = _shell(factory)
+    w = Watch(sh, beats=30)
+    sigs, pending = [], list(intents)
+    while not w.done:
+        for s in w.step():
+            sigs.append(s)
+            if s["signal"] == "surprise":
+                for _ in range(per_surprise or 1):
+                    if pending:
+                        ack = dispatch(sh, "intent",
+                                       pending.pop(0).format(r=s["record"]))
+                        assert ack["ok"] and ack["intent"] >= 1
+                sigs += w.outbox
+                w.outbox.clear()
+    return sh, w, sigs
+
+
+def _results(sigs):
+    return [s for s in sigs if s["signal"] == "result"]
+
+
+def test_cards_are_generated_from_provenance_and_include():
+    res = dispatch(_shell(), "cards", "")
+    by = {c["name"]: c for c in res["cards"]}
+    assert list(by) == ["kitchen", "kitchen_shared"]   # served first
+    assert by["kitchen"]["relation"] == "served"
+    shared = by["kitchen_shared"]
+    assert shared["relation"] == "sibling"
+    assert shared["text"].startswith("a shared kitchen")
+    assert shared["moves"] == ["partner_load"] and shared["slots"] == []
+    assert res["text"].splitlines()[1] == (
+        'kitchen_shared [sibling] "a shared kitchen: a second cook also '
+        'loads onions into the pot" moves partner_load')
+
+
+def test_transient_is_reset_and_the_kitchen_resumes():
+    sh, w, sigs = _triage("make_transient", ["reset {r}"])
+    res, = _results(sigs)
+    assert res["verb"] == "reset" and res["status"] == "admitted"
+    assert sh.loop.records[0]["resolution"]["by"] == "reset"
+    assert not w.observe_only and sh.counts.get("served") == 2
+
+
+def test_wrong_domain_is_explained_by_the_sibling_card_only():
+    sh, w, sigs = _triage(
+        "make_wrong_domain",
+        ["explain {r} kitchen", "explain {r} kitchen_shared load",
+         "explain {r} kitchen_shared partner_load"], per_surprise=3)
+    served, own, sib = _results(sigs)
+    # the served world at exactly k: its own verdict, no invented moves
+    assert served["status"] == "refused"
+    assert "exactly k=1" in served["reason"]
+    # a card names one of ITS moves, not the cook's own
+    assert own["status"] == "refused" and "partner_load" in own["reason"]
+    assert sib["status"] == "admitted"
+    assert sib["path"] == ["partner_load", "load"]
+    assert sib["horizon"] == {"served": 1, "card": 2}
+    assert sib["adopted"] == {"pot_space": -1, "pot_onion": 1}
+    # applied and resumed: the sibling is served, the session runs on
+    assert w.path == "kitchen_shared" and not w.observe_only
+    assert mirror(sh, w)[0]["path"] == "kitchen_shared"
+    assert sh.loop.records[0]["resolution"] == {
+        "by": "explain", "beat": sib["beat"], "card": "kitchen_shared",
+        "move": "partner_load"}
+    assert sh.counts.get("served", 0) >= 1
+    assert not [s for s in sigs if s["signal"] == "surprise"][1:]
+
+
+def test_novel_is_explained_by_nothing_and_escalated():
+    text = "the soup left the dish after plating and nothing was served"
+    sh, w, sigs = _triage(
+        "make_novel", ["explain {r} kitchen_shared partner_load",
+                       "escalate {r}", "escalate {r} " + text],
+        per_surprise=3)
+    no, empty, esc = _results(sigs)
+    assert no["status"] == "refused" and "does not reach" in no["reason"]
+    assert no["horizon"] == {"served": 1, "card": 2}
+    assert empty["status"] == "refused"
+    assert esc["status"] == "admitted"
+    rec = sh.loop.records[0]
+    assert rec["mined_text"] == text           # the revision loop's input
+    assert w.observe_only and "resolution" not in rec   # still frozen
+
+
+def test_reset_is_bounded_on_the_same_surprise():
+    sh, w, sigs = _triage("make_transient_twice",
+                          ["reset {r}", "reset {r}"])
+    first, second = _results(sigs)
+    assert first["status"] == "admitted" and first["record"] == 0
+    assert second["status"] == "refused" and second["record"] == 1
+    assert "no more resets; escalate" in second["reason"]
+    assert w.observe_only and w.open == 1
+    # a reset of an already-closed record is refused, with why
+    dispatch(sh, "intent", "reset 0")
+    late, = w.outbox
+    assert late["status"] == "refused"
+    assert late["reason"].startswith("record 0 is not open (reset at beat")
+
+
+def test_intents_are_exactly_once_and_refusals_are_signals():
+    sh = _shell("make_novel")
+    assert not dispatch(sh, "intent", "reset 0")["ok"]   # no watch yet
+    w = Watch(sh, beats=30)
+    acks = [dispatch(sh, "intent", x)["intent"]
+            for x in ("activate kitchen_shared", "reset", "reset 7")]
+    assert acks == [1, 2, 3]
+    outs = w.outbox
+    assert [o["intent"] for o in outs] == [1, 2, 3]
+    assert all(o["status"] == "refused" for o in outs)
+    assert "unknown intent 'activate'" in outs[0]["reason"]
+    assert [o["seq"] for o in outs] == sorted(o["seq"] for o in outs)
+
+
+def test_the_wire_streams_the_result_right_after_the_ack():
+    sh = _shell()
+    out = io.StringIO()
+    serve_json(sh, io.StringIO(
+        '{"op": "watch", "arg": "every=0 beats=2"}\n'
+        '{"op": "intent", "arg": "reset 0"}\n'), out)
+    lines = [json.loads(x) for x in out.getvalue().splitlines()]
+    assert lines[1] == {"ok": True, "intent": 1}
+    assert lines[2]["signal"] == "result" and lines[2]["intent"] == 1
+    assert lines[2]["reason"] == "no record 0" and lines[2]["seq"] == 1
