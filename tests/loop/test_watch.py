@@ -272,9 +272,12 @@ def test_wrong_domain_is_explained_by_the_sibling_card_only():
     assert sib["path"] == ["partner_load", "load"]
     assert sib["horizon"] == {"served": 1, "card": 2}
     assert sib["adopted"] == {"pot_space": -1, "pot_onion": 1}
-    # applied and resumed: the sibling is served, the session runs on
-    assert w.path == "kitchen_shared" and not w.observe_only
-    assert mirror(sh, w)[0]["path"] == "kitchen_shared"
+    # adopted and resumed — one exo row named for the card's move; the
+    # served world is NOT switched (activate is case 2, phase 2)
+    assert w.path == "kitchen" and not w.observe_only
+    assert mirror(sh, w)[0]["path"] == "kitchen"
+    assert sh.doc.catalog.name == "kitchen"
+    assert "kitchen_shared:partner_load do +pot_onion -pot_space" in sh.fired
     assert sh.loop.records[0]["resolution"] == {
         "by": "explain", "beat": sib["beat"], "card": "kitchen_shared",
         "move": "partner_load"}
@@ -337,3 +340,28 @@ def test_the_wire_streams_the_result_right_after_the_ack():
     assert lines[1] == {"ok": True, "intent": 1}
     assert lines[2]["signal"] == "result" and lines[2]["intent"] == 1
     assert lines[2]["reason"] == "no record 0" and lines[2]["seq"] == 1
+
+
+def test_a_recurring_explained_surprise_is_explained_then_escalated():
+    """The partner loads on every order. The first reading is explained
+    by kitchen_shared and adopted, but the served world stays the
+    one-cook kitchen, so the next order surprises the same way: the
+    second explain is refused with a mined_text naming the card, and the
+    escalate carries it — explained, then escalated (the case for G-G),
+    not a triage miss."""
+    sh, w, sigs = _triage("make_partner", [
+        "explain {r} kitchen_shared partner_load",
+        "explain {r} kitchen_shared partner_load"])
+    sur = [s for s in sigs if s["signal"] == "surprise"]
+    assert len(sur) == 2 and sur[0]["diff"] == sur[1]["diff"]
+    first, second = _results(sigs)
+    assert first["status"] == "admitted"
+    assert second["status"] == "refused" and second["record"] == 1
+    assert "activate is phase 2" in second["reason"]
+    assert second["card"] == "kitchen_shared"
+    assert "kitchen_shared (partner_load)" in second["mined_text"]
+    dispatch(sh, "intent", "escalate 1 " + second["mined_text"])
+    esc, = w.outbox
+    assert esc["status"] == "admitted"
+    assert sh.loop.records[1]["mined_text"] == second["mined_text"]
+    assert w.observe_only and w.open == 1

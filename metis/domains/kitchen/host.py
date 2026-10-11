@@ -54,7 +54,8 @@ EFFECTS = {
 
 # kind -> (intent, the occurrences of it the env botches)
 INJECT = {"transient": ("load", (2,)), "wrong_domain": ("load", (1,)),
-          "novel": ("plate", (1,)), "transient_twice": ("load", (2, 3))}
+          "novel": ("plate", (1,)), "transient_twice": ("load", (2, 3)),
+          "partner": ("load", (1, 3))}
 
 
 def _weights(reg):
@@ -148,7 +149,8 @@ class KitchenHost:
         k = self.kitchen
         if self.inject in ("transient", "transient_twice"):
             self.glitch = True
-        elif self.inject == "wrong_domain" and k.get("pot_space", 0) > 0:
+        elif self.inject in ("wrong_domain", "partner") \
+                and k.get("pot_space", 0) > 0:
             k["pot_space"] -= 1
             k["pot_onion"] = k.get("pot_onion", 0) + 1
         elif self.inject == "novel" and k.get("held_soup", 0) > 0:
@@ -180,3 +182,10 @@ def make_transient_twice(case):
     """The misread comes back on the 3rd load: a 'transient' that
     recurs after a reset (the bounded-reset fixture)."""
     return KitchenHost(case, inject="transient_twice")
+
+
+def make_partner(case):
+    """The second cook loads on EVERY order (after this cook's 1st load
+    of each): an explained wrong-domain reading recurs while the served
+    world stays the one-cook kitchen (explained, then escalated)."""
+    return KitchenHost(case, inject="partner")

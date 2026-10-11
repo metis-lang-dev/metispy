@@ -60,6 +60,8 @@ class Watch:
         self.outbox: List[dict] = []    # intent results, flushed by the wire
         self.intents = 0
         self._reset_sigs = set()        # surprises a reset already met
+        self._explained = {}            # surprise -> the (card, move) that
+                                        # explained it (adopted, not served)
         self._checkpoint()
         shell.__dict__["_watch"] = self  # the mirror reads its state
 
@@ -205,7 +207,12 @@ class Watch:
     # k over its own fired path (the record's verdict — it may not explain
     # by inventing its own moves); a candidate card gets k+1 — the fired
     # path plus ONE named move of the card, in any interleaving — the same
-    # allowance for every candidate.
+    # allowance for every candidate. An admitted explain ADOPTS the reading
+    # (one exo row named for the card's move) and resumes; it does not
+    # switch the served world — activate is case 2, phase 2 (G-A/G-G). A
+    # recurring card move therefore surprises again, and a second explain
+    # of the same surprise is refused with a mined_text naming the card:
+    # explained, then escalated — the argument for G-G.
 
     VERBS = ("explain", "reset", "escalate")
 
@@ -293,6 +300,19 @@ class Watch:
         move = parts[2] if len(parts) == 3 else None
         since = list(rec["meta"]["since"])
         k = rec["steps"]
+        before = self._explained.get(self._signature(rec))
+        if before is not None:
+            c0, m0 = before
+            text = (f"{c0} ({m0}) explained this surprise before and it "
+                    f"came back: the served world {rec['meta']['path']} "
+                    f"lacks {c0}'s {m0}")
+            rec.setdefault("refusals", []).append("explain")
+            self._result(n, "explain", False,
+                         f"the same surprise came back after {c0} "
+                         f"explained it — the served world is not switched "
+                         f"(activate is phase 2); escalate", record=r,
+                         card=c0, move=m0, mined_text=text)
+            return
         if card["relation"] == "served":
             self._result(n, "explain", False,
                          f"the served world is scored at exactly k={k} over "
@@ -308,7 +328,7 @@ class Watch:
                          f"beside the fired path ({offered})",
                          record=r, card=card["name"])
             return
-        cat, prog = card_program(self.shell, card, rec["init"],
+        _, prog = card_program(self.shell, card, rec["init"],
                                  rec["meta"]["stage"])
         path = _witness(prog, rec["init"], since, move, rec["observed"])
         if path is None:
@@ -319,12 +339,13 @@ class Watch:
                          card=card["name"], move=move,
                          horizon={"served": k, "card": k + 1})
             return
-        self._serve_card(cat, card)
-        adopted = self._adopt()
+        self._explained[self._signature(rec)] = (card["name"], move)
+        adopted = self._adopt(by=f"{card['name']}:{move}")
         self._close(r, "explain", card=card["name"], move=move)
         self._result(n, "explain", True,
                      f"{card['name']} explains the reading: {' '.join(path)}"
-                     f" — now serving {card['name']}, resumed",
+                     f" — the reading is adopted, the served world stays "
+                     f"{self.path} (activate is phase 2), resumed",
                      record=r, card=card["name"], move=move, path=path,
                      horizon={"served": k, "card": k + 1},
                      adopted=adopted)
@@ -353,10 +374,11 @@ class Watch:
         self._said = {}
         self._checkpoint()
 
-    def _adopt(self) -> Dict[str, int]:
+    def _adopt(self, by: str = "") -> Dict[str, int]:
         """The session takes the host's reading as its state — as ONE
-        exogenous row (an edit no event explains, first-class in log/
-        why like a tick's input). -> the edit, {} when none."""
+        exogenous row (an edit the served world's events do not
+        explain, first-class in log/why like a tick's input), named for
+        the card move that explains it. -> the edit, {} when none."""
         from metis.fw.plugin import exo_event
         sh = self.shell
         observe = getattr(sh.plugin, "observe", None)
@@ -370,6 +392,8 @@ class Watch:
         lines = [f"{'+' if d > 0 else '-'}{a} {abs(d)}"
                  for a, d in sorted(diff.items())]
         ev, after = exo_event(lines, sh.counts)
+        if by:
+            ev.name = f"{by} {ev.name}"
         sh.counts = after
         sh.fired_how.append({"how": "exo", "p": None})
         sh.fired.append(ev.name)
@@ -377,14 +401,6 @@ class Watch:
         sh._env_push()
         self.quiet = False
         return diff
-
-    def _serve_card(self, cat, card):
-        from metis.lang import load_llp
-        sh = self.shell
-        doc = (load_llp(card["file"]) if card["relation"] == "sibling"
-               else None)
-        sh._reserve(cat, ports=doc.ports if doc is not None else None)
-        self.path = cat.name
 
     def state(self) -> dict:
         return {"seq": self.seq, "beat": self.beat, "done": self.done,
