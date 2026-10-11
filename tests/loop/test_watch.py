@@ -559,3 +559,17 @@ def test_partner_at_order_scope_is_explained_then_noticed():
                     dispatch(sh, "intent", f"explain {s['record']} "
                              "kitchen_shared partner_load")
         assert [r["status"] for r in w.results] == want
+
+
+def test_mirror_carries_progress_and_the_last_event():
+    """RACK v2 finding 1: an ask sees the mirror line only, so the line
+    says the #query atoms' counts now and the last thing the domain did."""
+    sh = _shell()
+    w = Watch(sh, beats=30)
+    while not w.done:
+        w.step()
+    row, = mirror(sh, w)
+    assert row["now"] == {"served": 2, "cooking": 0, "held_soup": 0}
+    assert row["last"] == "fetch_onion"          # not the env's tick
+    line = mirror_line(row)
+    assert line.endswith("now served=2 cooking=0 held_soup=0  last fetch_onion")

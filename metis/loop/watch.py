@@ -577,9 +577,15 @@ def mirror(shell, watch: Optional[Watch] = None) -> List[dict]:
                     if dict(kappa).get(q, 0) > 0), 4)
         except StateBudgetExceeded:
             beliefs = {q: None for q in queries}
+    # RACK v2 (finding 1): progress — the #query atoms' counts NOW — and
+    # the last thing the domain did (its last fired event, not an env row)
+    last = next((ev.name for kind, _, ev in reversed(shell.fired_rows)
+                 if kind != "exo"), None)
     return [{"path": shell.doc.catalog.name, "stage": shell.stage,
              "status": status, "surprise": surprise, "horizon": steps,
-             "beliefs": beliefs}]
+             "beliefs": beliefs,
+             "now": {q: shell.counts.get(q, 0) for q in queries},
+             "last": last}]
 
 
 def mirror_line(row: dict) -> str:
@@ -588,8 +594,11 @@ def mirror_line(row: dict) -> str:
            if s else "surprise none")
     bel = "  ".join(f"P[{q}]={'?' if p is None else f'{p:.2f}'}"
                     for q, p in row["beliefs"].items())
+    now = " ".join(f"{q}={n}" for q, n in row.get("now", {}).items())
     return (f"{row['path']}  stage {row['stage']}  {row['status']}  "
-            f"{sur}" + (f"  {bel} @{row['horizon']}" if bel else ""))
+            f"{sur}" + (f"  {bel} @{row['horizon']}" if bel else "")
+            + (f"  now {now}" if now else "")
+            + (f"  last {row['last']}" if row.get("last") else ""))
 
 
 def _apply(counts: Dict[str, int], ev) -> Optional[Dict[str, int]]:
