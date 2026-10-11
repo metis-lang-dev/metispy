@@ -17,7 +17,7 @@ harness serves an episode with
         metis --json --host metis.domains.kitchen.host:make_episode \\
         metis/domains/kitchen/catalogs/kitchen_host.llp
     {"op":"watch","arg":"every=0.5 beats=<beats> operator=<operator>
-                         [arm=blind]"}
+                         scope=<scope> [arm=blind]"}
     ... triage ...
     {"op":"ledger"}
 
@@ -54,6 +54,11 @@ EXPECTED = {"clean": [], "transient": ["reset"],
             "wrong_domain": ["explain"], "novel": ["escalate"],
             "partner": ["explain", "escalate"],
             "transient_twice": ["reset", "escalate"]}
+# same_surprise_scope=order (the default): each partner onion lands on a
+# new order — the bound forgot the first explain — so both are explained
+EXPECTED_BY_SCOPE = {"order": {**EXPECTED,
+                               "partner": ["explain", "explain"]},
+                     "session": EXPECTED}
 RESUMES = ("reset", "explain")
 OPERATOR = 20     # beats until the operator resumes an escalation (the
                   # harness runs `watch ... operator=<episode operator>`)
@@ -61,7 +66,8 @@ OPERATOR = 20     # beats until the operator resumes an escalation (the
 
 # -- episodes -----------------------------------------------------------------
 
-def episodes(seed: int, n: int, kinds=("clean",) + KINDS) -> List[dict]:
+def episodes(seed: int, n: int, kinds=("clean",) + KINDS,
+             scope: str = "order") -> List[dict]:
     """n seeded episodes, kinds balanced (round robin, shuffled): 3-4
     orders 40-70 beats apart; the surprise arms after a random order
     and fires on the first or second matching intent from there."""
@@ -82,7 +88,7 @@ def episodes(seed: int, n: int, kinds=("clean",) + KINDS) -> List[dict]:
             plan = [entry(kind, after=at, skip=skip)]
         out.append({"id": f"s{seed}-{i:03d}", "kind": kind, "seed": seed,
                     "orders": orders, "beats": b + 40, "plan": plan,
-                    "operator": OPERATOR})
+                    "operator": OPERATOR, "scope": scope})
     return out
 
 
@@ -121,7 +127,8 @@ def run_episode(ep: dict, policy: str = "oracle", blind: bool = False,
     os.environ["METIS_KITCHEN_EPISODE"] = json.dumps(ep)
     sh = Repl(SCENE, plugin=HOST, host=True, stdout=io.StringIO())
     w = Watch(sh, beats=ep["beats"], blind=blind,
-              operator=ep.get("operator"))
+              operator=ep.get("operator"),
+              scope=ep.get("scope", "order"))
     w.every = 0.5
     pick = POLICIES[policy]
     wakes = 0
@@ -160,11 +167,12 @@ def _verdict(rec: dict) -> str:
     return "none"
 
 
-def score_episode(ep_kind: str, line: dict) -> dict:
+def score_episode(ep_kind: str, line: dict, scope: str = "order") -> dict:
     led = line["ledger"]
     recs = led.get("records", [])
     got = [_verdict(r) for r in recs]
-    want = list(EXPECTED[ep_kind])
+    expected = EXPECTED_BY_SCOPE[scope]
+    want = list(expected[ep_kind])
     # a surprise the triage resumed wrongly comes back (or the world
     # stays wrong): extra records are judged as further repeats
     want += ["escalate"] * max(0, len(got) - len(want))
@@ -179,7 +187,7 @@ def score_episode(ep_kind: str, line: dict) -> dict:
     w = led.get("watch", {})
     hours = (w.get("beat", 0) + final.get("fired", 0)) * 0.5 / 3600
     return {"kind": ep_kind, "correct": got == want[:len(got)]
-            and len(got) >= len(EXPECTED[ep_kind]),
+            and len(got) >= len(expected[ep_kind]),
             "got": got, "want": want, "false_resumes": false_resumes,
             "diverged": bool(final.get("diff")) and w.get("surprise") is None,
             "illegal": illegal, "refused": refused,
@@ -189,12 +197,13 @@ def score_episode(ep_kind: str, line: dict) -> dict:
             "tokens": (line.get("harness") or {}).get("tokens", 0)}
 
 
-def always_escalate(kinds: List[str]) -> Dict[str, float]:
+def always_escalate(kinds: List[str], scope: str = "order") \
+        -> Dict[str, float]:
     """The baseline: escalate every surprise — right only where escalate
     is the whole answer (novel; clean has nothing to triage)."""
     by = defaultdict(list)
     for k in kinds:
-        by[k].append(EXPECTED[k] in ([], ["escalate"]))
+        by[k].append(EXPECTED_BY_SCOPE[scope][k] in ([], ["escalate"]))
     return {k: sum(v) / len(v) for k, v in by.items()}
 
 
@@ -206,7 +215,9 @@ def score(lines: List[dict], eps: Dict[str, dict],
         h = harness.get((ln["episode"], ln["arm"]))
         if h:
             ln = {**ln, "harness": h}
-        arms[ln["arm"]].append(score_episode(eps[ln["episode"]]["kind"], ln))
+        ep = eps[ln["episode"]]
+        arms[ln["arm"]].append(score_episode(ep["kind"], ln,
+                                             ep.get("scope", "order")))
     table = {}
     for arm, rows in arms.items():
         by = defaultdict(list)
@@ -230,7 +241,9 @@ def score(lines: List[dict], eps: Dict[str, dict],
             "misses": [(r["kind"], r["got"], r["want"]) for r in rows
                        if not r["correct"]]}
     kinds = [e["kind"] for e in eps.values()]
-    base = always_escalate(kinds)
+    scopes = {e.get("scope", "order") for e in eps.values()}
+    base = always_escalate(kinds, scopes.pop() if len(scopes) == 1
+                           else "order")
     sur = [k for k in kinds if k != "clean"]
     base_all = sum(base[k] for k in sur) / max(1, len(sur))
     out = {"arms": table, "always_escalate": {"triage": base,
@@ -291,6 +304,8 @@ def main(argv=None):
     e.add_argument("--seed", type=int, default=1)
     e.add_argument("--n", type=int, default=30)
     e.add_argument("-o", "--out")
+    e.add_argument("--scope", choices=("order", "session"),
+                   default="order")
     r = sub.add_parser("run")
     r.add_argument("episodes")
     r.add_argument("--policy", choices=sorted(POLICIES), default="oracle")
@@ -304,7 +319,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.cmd == "episodes":
         text = "".join(json.dumps(x) + "\n"
-                       for x in episodes(a.seed, a.n))
+                       for x in episodes(a.seed, a.n, scope=a.scope))
         if a.out:
             Path(a.out).write_text(text)
         else:

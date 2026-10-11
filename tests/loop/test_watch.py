@@ -211,11 +211,11 @@ def test_host_is_argv_only_and_d4_holds(tmp_path, monkeypatch, capsys):
 
 # -- step 3, the metis-line half: cards and intents under the horizon rule
 
-def _triage(factory, intents, per_surprise=None):
+def _triage(factory, intents, per_surprise=None, scope="order"):
     """Run a watch; on each surprise, send the next intent(s) (formatted
     with the record id) and collect their result signals in order."""
     sh = _shell(factory)
-    w = Watch(sh, beats=30)
+    w = Watch(sh, beats=30, scope=scope)
     sigs, pending = [], list(intents)
     while not w.done:
         for s in w.step():
@@ -365,7 +365,7 @@ def test_a_recurring_explained_surprise_is_explained_then_escalated():
     not a triage miss."""
     sh, w, sigs = _triage("make_partner", [
         "explain {r} kitchen_shared partner_load",
-        "explain {r} kitchen_shared partner_load"])
+        "explain {r} kitchen_shared partner_load"], scope="session")
     sur = [s for s in sigs if s["signal"] == "surprise"]
     assert len(sur) == 2 and sur[0]["diff"] == sur[1]["diff"]
     first, second = _results(sigs)
@@ -386,7 +386,7 @@ def test_a_recurring_explained_surprise_is_explained_then_escalated():
 def test_ledger_is_the_runtime_account_of_the_run():
     sh, w, sigs = _triage("make_partner", [
         "explain {r} kitchen_shared partner_load",
-        "explain {r} kitchen_shared partner_load"])
+        "explain {r} kitchen_shared partner_load"], scope="session")
     dispatch(sh, "intent", "escalate 1 the partner loads every order")
     led = dispatch(sh, "ledger", "")
     assert led["ok"] and [r["record"] for r in led["records"]] == [0, 1]
@@ -417,32 +417,63 @@ def _oracle(sh, w, s):
         dispatch(sh, "intent", f"escalate {r} y")
 
 
-def test_the_hour_fires_its_whole_schedule_with_an_operator():
+def _hour(scope):
     sh = _shell("make_hour")
-    w = Watch(sh, beats=7200, operator=120)
-    sigs = []
+    w = Watch(sh, beats=7200, operator=120, scope=scope)
+    sigs, calls = [], []
     while not w.done:
         for s in w.step():
             sigs.append(s)
             if s["signal"] == "surprise":
                 _oracle(sh, w, s)
+                calls.append((s["record"], [o["verb"] + ":" + o["status"]
+                                            for o in w.outbox]))
                 w.outbox.clear()
-    led = ledger(sh, w)
+    return sh, w, sigs, calls, ledger(sh, w)
+
+
+def test_the_hour_fires_its_whole_schedule_with_an_operator():
+    sh, w, sigs, calls, led = _hour("order")
     kinds = [e["kind"] for e in led["host"]["injected"]]
     assert kinds == ["transient", "wrong_domain", "novel", "partner",
                      "partner", "partner", "transient_twice",
                      "transient_twice"]
     assert len(led["host"]["schedule"]["orders"]) == 26
     assert sum(1 for s in sigs if s["signal"] == "surprise") == 8
-    ops = [s for s in sigs if s.get("kind") == "operator"]
-    assert len(ops) == 6                  # every escalation resumed
     assert led["final"]["diff"] == {}
     assert led["final"]["served_model"] == led["final"]["served_host"] >= 20
-    # 'same surprise' has no time window: the 15-min wrong_domain's
-    # explanation makes every later partner reading a repeat, and the
-    # 5-min transient's reset bounds the 45-min one
+    assert led["watch"]["scope"] == "order"
+
+
+def test_same_surprise_is_scoped_to_the_order_in_the_hour():
+    """same_surprise_scope=order (the default): the bounds forget a
+    resolved surprise once its order is served. 35 min: each partner
+    onion lands on a NEW order, so every explain is admitted again (the
+    15-min wrong_domain no longer blocks it). 45 min: the twice-misread
+    falls inside ONE order, so the 5-min transient no longer bounds the
+    first reset, and the recurrence within the order is refused and
+    escalates."""
+    sh, w, sigs, calls, led = _hour("order")
+    by = [r["resolution"]["by"] for r in led["records"]]
+    assert by == ["reset", "explain", "operator",          # 5, 15, 25 min
+                  "explain", "explain", "explain",          # 35 min
+                  "reset", "operator"]                      # 45 min
+    assert calls[3:6] == [(3, ["explain:admitted"]),
+                          (4, ["explain:admitted"]),
+                          (5, ["explain:admitted"])]
+    assert calls[6:] == [(6, ["reset:admitted"]),
+                         (7, ["reset:refused", "escalate:admitted"])]
+    assert led["records"][7]["facts"][0].startswith(
+        "the same misreading (pot_onion +1) recurred after a reset of "
+        "record 6")
+
+
+def test_session_scope_remembers_for_the_whole_watch():
+    sh, w, sigs, calls, led = _hour("session")
     by = [r["resolution"]["by"] for r in led["records"]]
     assert by == ["reset", "explain"] + ["operator"] * 6
+    assert calls[3] == (3, ["explain:refused", "escalate:admitted"])
+    assert calls[6] == (6, ["reset:refused", "escalate:admitted"])
 
 
 def test_operator_resumes_only_an_escalated_surprise():

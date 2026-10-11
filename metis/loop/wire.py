@@ -371,10 +371,17 @@ def _op_watch(shell, arg):
     opts = {}
     for tok in a.split():
         k, eq, v = tok.partition("=")
-        if not eq or k not in ("beats", "every", "arm", "operator"):
+        if not eq or k not in ("beats", "every", "arm", "operator",
+                                "scope"):
             return {"ok": False, "error": "usage: watch [beats=N] "
                     "[every=SECONDS] [arm=checked|blind] [operator=BEATS]"
-                    " | watch off | watch status"}
+                    " [scope=order|session] | watch off | watch status"}
+        if k == "scope":
+            if v not in ("order", "session"):
+                return {"ok": False, "error": f"watch: scope={v} — order "
+                        "(default) or session"}
+            opts[k] = v
+            continue
         if k == "arm":
             if v not in ("checked", "blind"):
                 return {"ok": False, "error": f"watch: arm={v} — "
@@ -390,13 +397,14 @@ def _op_watch(shell, arg):
                 "first)", **w.state()}
     w = Watch(shell, beats=opts.get("beats"),
               blind=opts.get("arm") == "blind",
-              operator=opts.get("operator"))
+              operator=opts.get("operator"),
+              scope=opts.get("scope", "order"))
     w.every = opts.get("every", 0.5)
     sched = getattr(shell.plugin, "schedule", None)
     return {"ok": True, "watch": "on", "path": w.path,
             "host": shell.plugin_spec or None, "every": w.every,
             "beats": w.beats, "arm": "blind" if w.blind else "checked",
-            "operator": w.operator,
+            "operator": w.operator, "scope": w.scope,
             "schedule": sched() if callable(sched) else None,
             "stage": shell.stage,
             "counts": dict(sorted(shell.counts.items()))}

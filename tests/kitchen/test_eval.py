@@ -25,8 +25,9 @@ def test_oracle_is_perfect_and_always_escalate_is_the_baseline():
     c, e = res["arms"]["C"], res["arms"]["E"]
     assert c["triage_all"] == 1.0 and c["false_resumes"] == 0
     assert c["illegal"] == 0 and c["diverged"] == 0
-    # the bounds refused the repeats (partner, transient_twice: 2 each)
-    assert c["refused"] == 4
+    # the bound refused the repeat within one order (transient_twice,
+    # 2 episodes); partner's onions land on two orders: both explained
+    assert c["refused"] == 2
     # the in-process always-escalate run IS the analytic baseline
     assert e["triage"] == always_escalate([x["kind"] for x in EPS])
     assert res["always_escalate"]["triage_all"] == e["triage_all"] == 0.2
@@ -40,9 +41,10 @@ def test_blind_arm_counts_illegal_actions_and_false_resumes():
     c = [run_episode(e, "oracle", arm="B") for e in EPS]
     res = score(a + c, BY)
     A = res["arms"]["A"]
-    # without the runtime the repeats are resumed again: illegal, false
-    assert A["illegal"] == A["false_resumes"] == 4
-    assert A["triage"]["partner"] == A["triage"]["transient_twice"] == 0
+    # without the runtime the repeat is resumed again: illegal, false
+    assert A["illegal"] == A["false_resumes"] == 2
+    assert A["triage"]["transient_twice"] == 0
+    assert A["triage"]["partner"] == 1.0
     assert "B<=A (premise fails): False" in res["stop_conditions"]
 
 
@@ -52,3 +54,12 @@ def test_harness_wakes_and_tokens_override_the_runtime_count():
                                                    "tokens": 900}})
     c = res["arms"]["C"]
     assert c["tokens_per_hour"] > 0 and c["wakes_per_hour"] > 0
+
+
+def test_session_scope_episodes_keep_the_step3_expectations():
+    eps = episodes(3, 12, scope="session")
+    by = {e["id"]: e for e in eps}
+    c = [run_episode(e, "oracle", arm="C") for e in eps]
+    res = score(c, by)
+    assert res["arms"]["C"]["triage_all"] == 1.0
+    assert res["arms"]["C"]["refused"] == 4

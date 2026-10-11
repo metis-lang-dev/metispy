@@ -47,12 +47,21 @@ class Watch:
 
     def __init__(self, shell, beats: Optional[int] = None,
                  rare_ratio: float = 0.05, blind: bool = False,
-                 operator: Optional[int] = None):
+                 operator: Optional[int] = None, scope: str = "order"):
         self.shell = shell
         self.path = shell.doc.catalog.name
         self.beats = beats              # env beats before stopping
         self.rare_ratio = rare_ratio
         self.blind = blind              # arm A: no check, intents apply
+        if scope not in ("order", "session"):
+            raise ValueError(f"same_surprise_scope {scope!r}: order or "
+                             "session")
+        # same_surprise_scope: how long the bounds remember a surprise a
+        # reset or explain resolved — "order" (the task open at the
+        # resolution: cleared when the domain next reaches quiescence,
+        # i.e. that work is done — the kitchen's order served — and at
+        # episode_over) or "session" (for the whole watch)
+        self.scope = scope
         self.operator = operator        # beats until an escalation is
                                         # resumed by the operator
         self.beat = 0
@@ -88,6 +97,7 @@ class Watch:
             return out + self._read()
         if not self.observe_only and not self.quiet:
             self.quiet = True
+            self._task_done()
             if sh.plugin is None:
                 self.done = True
             return [self._signal("quiescence", stage=sh.stage,
@@ -120,6 +130,13 @@ class Watch:
         return out
 
     # -- the surprise test -------------------------------------------------
+
+    def _task_done(self):
+        """The task boundary: with scope "order", the bounds forget the
+        surprises resolved during the task just finished."""
+        if self.scope == "order":
+            self._reset_sigs.clear()
+            self._explained.clear()
 
     def _checkpoint(self):
         sh = self.shell
@@ -486,6 +503,7 @@ class Watch:
 
     def state(self) -> dict:
         return {"seq": self.seq, "beat": self.beat, "done": self.done,
+                "scope": self.scope,
                 "observe_only": self.observe_only, "surprise": self.open}
 
 
