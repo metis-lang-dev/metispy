@@ -349,7 +349,7 @@ class Watch:
                      f"{card['name']} explains the reading: {' '.join(path)}"
                      f" — the reading is adopted, the served world stays "
                      f"{self.path} (activate is phase 2), resumed",
-                     record=r, card=card["name"], move=move, path=path,
+                     record=r, card=card["name"], move=move, witness=path,
                      horizon={"served": k, "card": k + 1},
                      adopted=adopted)
 

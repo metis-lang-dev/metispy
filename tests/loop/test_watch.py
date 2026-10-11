@@ -274,7 +274,8 @@ def test_wrong_domain_is_explained_by_the_sibling_card_only():
     # a card names one of ITS moves, not the cook's own
     assert own["status"] == "refused" and "partner_load" in own["reason"]
     assert sib["status"] == "admitted"
-    assert sib["path"] == ["partner_load", "load"]
+    assert sib["witness"] == ["partner_load", "load"]
+    assert sib["path"] == "kitchen"       # the signal's domain, never clobbered
     assert sib["horizon"] == {"served": 1, "card": 2}
     assert sib["adopted"] == {"pot_space": -1, "pot_onion": 1}
     # adopted and resumed — one exo row named for the card's move; the
