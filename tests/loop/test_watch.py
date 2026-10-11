@@ -12,7 +12,7 @@ import pytest
 from metis.kernel.record import recover
 from metis.lang import load_llp
 from metis.lang.repl import Repl, main
-from metis.loop.watch import Watch, mirror, mirror_line
+from metis.loop.watch import Watch, ledger, mirror, mirror_line
 from metis.loop.wire import INTENT_VERBS, dispatch, serve_json
 
 from metis.domains.kitchen.model import CATALOG
@@ -402,3 +402,90 @@ def test_ledger_is_the_runtime_account_of_the_run():
         "admitted", "refused", "admitted"]
     assert led["watch"]["surprise"] == 1
     json.dumps(led)
+
+
+# -- step 4/5 prep: the hour, the operator, arm A (blind) ------------------
+
+def _oracle(sh, w, s):
+    """The intended triage per diff (the eval's 'oracle' arm)."""
+    r, d = s["record"], s["diff"]
+    x = (f"reset {r}" if d == {"pot_onion": 1} else
+         f"explain {r} kitchen_shared partner_load"
+         if d == {"pot_onion": 1, "pot_space": -1} else f"escalate {r} x")
+    dispatch(sh, "intent", x)
+    if w.outbox[-1]["status"] == "refused":
+        dispatch(sh, "intent", f"escalate {r} y")
+
+
+def test_the_hour_fires_its_whole_schedule_with_an_operator():
+    sh = _shell("make_hour")
+    w = Watch(sh, beats=7200, operator=120)
+    sigs = []
+    while not w.done:
+        for s in w.step():
+            sigs.append(s)
+            if s["signal"] == "surprise":
+                _oracle(sh, w, s)
+                w.outbox.clear()
+    led = ledger(sh, w)
+    kinds = [e["kind"] for e in led["host"]["injected"]]
+    assert kinds == ["transient", "wrong_domain", "novel", "partner",
+                     "partner", "partner", "transient_twice",
+                     "transient_twice"]
+    assert len(led["host"]["schedule"]["orders"]) == 26
+    assert sum(1 for s in sigs if s["signal"] == "surprise") == 8
+    ops = [s for s in sigs if s.get("kind") == "operator"]
+    assert len(ops) == 6                  # every escalation resumed
+    assert led["final"]["diff"] == {}
+    assert led["final"]["served_model"] == led["final"]["served_host"] >= 20
+    # 'same surprise' has no time window: the 15-min wrong_domain's
+    # explanation makes every later partner reading a repeat, and the
+    # 5-min transient's reset bounds the 45-min one
+    by = [r["resolution"]["by"] for r in led["records"]]
+    assert by == ["reset", "explain"] + ["operator"] * 6
+
+
+def test_operator_resumes_only_an_escalated_surprise():
+    sh = _shell("make_novel")
+    w = Watch(sh, beats=30, operator=3)
+    sigs = []
+    while not w.done:
+        sigs += w.step()
+    assert w.observe_only                 # never escalated: no operator
+    assert not any(s.get("kind") == "operator" for s in sigs)
+    sh = _shell("make_novel")
+    w = Watch(sh, beats=30, operator=3)
+    sigs = []
+    while not w.done:
+        for s in w.step():
+            sigs.append(s)
+            if s["signal"] == "surprise":
+                dispatch(sh, "intent", f"escalate {s['record']} spilled")
+    op, = [s for s in sigs if s.get("kind") == "operator"]
+    assert op["adopted"] == {"hand_free": 1, "held_soup": -1}
+    assert sh.loop.records[0]["resolution"]["by"] == "operator"
+    assert "operator do +hand_free -held_soup" in sh.fired
+    assert not w.observe_only
+
+
+def test_blind_arm_applies_every_intent_and_keeps_the_shadow_verdict():
+    sh = _shell("make_novel")
+    w = Watch(sh, beats=30, blind=True)
+    sigs = []
+    while not w.done:
+        for s in w.step():
+            sigs.append(s)
+            if s.get("kind") == "reading" and not s["consistent"] \
+                    and not w.results:
+                # arm A's mistake: call the spill the partner's onion
+                dispatch(sh, "intent",
+                         f"explain {s['record']} kitchen_shared partner_load")
+    assert not any(s["signal"] == "surprise" for s in sigs)
+    res, = w.results
+    assert res["status"] == "applied" and res["shadow"] == "refused"
+    # applied blind: the wrong reading adopted, the session ran on
+    assert sh.loop.records[0]["resolution"]["by"] == "explain"
+    assert any(s.get("kind") == "clause" and s["seq"] > res["seq"]
+               for s in sigs)
+    led = ledger(sh, w)
+    assert led["watch"]["blind"] is True

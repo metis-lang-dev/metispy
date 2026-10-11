@@ -46,11 +46,15 @@ class Watch:
     quiescence, or one env beat — and returns the signals it raised."""
 
     def __init__(self, shell, beats: Optional[int] = None,
-                 rare_ratio: float = 0.05):
+                 rare_ratio: float = 0.05, blind: bool = False,
+                 operator: Optional[int] = None):
         self.shell = shell
         self.path = shell.doc.catalog.name
         self.beats = beats              # env beats before stopping
         self.rare_ratio = rare_ratio
+        self.blind = blind              # arm A: no check, intents apply
+        self.operator = operator        # beats until an escalation is
+                                        # resumed by the operator
         self.beat = 0
         self.seq = 0
         self.quiet = False              # in quiescence (signalled)
@@ -69,7 +73,7 @@ class Watch:
 
     @property
     def observe_only(self) -> bool:
-        return self.open is not None
+        return self.open is not None and not self.blind
 
     # -- the driver ------------------------------------------------------
 
@@ -96,6 +100,8 @@ class Watch:
                                  fired=len(sh.fired), episode_over=True,
                                  observe_only=self.observe_only)]
         out = self._read() if self.observe_only else []
+        if self.observe_only:
+            out += self._operator()
         name = sh._tick(quiet_rows=False)
         if name is None:
             if sh.stage != DONE and not sh._candidates():
@@ -130,7 +136,7 @@ class Watch:
         model = {a: sh.counts.get(a, 0) for a in reading}
         diff = {a: reading[a] - model[a] for a in reading
                 if reading[a] != model[a]}
-        if self.observe_only:
+        if self.open is not None:
             # keep sensing; speak only when the reading changes (a
             # transient clears, a wrong world drifts further)
             if diff == self._said:
@@ -148,6 +154,11 @@ class Watch:
             sh.loop.records.append(rec)
             self.open = len(sh.loop.records) - 1
             self._said = diff
+            if self.blind:              # arm A: the reading, no verdict
+                return [self._signal("event", kind="reading",
+                                     consistent=False, diff=diff,
+                                     observed=reading, model=model,
+                                     record=self.open)]
             return [self._signal("surprise", record=self.open,
                                  kind=rec["kind"],
                                  likelihood=rec["likelihood"],
@@ -266,6 +277,23 @@ class Watch:
         m = rec["meta"]
         return (m["path"], tuple(sorted(m["diff"].items())))
 
+    def _verdict(self, n, verb, ok, reason, apply, **payload):
+        """One intent's outcome. Checked (arms B/C): applied only when
+        admitted. Blind (arm A, `watch arm=blind`): applied ALWAYS — the
+        runtime's verdict rides along as `shadow`, so an illegal action
+        is an applied intent whose shadow says refused."""
+        if ok or self.blind:
+            apply()
+        if self.blind:
+            sig = self._signal("result", intent=n, verb=verb,
+                               status="applied", reason=reason,
+                               shadow="admitted" if ok else "refused",
+                               **payload)
+            self.outbox.append(sig)
+            self.results.append(sig)
+        else:
+            self._result(n, verb, ok, reason, **payload)
+
     def _intent_reset(self, n, arg):
         r = self._open_record(n, "reset", arg)
         if r is None:
@@ -279,15 +307,19 @@ class Watch:
             text = (f"the same misreading ({gap}) recurred after a reset "
                     f"of record {r0} at beat {b0}: not a one-off")
             self._refuse_fact(rec, "reset", text)
-            self._result(n, "reset", False,
-                         "the same surprise came back after a reset — no "
-                         "more resets; escalate", record=r, mined_text=text)
+            self._verdict(n, "reset", False,
+                          "the same surprise came back after a reset — no "
+                          "more resets; escalate",
+                          lambda: self._close(r, "reset"),
+                          record=r, mined_text=text)
             return
-        self._reset_sigs[sig] = (r, self.beat)
-        self._close(r, "reset")
-        self._result(n, "reset", True,
-                     "the reading is set aside as noise; resumed on the "
-                     "model — the next reading checks it", record=r)
+
+        def apply():
+            self._reset_sigs[sig] = (r, self.beat)
+            self._close(r, "reset")
+        self._verdict(n, "reset", True,
+                      "the reading is set aside as noise; resumed on the "
+                      "model — the next reading checks it", apply, record=r)
 
     def _intent_explain(self, n, arg):
         parts = arg.split()
@@ -309,6 +341,11 @@ class Watch:
         move = parts[2] if len(parts) == 3 else None
         since = list(rec["meta"]["since"])
         k = rec["steps"]
+        out = {"adopted": {}}
+
+        def apply():                    # adopt the reading as the card's
+            out["adopted"] = self._adopt(by=f"{card['name']}:{move}")
+            self._close(r, "explain", card=card["name"], move=move)
         before = self._explained.get(self._signature(rec))
         if before is not None:
             c0, m0 = before
@@ -316,48 +353,51 @@ class Watch:
                     f"came back: the served world {rec['meta']['path']} "
                     f"lacks {c0}'s {m0}")
             self._refuse_fact(rec, "explain", text)
-            self._result(n, "explain", False,
-                         f"the same surprise came back after {c0} "
-                         f"explained it — the served world is not switched "
-                         f"(activate is phase 2); escalate", record=r,
-                         card=c0, move=m0, mined_text=text)
+            self._verdict(n, "explain", False,
+                          f"the same surprise came back after {c0} "
+                          f"explained it — the served world is not switched "
+                          f"(activate is phase 2); escalate", apply,
+                          record=r, card=c0, move=m0, mined_text=text)
             return
         if card["relation"] == "served":
-            self._result(n, "explain", False,
-                         f"the served world is scored at exactly k={k} over "
-                         "its own fired path: the record's own verdict "
-                         "(unmodeled) — it may not invent its own moves",
-                         record=r, card=card["name"],
-                         horizon={"served": k})
+            self._verdict(n, "explain", False,
+                          f"the served world is scored at exactly k={k} over "
+                          "its own fired path: the record's own verdict "
+                          "(unmodeled) — it may not invent its own moves",
+                          apply, record=r, card=card["name"],
+                          horizon={"served": k})
             return
         if move is None or move not in card["moves"]:
             offered = ", ".join(card["moves"]) or "none"
-            self._result(n, "explain", False,
-                         f"a proposal names one move of {card['name']} "
-                         f"beside the fired path ({offered})",
-                         record=r, card=card["name"])
+            self._verdict(n, "explain", False,
+                          f"a proposal names one move of {card['name']} "
+                          f"beside the fired path ({offered})", apply,
+                          record=r, card=card["name"])
             return
         _, prog = card_program(self.shell, card, rec["init"],
-                                 rec["meta"]["stage"])
+                               rec["meta"]["stage"])
         path = _witness(prog, rec["init"], since, move, rec["observed"])
         if path is None:
-            self._result(n, "explain", False,
-                         f"{card['name']} with {move} does not reach the "
-                         f"reading from the record over its fired path "
-                         f"{since} (k+1={k + 1})", record=r,
-                         card=card["name"], move=move,
-                         horizon={"served": k, "card": k + 1})
+            self._verdict(n, "explain", False,
+                          f"{card['name']} with {move} does not reach the "
+                          f"reading from the record over its fired path "
+                          f"{since} (k+1={k + 1})", apply, record=r,
+                          card=card["name"], move=move,
+                          horizon={"served": k, "card": k + 1})
             return
-        self._explained[self._signature(rec)] = (card["name"], move)
-        adopted = self._adopt(by=f"{card['name']}:{move}")
-        self._close(r, "explain", card=card["name"], move=move)
-        self._result(n, "explain", True,
-                     f"{card['name']} explains the reading: {' '.join(path)}"
-                     f" — the reading is adopted, the served world stays "
-                     f"{self.path} (activate is phase 2), resumed",
-                     record=r, card=card["name"], move=move, witness=path,
-                     horizon={"served": k, "card": k + 1},
-                     adopted=adopted)
+
+        def admit():
+            self._explained[self._signature(rec)] = (card["name"], move)
+            apply()
+        self._verdict(n, "explain", True,
+                      f"{card['name']} explains the reading: {' '.join(path)}"
+                      f" — the reading is adopted, the served world stays "
+                      f"{self.path} (activate is phase 2), resumed", admit,
+                      record=r, card=card["name"], move=move, witness=path,
+                      horizon={"served": k, "card": k + 1},
+                      adopted=out["adopted"])
+        # the adopted edit is known only after apply(): patch the signal
+        self.outbox[-1]["adopted"] = out["adopted"]
 
     def _intent_escalate(self, n, arg):
         rid, _, text = arg.partition(" ")
@@ -370,15 +410,36 @@ class Watch:
                          record=r)
             return
         rec = self.shell.loop.records[r]
-        # the revision loop's input: the runtime's facts FIRST (a refusal
-        # is authoritative; a model's sentence cannot be trusted to carry
-        # it), then the model's description
-        facts = rec.get("facts", [])
-        rec["mined_text"] = "\n".join(facts + [text.strip()])
-        rec["escalated"] = {"beat": self.beat, "facts": len(facts)}
-        self._result(n, "escalate", True,
-                     "stamped on the record for the revision loop; still "
-                     "observe-only", record=r, chars=len(text.strip()))
+
+        def apply():
+            # the revision loop's input: the runtime's facts FIRST (a
+            # refusal is authoritative; a model's sentence cannot be
+            # trusted to carry it), then the model's description
+            facts = rec.get("facts", [])
+            rec["mined_text"] = "\n".join(facts + [text.strip()])
+            rec["escalated"] = {"beat": self.beat, "facts": len(facts)}
+        self._verdict(n, "escalate", True,
+                      "stamped on the record for the revision loop; still "
+                      "observe-only", apply, record=r,
+                      chars=len(text.strip()))
+
+    def _operator(self):
+        """`watch operator=N`: an ESCALATED surprise still open N beats
+        after its escalation is resumed by the operator (the human the
+        escalation reached) — the reading adopted as one exo row
+        'operator …', the record closed by 'operator'. Never an intent:
+        the model cannot do this."""
+        if self.operator is None or self.open is None:
+            return []
+        rec = self.shell.loop.records[self.open]
+        esc = rec.get("escalated")
+        if not esc or self.beat - esc["beat"] < self.operator:
+            return []
+        r = self.open
+        adopted = self._adopt(by="operator")
+        self._close(r, "operator")
+        return [self._signal("event", kind="operator", record=r,
+                             adopted=adopted, resumed=True)]
 
     @staticmethod
     def _refuse_fact(rec, verb, text):
@@ -544,6 +605,22 @@ def ledger(shell, watch: Optional[Watch] = None) -> dict:
                      "mined_text": r.get("mined_text")})
     out = {"records": recs,
            "results": list(watch.results) if watch is not None else []}
+    plugin = shell.plugin
+    if plugin is not None and hasattr(plugin, "schedule"):
+        out["host"] = {"schedule": plugin.schedule(),
+                       "injected": [dict(e) for e in
+                                    getattr(plugin, "injected", [])]}
+    observe = getattr(plugin, "observe", None)
+    if observe is not None:
+        reading = dict(observe(dict(shell.counts)))
+        out["final"] = {
+            "diff": {a: n - shell.counts.get(a, 0)
+                     for a, n in reading.items()
+                     if n != shell.counts.get(a, 0)},
+            "served_model": shell.counts.get("served", 0),
+            "served_host": reading.get("served", 0),
+            "fired": len(shell.fired)}
     if watch is not None:
-        out["watch"] = watch.state()
+        out["watch"] = {**watch.state(), "blind": watch.blind,
+                        "operator": watch.operator}
     return out

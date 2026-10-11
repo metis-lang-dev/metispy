@@ -371,21 +371,34 @@ def _op_watch(shell, arg):
     opts = {}
     for tok in a.split():
         k, eq, v = tok.partition("=")
-        if not eq or k not in ("beats", "every"):
+        if not eq or k not in ("beats", "every", "arm", "operator"):
             return {"ok": False, "error": "usage: watch [beats=N] "
-                    "[every=SECONDS] | watch off | watch status"}
+                    "[every=SECONDS] [arm=checked|blind] [operator=BEATS]"
+                    " | watch off | watch status"}
+        if k == "arm":
+            if v not in ("checked", "blind"):
+                return {"ok": False, "error": f"watch: arm={v} — "
+                        "checked (B/C) or blind (A)"}
+            opts[k] = v
+            continue
         try:
-            opts[k] = int(v) if k == "beats" else float(v)
+            opts[k] = float(v) if k == "every" else int(v)
         except ValueError:
             return {"ok": False, "error": f"watch: bad {k}={v}"}
     if w is not None and not w.done:
         return {"ok": False, "error": "watch: already on (watch off "
                 "first)", **w.state()}
-    w = Watch(shell, beats=opts.get("beats"))
+    w = Watch(shell, beats=opts.get("beats"),
+              blind=opts.get("arm") == "blind",
+              operator=opts.get("operator"))
     w.every = opts.get("every", 0.5)
+    sched = getattr(shell.plugin, "schedule", None)
     return {"ok": True, "watch": "on", "path": w.path,
             "host": shell.plugin_spec or None, "every": w.every,
-            "beats": w.beats, "stage": shell.stage,
+            "beats": w.beats, "arm": "blind" if w.blind else "checked",
+            "operator": w.operator,
+            "schedule": sched() if callable(sched) else None,
+            "stage": shell.stage,
             "counts": dict(sorted(shell.counts.items()))}
 
 

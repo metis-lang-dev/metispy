@@ -1,37 +1,41 @@
-"""The kitchen as a scripted PortPlugin host (runtime-wire step 1,
-metis-agent docs/INTEGRATION.md): the env the harness's runtime
-process serves `catalogs/kitchen_host.llp` against.
+"""The kitchen as a scripted PortPlugin host (runtime-wire, metis-agent
+docs/INTEGRATION.md): the env the harness's runtime process serves
+`catalogs/kitchen_host.llp` against.
 
 - bind: the six task weights — the KitchenModel base policy (dishes
   while the soup cooks, onions otherwise; small off-weights).
 - tick (the INPUT face, one beat at quiescence): the order script —
   "+pot_space 3" when the next order is due, [] on a quiet beat, None
-  when the script is over.
+  when the script is over (never, for an open-ended script).
 - on_event (the OUTPUT face): the env executes the fired intent on its
   OWN kitchen (the same multiset effect the catalog declares — a
   faithful actuator until a surprise is injected).
-- observe (the sensor face, optional in the protocol; the watch driver
-  reads it after every fired event and on every observe-only beat):
-  the env's kitchen over the full vocabulary.
+- observe (the sensor face): the env's kitchen over the full vocabulary.
 
-Three injectable surprises, one factory each (plus make_transient_twice,
-the misread recurring on the 3rd load — the bounded-reset fixture) (`--host
-metis.domains.kitchen.host:make_<kind>`):
+Surprises come from a SCHEDULE: entries {kind, after, skip, count} — the
+entry arms at env beat `after` and fires on the (skip+1)-th matching
+intent from then on, `count` times. Four kinds (+ the recurring fifth):
 
-- transient: right after the 2nd `load` the sensor misreads the pot
-  once (one onion too many); the kitchen itself is unchanged and the
-  next reading agrees with the model again.
-- wrong_domain: right after the 1st `load` a second cook drops an onion
-  into the pot. Nothing in `kitchen` derives it; the sibling card
+- transient: right after a `load` the sensor misreads the pot once (one
+  onion too many); the kitchen is unchanged, the next reading agrees.
+- wrong_domain: right after a `load` (pot capacity left) a second cook
+  drops an onion in. `kitchen` cannot derive it; the sibling card
   `kitchen_shared` (partner_load) does.
-- novel: right after the 1st `plate` the soup is spilled — the dish is
-  gone and the hand free, nothing served. No card derives it.
+- novel: right after a `plate` the soup is spilled — dish gone, hand
+  free, nothing served. No card derives it.
+- partner: wrong_domain on the first load of `count` successive orders
+  (explained, then escalated: the served world is not switched).
+- transient_twice: the misread on `count` consecutive loads (the
+  bounded-reset fixture).
+
+`schedule()` is the plan as data and `injected` what fired (kind, beat,
+intent) — the eval's ground truth, read by the ledger.
 
 Env state mutates only in tick/on_event (the purity contract); a
-reading is a pure function of the env (the transient's glitch is env
-state: set by the botched on_event, cleared by the next tick or
-on_event, so observe() stays repeatable)."""
+reading is a pure function of the env (the glitch is env state: set by
+the botched on_event, cleared by the next tick or on_event)."""
 
+import random
 from typing import Dict, List, Optional
 
 ATOMS = ("hand_free", "held_onion", "held_dish", "held_soup",
@@ -52,48 +56,62 @@ EFFECTS = {
     "partner_load": ({"pot_space": 1}, {"pot_onion": 1}),
 }
 
-# kind -> (intent, the occurrences of it the env botches)
-INJECT = {"transient": ("load", (2,)), "wrong_domain": ("load", (1,)),
-          "novel": ("plate", (1,)), "transient_twice": ("load", (2, 3)),
-          "partner": ("load", (1, 3))}
+KINDS = ("transient", "wrong_domain", "novel", "partner",
+         "transient_twice")
+TRIGGER = {"transient": "load", "wrong_domain": "load", "novel": "plate",
+           "partner": "load", "transient_twice": "load"}
+
+
+def entry(kind, after=0, skip=0, count=None):
+    if kind not in KINDS:
+        raise ValueError(f"surprise kind {kind!r}: want one of "
+                         f"{', '.join(KINDS)}")
+    if count is None:
+        count = {"partner": 2, "transient_twice": 2}.get(kind, 1)
+    return {"kind": kind, "after": after, "skip": skip, "count": count}
 
 
 def _weights(reg):
     def port(name):
         def w(args, counts):
             if name == "fetch_dish":
-                return 1.0 if counts.get("cooking", 0) > 0 else 0.05
+                # 0, not KitchenModel's 0.05: the catalog has no way to
+                # put a dish down, so a dish fetched with nothing cooking
+                # deadlocks the cook for good (found in the hour run)
+                return 1.0 if counts.get("cooking", 0) > 0 else 0.0
             if name == "fetch_onion":
                 return 0.05 if counts.get("cooking", 0) > 0 else 1.0
             return 1.0
         return w
     for name in EFFECTS:
-        reg.weight(f"w_{name}", port(name))
+        if name != "partner_load":
+            reg.weight(f"w_{name}", port(name))
     # the sibling card's port (kitchen_shared): a second cook loads
     # rarely next to this one's own moves
     reg.weight("w_partner", 0.1)
 
 
 class KitchenHost:
-    """Scripted orders + a faithful actuator + full sensing, with at
-    most one injected surprise."""
+    """Scripted orders + a faithful actuator + full sensing + a
+    surprise schedule."""
 
     name = "kitchen"
 
-    def __init__(self, case, inject: Optional[str] = None,
-                 orders: List[int] = (0, 14), beats: int = 30):
-        if inject is not None and inject not in INJECT:
-            raise ValueError(f"inject {inject!r}: want one of "
-                             f"{', '.join(INJECT)}")
-        self.inject = inject
-        self.orders = tuple(orders)     # beat -> an order arrives
-        self.beats = beats              # the script's length
+    def __init__(self, case, plan=(), orders=(0, 14),
+                 beats: Optional[int] = 30):
+        self.plan = [dict(e) for e in plan]
+        self.orders = tuple(orders)     # beats at which an order arrives
+        self.beats = beats              # the script's length (None: open)
         self.beat = 0
         self.kitchen: Dict[str, int] = {
             a: n for a, n in dict(case.get("init", {})).items() if n > 0}
-        self.seen: Dict[str, int] = {}  # intent -> times executed
         self.glitch = False             # the transient's one misread
-        self.injected: List[str] = []   # what the env did off-model
+        self.injected: List[dict] = []  # what the env did off-model
+        self._plan0 = [dict(e) for e in self.plan]
+
+    def schedule(self) -> dict:
+        return {"orders": list(self.orders), "beats": self.beats,
+                "surprises": [dict(e) for e in self._plan0]}
 
     # -- the protocol ----------------------------------------------------
 
@@ -101,7 +119,7 @@ class KitchenHost:
         _weights(reg)
 
     def tick(self, counts):
-        if self.beat >= self.beats:
+        if self.beats is not None and self.beat >= self.beats:
             return None
         dos = []
         if self.beat in self.orders:
@@ -122,11 +140,21 @@ class KitchenHost:
         for a, n in produce.items():
             self.kitchen[a] = self.kitchen.get(a, 0) + n
         self.kitchen = {a: n for a, n in self.kitchen.items() if n > 0}
-        self.seen[name] = self.seen.get(name, 0) + 1
-        if self.inject:
-            what, when = INJECT[self.inject]
-            if name == what and self.seen[name] in when:
-                self._surprise()
+        for e in self.plan:
+            if e["count"] <= 0 or e["after"] > self.beat \
+                    or TRIGGER[e["kind"]] != name:
+                continue
+            if e["skip"] > 0:
+                e["skip"] -= 1
+                continue
+            if self._surprise(e["kind"]):
+                self.injected.append({"kind": e["kind"], "beat": self.beat,
+                                      "intent": name})
+                e["count"] -= 1
+                if e["kind"] == "partner":   # the next order's first load
+                    e["after"] = min((b + 1 for b in self.orders
+                                      if b >= self.beat), default=1 << 60)
+            break                            # one surprise per event
 
     def observe(self, counts) -> Dict[str, int]:
         reading = {a: self.kitchen.get(a, 0) for a in ATOMS}
@@ -135,57 +163,92 @@ class KitchenHost:
         return reading
 
     def snapshot(self):
-        return (self.beat, dict(self.kitchen), dict(self.seen),
-                self.glitch, list(self.injected))
+        return (self.beat, dict(self.kitchen), self.glitch,
+                [dict(e) for e in self.injected],
+                [dict(e) for e in self.plan])
 
     def restore(self, snap):
-        beat, kitchen, seen, glitch, injected = snap
-        self.beat, self.kitchen, self.seen = beat, dict(kitchen), dict(seen)
-        self.glitch, self.injected = glitch, list(injected)
+        beat, kitchen, glitch, injected, plan = snap
+        self.beat, self.kitchen, self.glitch = beat, dict(kitchen), glitch
+        self.injected = [dict(e) for e in injected]
+        self.plan = [dict(e) for e in plan]
 
     # -- the injected surprises -----------------------------------------
 
-    def _surprise(self):
+    def _surprise(self, kind) -> bool:
         k = self.kitchen
-        if self.inject in ("transient", "transient_twice"):
+        if kind in ("transient", "transient_twice"):
             self.glitch = True
-        elif self.inject in ("wrong_domain", "partner") \
-                and k.get("pot_space", 0) > 0:
+            return True
+        if kind in ("wrong_domain", "partner") and k.get("pot_space", 0) > 0:
             k["pot_space"] -= 1
             k["pot_onion"] = k.get("pot_onion", 0) + 1
-        elif self.inject == "novel" and k.get("held_soup", 0) > 0:
+        elif kind == "novel" and k.get("held_soup", 0) > 0:
             k["held_soup"] -= 1
             k["hand_free"] = k.get("hand_free", 0) + 1
         else:
-            return
+            return False                     # not possible here: stay armed
         self.kitchen = {a: n for a, n in k.items() if n > 0}
-        self.injected.append(self.inject)
+        return True
 
+
+# -- the fixtures (runtime-wire steps 1-3) ------------------------------------
 
 def make(case):
     return KitchenHost(case)
 
 
 def make_transient(case):
-    return KitchenHost(case, inject="transient")
+    return KitchenHost(case, [entry("transient", skip=1)])
 
 
 def make_wrong_domain(case):
-    return KitchenHost(case, inject="wrong_domain")
+    return KitchenHost(case, [entry("wrong_domain")])
 
 
 def make_novel(case):
-    return KitchenHost(case, inject="novel")
+    return KitchenHost(case, [entry("novel")])
 
 
 def make_transient_twice(case):
-    """The misread comes back on the 3rd load: a 'transient' that
-    recurs after a reset (the bounded-reset fixture)."""
-    return KitchenHost(case, inject="transient_twice")
+    """The misread on the 2nd and 3rd load: a 'transient' that recurs
+    after a reset (the bounded-reset fixture)."""
+    return KitchenHost(case, [entry("transient_twice", skip=1)])
 
 
 def make_partner(case):
-    """The second cook loads on EVERY order (after this cook's 1st load
-    of each): an explained wrong-domain reading recurs while the served
-    world stays the one-cook kitchen (explained, then escalated)."""
-    return KitchenHost(case, inject="partner")
+    """The second cook loads on the first load of each of two orders: an
+    explained wrong-domain reading recurs while the served world stays
+    the one-cook kitchen (explained, then escalated)."""
+    return KitchenHost(case, [entry("partner")])
+
+
+# -- the hour (runtime-wire step 4) and the eval schedule (step 5) -----------
+
+BEATS_PER_MIN = 120                       # at watch every=0.5
+
+
+def orders_every(seed, lo_min=2.0, hi_min=3.0, until_min=60.0, first=0):
+    """Order beats, one every lo..hi minutes (seeded), from `first`."""
+    rng = random.Random(seed)
+    out, b = [], first
+    while b < until_min * BEATS_PER_MIN:
+        out.append(b)
+        b += int(rng.uniform(lo_min, hi_min) * BEATS_PER_MIN)
+    return out
+
+
+HOUR_PLAN = [entry("transient", after=5 * BEATS_PER_MIN),
+             entry("wrong_domain", after=15 * BEATS_PER_MIN),
+             entry("novel", after=25 * BEATS_PER_MIN),
+             entry("partner", after=35 * BEATS_PER_MIN, count=3),
+             entry("transient_twice", after=45 * BEATS_PER_MIN)]
+
+
+def make_hour(case):
+    """An open-ended kitchen hour (never ends by itself — `watch off`):
+    an order every 2-3 min (seed 7) and the five kinds at ~5/15/25/35/45
+    min (partner on three successive orders: two recurrences). Pair with
+    `watch every=0.5 operator=N` so an escalated surprise is resumed by
+    the operator and the rest of the schedule can fire."""
+    return KitchenHost(case, HOUR_PLAN, orders_every(7), beats=None)
