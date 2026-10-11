@@ -52,6 +52,13 @@ def test_clean_kitchen_streams_events_and_quiescence_in_order():
     assert not any(q["episode_over"] for q in qs[:-1])
     # quiet beats said nothing: 30 beats, 2 exo lines
     assert w.beat == 30 and len(orders) == 2
+    # ... and left no row (51 rows before the fix): two soups of 9
+    # (load, fetch_onion, load, fetch_onion, load, cook, fetch_dish,
+    # plate, serve), a stray fetch_onion whenever the pot is empty (3),
+    # and the 2 orders
+    assert len(sh.fired) == len(sh.fired_rows) == 23
+    assert [r[0] for r in sh.fired_rows].count("exo") == 2
+    assert len(sh._envs) == len(sh.fired) + 1
     assert sh.counts.get("served") == 2 and not sh.loop.records
 
 

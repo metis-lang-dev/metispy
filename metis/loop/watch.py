@@ -89,7 +89,8 @@ class Watch:
                                  fired=len(sh.fired), episode_over=True,
                                  observe_only=self.observe_only)]
         out = self._read() if self.observe_only else []
-        if sh._tick() is None:
+        name = sh._tick(quiet_rows=False)
+        if name is None:
             if sh.stage != DONE and not sh._candidates():
                 sh._latch_done()
             self.done = True
@@ -98,9 +99,8 @@ class Watch:
                                        episode_over=True,
                                        observe_only=self.observe_only)]
         self.beat += 1
-        ev = sh.fired_rows[-1][2]
-        if ev.ops:
-            self.quiet = False          # input arrived: maybe work again
+        if name:                        # input arrived: maybe work again
+            self.quiet = False
             out.append(self._row_signal())
         if not self.observe_only:
             self._checkpoint()

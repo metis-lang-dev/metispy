@@ -460,19 +460,26 @@ class Repl(LoopVerbs, Cmd):
         if self.plugin is not None:
             self._envs.append(self._env_snap())
 
-    def _tick(self):
+    def _tick(self, quiet_rows=True):
         """One env beat (the INPUT face): plugin.tick(counts) -> its
         do-lines applied as ONE exogenous row (kind "exo", how "exo":
         conditioning, excluded from the likelihood like a do), the env
         snapshot recorded beside it. A tick REVIVES a quiescent world
         (G6: a shop with no customers is quiet, not dead). -> the row
-        name, or None when the env's episode is over (tick -> None)."""
+        name, or None when the env's episode is over (tick -> None).
+        quiet_rows=False (the runtime's watch): a beat with no input
+        adds no row — the env moves on and the head's env snapshot
+        follows it; -> "" for that quiet beat."""
         from metis.fw.plugin import exo_event
         if self.plugin is None:
             return None
         dos = self.plugin.tick(dict(self.counts))
         if dos is None:
             return None
+        if not dos and not quiet_rows:
+            if self._envs:
+                self._envs[-1] = self._env_snap()
+            return ""
         ev, after = exo_event(list(dos), self.counts)
         if self.stage == DONE:
             self.stage = self.__dict__.get("_quiet_stage") \
