@@ -217,10 +217,13 @@ def make_transient_twice(case):
 
 
 def make_partner(case):
-    """The second cook loads on the first load of each of two orders: an
-    explained wrong-domain reading recurs while the served world stays
-    the one-cook kitchen (explained, then escalated)."""
-    return KitchenHost(case, [entry("partner")])
+    """The second cook loads on the first load of each of three orders:
+    an explained wrong-domain reading recurs while the served world
+    stays the one-cook kitchen. At the default scope (order): explained,
+    then noticed (explain, explain+notice, explain+notice); at
+    scope=session (strict): explained, then escalated."""
+    return KitchenHost(case, [entry("partner", count=3)], (0, 14, 28),
+                       beats=44)
 
 
 # -- the hour (runtime-wire step 4) and the eval schedule (step 5) -----------

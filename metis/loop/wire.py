@@ -372,10 +372,11 @@ def _op_watch(shell, arg):
     for tok in a.split():
         k, eq, v = tok.partition("=")
         if not eq or k not in ("beats", "every", "arm", "operator",
-                                "scope"):
+                                "scope", "explain_repeat_notice"):
             return {"ok": False, "error": "usage: watch [beats=N] "
                     "[every=SECONDS] [arm=checked|blind] [operator=BEATS]"
-                    " [scope=order|session] | watch off | watch status"}
+                    " [scope=order|session] [explain_repeat_notice=N]"
+                    " | watch off | watch status"}
         if k == "scope":
             if v not in ("order", "session"):
                 return {"ok": False, "error": f"watch: scope={v} — order "
@@ -398,7 +399,8 @@ def _op_watch(shell, arg):
     w = Watch(shell, beats=opts.get("beats"),
               blind=opts.get("arm") == "blind",
               operator=opts.get("operator"),
-              scope=opts.get("scope", "order"))
+              scope=opts.get("scope", "order"),
+              explain_repeat_notice=opts.get("explain_repeat_notice", 2))
     w.every = opts.get("every", 0.5)
     sched = getattr(shell.plugin, "schedule", None)
     return {"ok": True, "watch": "on", "path": w.path,

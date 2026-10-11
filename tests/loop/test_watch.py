@@ -458,9 +458,14 @@ def test_same_surprise_is_scoped_to_the_order_in_the_hour():
     assert by == ["reset", "explain", "operator",          # 5, 15, 25 min
                   "explain", "explain", "explain",          # 35 min
                   "reset", "operator"]                      # 45 min
+    # explained, then noticed: the same card+move in consecutive orders
     assert calls[3:6] == [(3, ["explain:admitted"]),
-                          (4, ["explain:admitted"]),
-                          (5, ["explain:admitted"])]
+                          (4, ["explain:admitted+notice"]),
+                          (5, ["explain:admitted+notice"])]
+    # the 15-min wrong_domain is the same card+move, but not consecutive
+    assert calls[1] == (1, ["explain:admitted"])
+    assert led["records"][5]["notice"] == {
+        "card": "kitchen_shared", "move": "partner_load", "orders": 3}
     assert calls[6:] == [(6, ["reset:admitted"]),
                          (7, ["reset:refused", "escalate:admitted"])]
     assert led["records"][7]["facts"][0].startswith(
@@ -520,3 +525,37 @@ def test_blind_arm_applies_every_intent_and_keeps_the_shadow_verdict():
                for s in sigs)
     led = ledger(sh, w)
     assert led["watch"]["blind"] is True
+
+
+def test_partner_at_order_scope_is_explained_then_noticed():
+    """The silent-wrong-context case: each order's partner onion is
+    explained and the kitchen keeps working (no freeze), but from the
+    2nd consecutive order on the record carries a NOTICE for the
+    revision loop — what phase 2's activate will consume."""
+    sh, w, sigs = _triage("make_partner", [
+        "explain {r} kitchen_shared partner_load"] * 3)
+    res = _results(sigs)
+    assert [r["status"] for r in res] == [
+        "admitted", "admitted+notice", "admitted+notice"]
+    assert res[2]["mined_text"] == (
+        "kitchen_shared (partner_load) explained this diff in 3 consecutive"
+        " orders: the served world kitchen lacks it; activate is phase 2")
+    recs = sh.loop.records
+    assert "notice" not in recs[0]
+    assert recs[1]["notice"]["orders"] == 2
+    assert recs[2]["mined_text"] == res[2]["mined_text"]
+    assert all(r["resolution"]["by"] == "explain" for r in recs)
+    # no freeze; (the 3rd soup can stall on the catalog's held-onion
+    # dead end — cook needs a free hand — until an order that never comes)
+    assert not w.observe_only and sh.counts.get("served") >= 2
+    # the knob: off (0) never notices; 3 notices only the third
+    for n, want in ((0, ["admitted"] * 3),
+                    (3, ["admitted", "admitted", "admitted+notice"])):
+        sh = _shell("make_partner")
+        w = Watch(sh, beats=44, explain_repeat_notice=n)
+        while not w.done:
+            for s in w.step():
+                if s["signal"] == "surprise":
+                    dispatch(sh, "intent", f"explain {s['record']} "
+                             "kitchen_shared partner_load")
+        assert [r["status"] for r in w.results] == want

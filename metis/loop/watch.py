@@ -47,7 +47,8 @@ class Watch:
 
     def __init__(self, shell, beats: Optional[int] = None,
                  rare_ratio: float = 0.05, blind: bool = False,
-                 operator: Optional[int] = None, scope: str = "order"):
+                 operator: Optional[int] = None, scope: str = "order",
+                 explain_repeat_notice: int = 2):
         self.shell = shell
         self.path = shell.doc.catalog.name
         self.beats = beats              # env beats before stopping
@@ -62,6 +63,12 @@ class Watch:
         # i.e. that work is done — the kitchen's order served — and at
         # episode_over) or "session" (for the whole watch)
         self.scope = scope
+        # the silent-wrong-context smell: the SAME (card, move) admitted
+        # in N consecutive orders still resumes, but the record gets a
+        # notice the revision loop (and phase 2's activate) consumes
+        self.notice_after = explain_repeat_notice
+        self.tasks = 0                  # task boundaries so far
+        self._streak = {}               # (card, move) -> (task, run)
         self.operator = operator        # beats until an escalation is
                                         # resumed by the operator
         self.beat = 0
@@ -134,6 +141,7 @@ class Watch:
     def _task_done(self):
         """The task boundary: with scope "order", the bounds forget the
         surprises resolved during the task just finished."""
+        self.tasks += 1
         if self.scope == "order":
             self._reset_sigs.clear()
             self._explained.clear()
@@ -405,6 +413,19 @@ class Watch:
 
         def admit():
             self._explained[self._signature(rec)] = (card["name"], move)
+            key = (card["name"], move)
+            last, run = self._streak.get(key, (None, 0))
+            run = run + 1 if last == self.tasks - 1 else \
+                (run if last == self.tasks else 1)
+            self._streak[key] = (self.tasks, run)
+            if self.notice_after and run >= self.notice_after:
+                out["notice"] = (
+                    f"{card['name']} ({move}) explained this diff in {run} "
+                    f"consecutive orders: the served world {self.path} "
+                    f"lacks it; activate is phase 2")
+                rec["notice"] = {"card": card["name"], "move": move,
+                                 "orders": run}
+                rec["mined_text"] = out["notice"]
             apply()
         self._verdict(n, "explain", True,
                       f"{card['name']} explains the reading: {' '.join(path)}"
@@ -414,7 +435,13 @@ class Watch:
                       horizon={"served": k, "card": k + 1},
                       adopted=out["adopted"])
         # the adopted edit is known only after apply(): patch the signal
-        self.outbox[-1]["adopted"] = out["adopted"]
+        sig = self.outbox[-1]
+        sig["adopted"] = out["adopted"]
+        if out.get("notice"):
+            if sig["status"] == "admitted":
+                sig["status"] = "admitted+notice"
+            sig["notice"] = rec["notice"]
+            sig["mined_text"] = out["notice"]
 
     def _intent_escalate(self, n, arg):
         rid, _, text = arg.partition(" ")
@@ -503,7 +530,8 @@ class Watch:
 
     def state(self) -> dict:
         return {"seq": self.seq, "beat": self.beat, "done": self.done,
-                "scope": self.scope,
+                "scope": self.scope, "explain_repeat_notice":
+                self.notice_after,
                 "observe_only": self.observe_only, "surprise": self.open}
 
 
@@ -620,6 +648,7 @@ def ledger(shell, watch: Optional[Watch] = None) -> dict:
                      "refusals": r.get("refusals", []),
                      "escalated": r.get("escalated"),
                      "facts": r.get("facts", []),
+                     "notice": r.get("notice"),
                      "mined_text": r.get("mined_text")})
     out = {"records": recs,
            "results": list(watch.results) if watch is not None else []}
