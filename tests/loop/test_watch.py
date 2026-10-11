@@ -244,9 +244,14 @@ def test_cards_are_generated_from_provenance_and_include():
     assert shared["relation"] == "sibling"
     assert shared["text"].startswith("a shared kitchen")
     assert shared["moves"] == ["partner_load"] and shared["slots"] == []
+    assert shared["effects"] == [{"name": "partner_load",
+                                  "consume": {"pot_space": 1},
+                                  "produce": {"pot_onion": 1},
+                                  "persist": {}}]
     assert res["text"].splitlines()[1] == (
         'kitchen_shared [sibling] "a shared kitchen: a second cook also '
-        'loads onions into the pot" moves partner_load')
+        'loads onions into the pot" moves partner_load (-pot_space '
+        '+pot_onion)')
 
 
 def test_transient_is_reset_and_the_kitchen_resumes():

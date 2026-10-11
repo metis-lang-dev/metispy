@@ -8,6 +8,8 @@ carries — never authored:
             as the served scene — an alternative world, not an addition)
   moves     the ground events the card adds over the served world — the
             only moves an explanation may name beside the fired path
+  effects   each move's declared consume/produce/persist (the event
+            signals' shape): what a reading's diff is matched against
   slots     the card's own declared types (binding slots for activate)
 
 Discovery is structural (extends-pruning): the served file's folder,
@@ -63,6 +65,7 @@ def cards(shell) -> List[dict]:
     own = {ev.name for _, _, ev in shell.events_tbl}
     out = [{"name": shell.doc.catalog.name, "file": served["file"],
             "text": served["text"], "relation": "served", "moves": [],
+            "effects": [],
             "slots": served["types"]}]
     for f in sorted(Path(served["file"]).parent.glob("*.llp")):
         c = _scan(f.resolve())
@@ -79,10 +82,21 @@ def cards(shell) -> List[dict]:
         try:
             _, prog = card_program(shell, card, shell.case["init"],
                                    shell.prog.init_stage)
-            card["moves"] = sorted({ev.name for _, _, ev in prog.events()}
-                                   - own)
+            evs = {}
+            for _, _, ev in prog.events():
+                if ev.name not in own:
+                    evs.setdefault(ev.name, ev)
+            card["moves"] = sorted(evs)
+            # each move's declared effect, the event signals' shape:
+            # what a reading's diff can be matched against
+            card["effects"] = [{"name": n,
+                                "consume": dict(evs[n].consume),
+                                "produce": dict(evs[n].produce),
+                                "persist": dict(evs[n].persist)}
+                               for n in card["moves"]]
         except Exception as e:            # a broken card is a finding
-            card["moves"], card["error"] = [], f"{type(e).__name__}: {e}"
+            card["moves"], card["effects"] = [], []
+            card["error"] = f"{type(e).__name__}: {e}"
         out.append(card)
     return out
 
@@ -90,5 +104,12 @@ def cards(shell) -> List[dict]:
 def card_line(c: dict) -> str:
     rel = {"served": "active", "extends": "pack",
            "sibling": "sibling"}[c["relation"]]
-    moves = (" moves " + ", ".join(c["moves"])) if c["moves"] else ""
+    def eff(e):
+        ops = ([f"-{a}" + (f" {n}" if n != 1 else "")
+                for a, n in sorted(e["consume"].items())]
+               + [f"+{a}" + (f" {n}" if n != 1 else "")
+                  for a, n in sorted(e["produce"].items())])
+        return f"{e['name']} ({' '.join(ops)})"
+    moves = (" moves " + ", ".join(eff(e) for e in c["effects"])
+             if c.get("effects") else "")
     return f'{c["name"]} [{rel}] "{c["text"] or ""}"{moves}'
