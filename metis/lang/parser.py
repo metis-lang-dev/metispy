@@ -1,7 +1,8 @@
 """Recursive-descent parser for rulescript v2. Dependency-free.
 
 Line comments: `% ...` dropped; `%% ...` are DOC lines, attached to
-the next rule or link (mandatory there — the compiler enforces it).
+the next rule or link (mandatory there — the compiler enforces it) or
+pred (optional: the atom's words, RAG §11.1).
 `# ...` lines are interpreter directives (embedded case lines,
 metis/lang/directives.py) — a comment class here: the compiler never
 sees them. Idents may contain hyphens (object-behavior); the arrow
@@ -443,7 +444,8 @@ def _parse(text: str) -> ast.Catalog:
             p.punct(":")
             space = p.expect("ident")
             p.punct(".")
-            decls.append(ast.PredDecl(pname, args, space, *at))
+            decls.append(ast.PredDecl(pname, args, space, p.take_docs(),
+                                      *at))
         elif v == "bwd":
             p.next()
             at = p._here()

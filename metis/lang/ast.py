@@ -113,6 +113,9 @@ class PredDecl:
     name: str
     args: Tuple[str, ...]        # argument TYPES
     namespace: str
+    # the atom's %% doc in the person's words ("a free hand"; RAG §11.1):
+    # optional, unlike a rule's
+    doc: str = ""
     line: int = field(default=0, compare=False, repr=False)
     col: int = field(default=0, compare=False, repr=False)
     file: str = field(default="", compare=False, repr=False)
@@ -272,7 +275,7 @@ def pretty(cat: Catalog) -> str:
             for r in d.rules:
                 out.append(f"{_doc(r.doc)}  {rule_line(r)}")
             out.append("}")
-        elif isinstance(d, LinkDecl):
+        elif isinstance(d, (LinkDecl, PredDecl)):
             out.append(f"{_doc(d.doc)}{decl_line(d)}")
         else:
             out.append(decl_line(d))

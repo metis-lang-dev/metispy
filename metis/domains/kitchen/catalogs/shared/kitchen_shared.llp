@@ -10,7 +10,8 @@ provenance text "a shared kitchen: a second cook also loads onions into the pot"
 include "../kitchen.llp".
 weight w_partner.
 stage task {
-  %% the second cook drops the onion it holds into the other cook's pot.
+  %% the second cook drops the onion it holds into the first cook's pot.
+  %% target: kitchen
   partner_load [task] : held_onion -o hand_free  @w w_partner.
 }
 #init hand_free 1

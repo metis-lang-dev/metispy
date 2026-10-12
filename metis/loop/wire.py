@@ -432,6 +432,17 @@ def _op_cards(shell, arg):
             "text": "\n".join(card_line(c) for c in cs)}
 
 
+def _op_script(shell, arg):
+    """The script of the served node (metis-agent RAG §11.1), handed
+    over once at attach: per card, per clause its %% comment, premises
+    and effects (in the atoms' %% words) and cross-domain target; per
+    atom its %% doc. The surprise and result shapes are not script."""
+    from .cards import script, script_line
+    ss = script(shell)
+    return {"ok": True, "script": ss,
+            "text": "\n".join(script_line(s) for s in ss)}
+
+
 def _op_ledger(shell, arg):
     """The runtime ledger of the watched run: records (gap, resolution,
     refusals, mined_text) and every intent result, in order."""
@@ -450,7 +461,8 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "findings": _op_findings, "graph": _op_graph,
              "why": _op_why, "causes": _op_causes, "ctx": _op_ctx,
              "watch": _op_watch, "intent": _op_intent,
-             "cards": _op_cards, "ledger": _op_ledger}
+             "cards": _op_cards, "script": _op_script,
+             "ledger": _op_ledger}
 
 
 def dispatch(shell, op: str, arg: str = "") -> dict:

@@ -254,6 +254,36 @@ def test_cards_are_generated_from_provenance_and_include():
         '+pot_onion)')
 
 
+def test_script_carries_the_catalogs_own_words():
+    """metis-agent RAG §11.1: per clause its %% comment, premises and
+    effects as atom names, a cross-domain clause's target; per atom its
+    doc. The sibling lists only the move it adds and the atoms it
+    touches."""
+    res = dispatch(_shell(), "script", "")
+    by = {s["name"]: s for s in res["script"]}
+    assert list(by) == ["kitchen", "kitchen_shared"]
+    k = by["kitchen"]
+    assert [c["name"] for c in k["clauses"]] == [
+        "fetch_onion", "load", "cook", "fetch_dish", "plate", "serve"]
+    fetch = k["clauses"][0]
+    assert fetch["doc"] == "walk to a dispenser and take an onion."
+    assert fetch["premises"] == [{"atom": "hand_free", "n": 1,
+                                  "kept": False}]
+    assert k["clauses"][2]["premises"] == [
+        {"atom": "hand_free", "n": 1, "kept": True},
+        {"atom": "pot_onion", "n": 3, "kept": False}]
+    assert {a["name"]: a["doc"] for a in k["atoms"]}["pot_onion"] == \
+        "onions in the pot"
+    assert k["missing"] == {"clause_doc": [], "atom_doc": []}
+    pl, = by["kitchen_shared"]["clauses"]
+    assert pl["name"] == "partner_load" and pl["target"] == "kitchen"
+    assert pl["doc"] == ("the second cook drops an onion into the first "
+                         "cook's pot.")          # the tag line stripped
+    assert [a["name"] for a in by["kitchen_shared"]["atoms"]] == [
+        "pot_space", "pot_onion"]
+    assert "partner_load → kitchen:" in res["text"]
+
+
 def test_transient_is_reset_and_the_kitchen_resumes():
     sh, w, sigs = _triage("make_transient", ["reset {r}"])
     res, = _results(sigs)

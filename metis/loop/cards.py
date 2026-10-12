@@ -113,3 +113,104 @@ def card_line(c: dict) -> str:
     moves = (" moves " + ", ".join(eff(e) for e in c["effects"])
              if c.get("effects") else "")
     return f'{c["name"]} [{rel}] "{c["text"] or ""}"{moves}'
+
+
+# ---- the script (metis-agent RAG §11.1, E8) -----------------------------
+
+_TAG = re.compile(r"^(target):\s*(\w+)\s*$")
+
+
+def _words(doc: str):
+    """A clause's %% doc split into its words and its tags (`target:
+    <catalog>` — the catalog whose world a cross-domain clause acts on)."""
+    text, tags = [], {}
+    for ln in doc.splitlines():
+        m = _TAG.match(ln.strip())
+        if m:
+            tags[m.group(1)] = m.group(2)
+        elif ln.strip():
+            text.append(ln.strip())
+    return " ".join(text), tags
+
+
+def _side(atoms):
+    """Atoms of one side of a clause by name, multiplicity folded, in
+    order ($-premises kept: needed, not consumed)."""
+    out, at = [], {}
+    for a in atoms:
+        if not hasattr(a, "pred") or a.pred == "one":
+            continue                      # a Distinct guard, the LL unit
+        k = (str(a).lstrip("$"), a.persist)
+        if k in at:
+            out[at[k]]["n"] += 1
+            continue
+        at[k] = len(out)
+        out.append({"atom": k[0], "n": 1, "kept": a.persist})
+    return out
+
+
+def script_of(card: dict) -> dict:
+    """One card's script from its catalog source (includes spliced): per
+    clause {name, doc (its %% comment), premises, effects (atom names),
+    target}, per atom {name, doc}. No authored interpretation: reading a
+    fragment against the entries is the narrator's job (RAG §11.1). A
+    sibling or pack lists only the clauses it adds over the served world
+    (its card's moves) and the atoms they touch."""
+    from metis.lang import ast
+    from metis.lang.compiler import resolve_includes
+    from metis.lang.parser import parse_file
+    cat = resolve_includes(parse_file(card["file"]),
+                           Path(card["file"]).parent)
+    preds = [d for d in cat.decls if isinstance(d, ast.PredDecl)]
+    moves = set(card.get("moves") or [])
+    clauses = []
+    for st in (d for d in cat.decls if isinstance(d, ast.Stage)):
+        for r in st.rules:
+            if card["relation"] != "served" and not any(
+                    m == r.name or m.startswith(r.name + "(")
+                    for m in moves):
+                continue
+            words, tags = _words(r.doc)
+            clauses.append({"name": r.name, "stage": st.name,
+                            "doc": words, "premises": _side(r.body),
+                            "effects": _side(r.head),
+                            "target": tags.get("target")})
+    if card["relation"] != "served":      # only the atoms its moves use
+        used = {x["atom"].split("(")[0] for c in clauses
+                for x in c["premises"] + c["effects"]}
+        preds = [d for d in preds if d.name in used]
+    return {"name": card["name"], "relation": card["relation"],
+            "text": card["text"], "clauses": clauses,
+            "atoms": [{"name": d.name, "doc": d.doc} for d in preds],
+            "missing": {"clause_doc": [c["name"] for c in clauses
+                                       if not c["doc"]],
+                        "atom_doc": [d.name for d in preds if not d.doc]}}
+
+
+def script(shell) -> List[dict]:
+    """The script of every card offerable at the served node: the served
+    catalog's clauses and atoms, each sibling/pack's added clauses."""
+    out = []
+    for c in cards(shell):
+        try:
+            out.append(script_of(c))
+        except Exception as e:            # a broken card is a finding
+            out.append({"name": c["name"], "relation": c["relation"],
+                        "text": c["text"], "clauses": [], "atoms": [],
+                        "error": f"{type(e).__name__}: {e}"})
+    return out
+
+
+def script_line(s: dict) -> str:
+    lines = [f'{s["name"]} [{s["relation"]}] "{s["text"] or ""}"']
+    def side(xs):
+        return " * ".join(("$" if x["kept"] else "") + x["atom"]
+                          + (f"^{x['n']}" if x["n"] > 1 else "") for x in xs)
+    for c in s["clauses"]:
+        t = f" → {c['target']}" if c.get("target") else ""
+        lines.append(f"  {c['name']}{t}: {c['doc'] or '(no comment)'}"
+                     f" [{side(c['premises'])} -o {side(c['effects'])}]")
+    if s["atoms"]:
+        lines.append("  atoms: " + ", ".join(
+            f"{a['name']} = {a['doc'] or '(no doc)'}" for a in s["atoms"]))
+    return "\n".join(lines)

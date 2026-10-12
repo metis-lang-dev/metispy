@@ -7,14 +7,23 @@ layers (task).
 stages (task).
 
 namespace k produce (task).
+%% a free hand
 pred hand_free : k.
+%% an onion in hand
 pred held_onion : k.
+%% a dish in hand
 pred held_dish : k.
+%% a soup in hand
 pred held_soup : k.
+%% room in the pot
 pred pot_space : k.
+%% onions in the pot
 pred pot_onion : k.
+%% a soup cooking
 pred cooking : k.
+%% a soup ready
 pred ready : k.
+%% soups served
 pred served : k.
 
 input scene.
