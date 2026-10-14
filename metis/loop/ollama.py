@@ -55,11 +55,13 @@ def strip_fences(text: str) -> str:
 
 def generate(prompt: str, model: str = None, host: str = None,
              timeout: int = 600, options: dict = None,
-             system: str = None) -> str:
+             system: str = None, meta: dict = None) -> str:
     """One completion from the local Ollama server. `options` merge
     over the temperature-0 default (the narrate seat warms it);
     `system` goes in the model's system slot, apart from the
-    material — small models keep the two straight only that way."""
+    material — small models keep the two straight only that way.
+    `meta`, when given, is filled with cut (the server stopped at
+    num_predict: done_reason "length") and tokens (eval_count)."""
     req = urllib.request.Request(
         (host or default_host()).rstrip("/") + "/api/generate",
         data=json.dumps({
@@ -88,6 +90,9 @@ def generate(prompt: str, model: str = None, host: str = None,
         raise
     if "response" not in out:
         raise RuntimeError(f"ollama: no response field in {out!r}")
+    if meta is not None:
+        meta["cut"] = out.get("done_reason") == "length"
+        meta["tokens"] = out.get("eval_count")
     return strip_fences(out["response"])
 
 

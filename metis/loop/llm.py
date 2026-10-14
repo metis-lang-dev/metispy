@@ -46,7 +46,8 @@ def resolve(spec: str) -> Endpoint:
 
 
 def _anthropic(prompt: str, model: str, timeout: int,
-               options: dict = None, system: str = None) -> str:
+               options: dict = None, system: str = None,
+               meta: dict = None) -> str:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
@@ -67,24 +68,33 @@ def _anthropic(prompt: str, model: str, timeout: int,
                  "anthropic-version": ANTHROPIC_VERSION})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         out = json.loads(r.read())
+    if meta is not None:
+        meta["cut"] = out.get("stop_reason") == "max_tokens"
+        meta["tokens"] = (out.get("usage") or {}).get("output_tokens")
     return "".join(b.get("text", "")
                    for b in out.get("content", [])).strip()
 
 
 def complete(spec, prompt: str, timeout: int = 600,
-             options: dict = None, system: str = None) -> str:
+             options: dict = None, system: str = None,
+             meta: dict = None) -> str:
     """One completion from the configured endpoint. `options` are
     sampling knobs (Ollama's: temperature, num_ctx, ...); the
     anthropic backend honors temperature only, command ignores them.
     `system` rides the backend's system slot; the command backend,
-    which has none, gets it prepended to the prompt."""
+    which has none, gets it prepended to the prompt. `meta`, when
+    given, says whether the endpoint stopped at its token cap (cut)
+    and how many tokens it wrote; the command backend cannot tell
+    (cut False)."""
     ep = spec if isinstance(spec, Endpoint) else resolve(spec)
+    if meta is not None:
+        meta.setdefault("cut", False)
     if ep.backend == "ollama":
         from .ollama import generate
         return generate(prompt, model=ep.arg or None, timeout=timeout,
-                        options=options, system=system)
+                        options=options, system=system, meta=meta)
     if ep.backend == "anthropic":
-        return _anthropic(prompt, ep.arg, timeout, options, system)
+        return _anthropic(prompt, ep.arg, timeout, options, system, meta)
     if system:
         prompt = system + "\n\n" + prompt
     proc = subprocess.run(shlex.split(ep.arg), input=prompt,
