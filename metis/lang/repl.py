@@ -131,7 +131,8 @@ tick [N]            advance the env N beats by hand (its do-lines join
 notch [ALPHA]       fit the ports from this session's sampled steps
                     (Dirichlet per read-scope row), print the row
                     sheet; `notch accept` ships it as an OVERLAY
-                    (never a catalog edit), `notch pop` drops one
+                    (never a catalog edit), `notch pop` drops one;
+                    `notch load FILE` ships a fitted overlay file
 key                 canonical program_key of the serving catalog
 version             what is running: package, source+git, python,
                     config dot file, llm endpoint
@@ -411,13 +412,18 @@ class Repl(LoopVerbs, Cmd):
                                  - set(reg.weight_bindings() if reg
                                        else ()))
                 err = PortError(missing)
+                found = None if spec else self._plugin_beside()
                 how = ("plugin " + spec + " does not bind it" if spec
+                       else ("no plugin binds it — one is beside the "
+                             f"catalog: serve it with `{found[0]}`, or add "
+                             f"'{found[1]}' to {self.path.name}" + found[2])
+                       if found
                        else "no plugin binds it: serve it with `metis "
                        "--plugin pkg.mod:factory FILE` (catalog-served "
                        "files), or put '#plugin pkg.mod:factory' in a "
-                       "scene file"
-                       + ("" if self.terminal else
-                          " (plugins attach in the terminal shell only)"))
+                       "scene file")
+                how += ("" if spec or self.terminal else
+                        " (plugins attach in the terminal shell only)")
                 err.findings = [f"unbound weight port '{m}' — {how}"
                                 for m in missing] or list(
                                     getattr(e, "findings", [str(e)]))
@@ -432,6 +438,68 @@ class Repl(LoopVerbs, Cmd):
         self._port_warns = warns
         if attach:
             self._env_attach()
+
+    def _plugin_beside(self):
+        """A port plugin by convention beside the catalog — <stem>_plugin.py
+        or <stem>/<stem>_plugin.py, its factory `make` (else its first
+        `def NAME(case`) — as (the serve command, the #plugin line, a
+        hint for a fitted overlay <stem>.notch.json beside it); None when
+        there is none."""
+        d, stem = self.path.parent, self.path.stem
+        for f in (d / f"{stem}_plugin.py", d / stem / f"{stem}_plugin.py"):
+            if not f.exists():
+                continue
+            src = f.read_text(errors="replace")
+            m = re.search(r"^def (\w+)\(case", src, re.M)
+            fac = "make" if re.search(r"^def make\(", src, re.M) or not m \
+                else m.group(1)
+            spec = f"{f.relative_to(d).as_posix()}:{fac}"
+            notch = d / f"{stem}.notch.json"
+            return (f"metis --plugin {spec} {self.path.name}",
+                    f"#plugin {spec}",
+                    (f"; then `notch load {notch.name}` for the fitted "
+                     "world" if notch.exists() else ""))
+        return None
+
+    def _notch_load(self, arg):
+        """notch load FILE: a fitted overlay file (the recorder's
+        --overlay format, {"rows": [{port, args, row, notched}]}) shipped
+        on the registry as `notch accept` ships a fit."""
+        if not arg:
+            self._say("usage: notch load FILE (a fitted overlay, e.g. "
+                      f"{self.path.stem}.notch.json)")
+            return
+        if self.registry is None:
+            self._say("no port plugin attached — an overlay rides on the "
+                      "plugin's registry; serve the catalog with it first")
+            return
+        f = Path(arg).expanduser()
+        if not f.is_absolute():
+            f = next((c for c in (self.path.parent / f, Path.cwd() / f)
+                      if c.exists()), self.path.parent / f)
+        if not f.exists():
+            self._say(f"no overlay file {arg}")
+            return
+        from metis.domains.rddl_recorder import _overlay_table
+        try:
+            tables = _overlay_table(f)
+        except (ValueError, KeyError, TypeError) as e:
+            self._say(f"not an overlay file ({type(e).__name__}: {e}) — "
+                      "want {\"rows\": [{port, args, row, notched}]}")
+            return
+        ports = {r.factor for r in self.doc.ports.weight_refs.values()}
+        unknown = sorted(set(tables) - ports)
+        if unknown:
+            self._say(f"{f.name} prices port(s) this catalog does not "
+                      f"declare: {', '.join(unknown)} — not loaded")
+            return
+        for port, ov in sorted(tables.items()):
+            self.registry.overlay(port, ov)
+        self._overlays.append(sorted(tables))
+        self._rebuild_pricer()
+        self._say(f"overlay {f.name} shipped on {', '.join(sorted(tables))}"
+                  f" (depth {len(self._overlays)}) — the catalog is "
+                  f"unchanged (key {self.key[:12]}…); `notch pop` drops it")
 
     def _rebuild_pricer(self):
         """After the registry's overlay chain changed (notch)."""
@@ -2605,10 +2673,14 @@ class Repl(LoopVerbs, Cmd):
         posterior mean (alpha*p0 + s)/(alpha + n). Prints the row
         sheet; `notch accept` (or `accept` with no candidate pending)
         ships it as an OVERLAY on the registry — never a catalog edit;
-        `notch pop` drops the newest overlay."""
+        `notch load FILE` ships a fitted overlay file the same way (the
+        recorder's --overlay format, e.g. <stem>.notch.json beside the
+        catalog); `notch pop` drops the newest overlay."""
         a = arg.strip()
         if a == "accept":
             return self._notch_accept()
+        if a == "load" or a.startswith("load "):
+            return self._notch_load(a[4:].strip())
         if a == "pop":
             if not self._overlays:
                 self._say("no notch overlay shipped")
@@ -2624,7 +2696,7 @@ class Repl(LoopVerbs, Cmd):
         try:
             alpha = float(a) if a else 10.0
         except ValueError:
-            self._say("usage: notch [ALPHA] | notch accept | notch pop")
+            self._say("usage: notch [ALPHA] | notch accept | notch load FILE | notch pop")
             return
         fit = notch_rows(self.fired_how, alpha, self.doc.ports)
         if not fit["rows"]:
