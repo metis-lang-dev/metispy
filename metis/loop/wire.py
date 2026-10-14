@@ -511,7 +511,7 @@ def _fired_since(shell, k):
     for j, (kind, stage, ev) in enumerate(shell.fired_rows[k:], k + 1):
         nd = by.get(j)
         out.append({"i": j, "name": ev.name, "kind": kind,
-                    "stage": stage if kind == "clause" else ev.pre,
+                    "stage": stage if kind in ("clause", "exo") else ev.pre,   # exo: a host beat (no link)
                     "post": ev.post if kind == "link" else None,
                     "beat": nd.beat if nd else None,
                     "episode": nd.episode if nd else None,

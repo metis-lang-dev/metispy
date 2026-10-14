@@ -284,6 +284,23 @@ def test_web_console_never_imports_the_plugin(tmp_path):
     assert not {"plugin", "ports", "port", "tick", "notch"} & INTENT_VERBS
 
 
+def test_a_hosted_run_posts_its_env_rows_on_the_wire(tmp_path):
+    """A host attached as the operator's --host (the loop console's
+    one-click open, metis-loop catalog_index): the wire's posting of a run
+    lists the env rows (kind exo, no stage link) — it read ev.pre off them
+    and failed every hosted run ("'ExoEvent' object has no attribute
+    'pre'")."""
+    from metis.loop.wire import intent_posting
+    p = _world(tmp_path, CLOCK, "clock_env.py", CLOCK_ENV)
+    r = Repl(p, seed=1, stdout=io.StringIO(), plugin="clock_env.py:make", host=True)
+    assert r.plugin is not None
+    post = intent_posting(r, ":run 100")
+    assert post["status"] == "done", post
+    rows = post["json"]["fired"]
+    assert any(f["kind"] == "exo" and f["stage"] == r.fired_rows[f["i"] - 1][1] for f in rows)
+    assert {f["kind"] for f in rows} >= {"exo", "clause"}
+
+
 # -- gate: an unbound port in a candidate is a finding -------------------
 
 def test_gate_unbound_port_is_a_finding_not_a_crash(tmp_path):
