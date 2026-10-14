@@ -127,7 +127,9 @@ ports (PLUGIN-PORTS.md) — real values and time behind the catalog;
 operator code, so TERMINAL ONLY (D4):
 plugin [SPEC|off]   show / attach (pkg.mod:factory | file.py:factory)
                     / detach the port plugin (also '#plugin SPEC' in
-                    the file, or [ports] plugin in the dot file)
+                    the file, or [ports] plugin in the dot file);
+                    '#notch FILE' in the file ships a fitted overlay
+                    at serve, as `notch load FILE` (`notch pop` drops it)
 ports               declared weight ports: bound?, read scope, the
                     rules referencing them
 port F(ARGS)        evaluate one binding against the current counts
@@ -269,6 +271,7 @@ class Repl(LoopVerbs, Cmd):
         self._envs, self._env0 = [], None
         self._notch = None              # a fitted, not yet shipped fit
         self._overlays = []             # shipped notch overlays (names)
+        self._overlay_names = []        # per overlay: "notch fit" or its file
         # `plugin SPEC|off` (or the constructor) pins the spec over the
         # file's #plugin / the dot file's [ports] plugin; None = unpinned
         self._plugin_pin = plugin
@@ -345,6 +348,7 @@ class Repl(LoopVerbs, Cmd):
                              self.prog)
         self.events_tbl = canonical_events(self.prog)
         self.key = program_key(self.prog)
+        self._ship_pending_notch()
         if initial or self.stage not in (
                 list(self.prog.stages) + [DONE]):
             self.stage = self.prog.init_stage
@@ -368,6 +372,7 @@ class Repl(LoopVerbs, Cmd):
         self.prog = catalog.ground(dict(self.case["init"]))
         self.events_tbl = canonical_events(self.prog)
         self.key = program_key(self.prog)
+        self._ship_pending_notch()
         if self.stage not in (list(self.prog.stages) + [DONE]):
             self.stage = self.prog.init_stage
             self.counts = dict(self.case["init"])
@@ -445,6 +450,11 @@ class Repl(LoopVerbs, Cmd):
         self._port_warns = warns
         if attach:
             self._env_attach()
+            # a fresh registry carries no overlay: the file's #notch
+            # lines ship again on it (as `notch load` would)
+            self._overlays, self._overlay_names = [], []
+            self._notch_pending = list(case.get("notch") or []) \
+                if plugin is not None else []
 
     def _seeded_trace(self, seed):
         """`narrate SEED`'s fresh trace: the reference sampler from the
@@ -480,45 +490,67 @@ class Repl(LoopVerbs, Cmd):
                      "world" if notch.exists() else ""))
         return None
 
-    def _notch_load(self, arg):
+    def _ship_pending_notch(self):
+        """The file's #notch overlays, once the catalog is compiled and
+        its plugin's fresh registry is bound (serve, reload, plugin)."""
+        pending, self._notch_pending = getattr(self, "_notch_pending", []), []
+        for f in pending:
+            if not self._notch_load(f, quiet=True):
+                self._port_warns.append(f"#notch {f}: not shipped")
+
+    def _pricing(self):
+        """What prices the session's weight ports, in one line: the
+        plugin's base binding (its `name`, else its spec) and the
+        overlays shipped on it — '' for a catalog without weight ports."""
+        if self.pricer is None:
+            return ""
+        base = getattr(self.plugin, "name", "") or self.plugin_spec or "no plugin"
+        return (f"priced by {base}; overlays: "
+                + (", ".join(self._overlay_names) or "none"))
+
+    def _notch_load(self, arg, quiet=False):
         """notch load FILE: a fitted overlay file (the recorder's
         --overlay format, {"rows": [{port, args, row, notched}]}) shipped
         on the registry as `notch accept` ships a fit."""
         if not arg:
             self._say("usage: notch load FILE (a fitted overlay, e.g. "
                       f"{self.path.stem}.notch.json)")
-            return
+            return False
         if self.registry is None:
             self._say("no port plugin attached — an overlay rides on the "
                       "plugin's registry; serve the catalog with it first")
-            return
+            return False
         f = Path(arg).expanduser()
         if not f.is_absolute():
             f = next((c for c in (self.path.parent / f, Path.cwd() / f)
                       if c.exists()), self.path.parent / f)
         if not f.exists():
             self._say(f"no overlay file {arg}")
-            return
+            return False
         from metis.lang.overlay import overlay_table as _overlay_table
         try:
             tables = _overlay_table(f)
         except (ValueError, KeyError, TypeError) as e:
             self._say(f"not an overlay file ({type(e).__name__}: {e}) — "
                       "want {\"rows\": [{port, args, row, notched}]}")
-            return
+            return False
         ports = {r.factor for r in self.doc.ports.weight_refs.values()}
         unknown = sorted(set(tables) - ports)
         if unknown:
             self._say(f"{f.name} prices port(s) this catalog does not "
                       f"declare: {', '.join(unknown)} — not loaded")
-            return
+            return False
         for port, ov in sorted(tables.items()):
             self.registry.overlay(port, ov)
         self._overlays.append(sorted(tables))
+        self._overlay_names.append(f.name)
         self._rebuild_pricer()
+        if quiet:
+            return True
         self._say(f"overlay {f.name} shipped on {', '.join(sorted(tables))}"
                   f" (depth {len(self._overlays)}) — the catalog is "
                   f"unchanged (key {self.key[:12]}…); `notch pop` drops it")
+        return True
 
     def _rebuild_pricer(self):
         """After the registry's overlay chain changed (notch)."""
@@ -792,7 +824,8 @@ class Repl(LoopVerbs, Cmd):
                 break
             names.append(name)
         self._say(" ".join(names) if names else "(quiescent)")
-        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}")
+        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}"
+                  + (f"\n({self._pricing()})" if self.pricer else ""))
 
     def do_state(self, arg):
         """current stage + multiset, tabulated by predicate"""
@@ -1970,6 +2003,8 @@ class Repl(LoopVerbs, Cmd):
                 "blocked " + " ".join(c["masks"]) if c["masks"] else "",
                 f"FORKED at #{fk['at']} (actual #{fk['actual']} shelved"
                 " — back)" if fk else "") if x))
+        if self.pricer is not None:
+            out.append("PRICED  " + self._pricing())
         want = [section] if section else list(self._CTX_SECTIONS)
         if "tokens" in want:
             out += ["── tokens"] + (state_table(self.counts.items())
@@ -2310,7 +2345,8 @@ class Repl(LoopVerbs, Cmd):
             return
         if show == "user":
             self._say(user_prompt(rows, stage, kappa, self.text,
-                                  seed=seed, marks=hows, base_do=bdo))
+                                  seed=seed, marks=hows, base_do=bdo)
+                      + (f"\n({self._pricing()})" if self.pricer else ""))
             return
         try:
             text = narrate(self.llm or "ollama", rows, stage, kappa,
@@ -2341,6 +2377,7 @@ class Repl(LoopVerbs, Cmd):
     def _directive_block(self):
         lines = [f"#plugin {self.plugin_spec}"] if self.plugin_spec \
             else []
+        lines += [f"#notch {f}" for f in self.case.get("notch", [])]
         lines += [f"#init {a} {n}"
                   for a, n in sorted(self.counts.items())]
         if self.case["steps"]:
@@ -2584,7 +2621,8 @@ class Repl(LoopVerbs, Cmd):
             findings = getattr(e, "findings", None) or [str(e)]
             self._say("plugin not changed:\n  " + "\n  ".join(findings))
             return
-        self._overlays = []
+        self._overlays, self._overlay_names = [], []
+        self._ship_pending_notch()
         self._notch = None
         for w in self._port_warns:
             self._say(f"warning: {w}")
@@ -2706,6 +2744,8 @@ class Repl(LoopVerbs, Cmd):
                 return
             for f in self._overlays.pop():
                 self.registry.pop_overlay(f)
+            if self._overlay_names:
+                self._overlay_names.pop()
             self._rebuild_pricer()
             self._say(f"overlay dropped ({len(self._overlays)} left)")
             return
@@ -2744,6 +2784,7 @@ class Repl(LoopVerbs, Cmd):
             self.registry.overlay(f, ov)
             shipped.append(f)
         self._overlays.append(shipped)
+        self._overlay_names.append("notch fit")
         self._notch = None
         self._rebuild_pricer()
         self._say(f"overlay shipped on {', '.join(shipped)} (depth "
@@ -2947,6 +2988,9 @@ class Repl(LoopVerbs, Cmd):
                 self.do_plugin(args[0])
                 if self.plugin_spec == args[0]:
                     self.case["plugin"] = args[0]
+            elif key == "notch" and len(args) == 1:
+                if self._notch_load(args[0]):
+                    self.case.setdefault("notch", []).append(args[0])
             elif key == "steps" and len(args) == 1:
                 self.case["steps"] = int(args[0])
                 self._say(f"steps {args[0]}")

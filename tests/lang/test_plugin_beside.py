@@ -88,3 +88,42 @@ def test_seeded_narrate_trace_is_priced_by_the_session():
     assert n0 and n1
     assert f0 / n0 > 0.25          # pign(k0) = 0.5 under the base binding
     assert f1 / n1 < 0.05          # the fitted law: pign(k0) ≈ 0.009
+
+
+def directed_copy(tmp_path):
+    """wildfire.llp with '#notch wildfire.notch.json' beside its #plugin line."""
+    d = tmp_path / "rddl"
+    d.mkdir()
+    (d / "wildfire.llp").write_text(WILD.read_text() + "\n#notch wildfire.notch.json\n")
+    os.symlink(RDDL / "wildfire", d / "wildfire")
+    os.symlink(RDDL / "wildfire.notch.json", d / "wildfire.notch.json")
+    return d / "wildfire.llp"
+
+
+def test_notch_directive_ships_at_serve_and_pop_drops_it(tmp_path):
+    """#notch FILE ships the fitted overlay at serve, as `notch load` does;
+    the pricing is named in run's footer, the ctx band and narrate user;
+    `notch pop` drops it back to the base binding."""
+    out = io.StringIO()
+    r = Repl(directed_copy(tmp_path), seed=1, terminal=True, stdout=out)
+
+    def say(line):
+        out.truncate(0)
+        out.seek(0)
+        r.onecmd(line)
+        return out.getvalue()
+    assert r._overlay_names == ["wildfire.notch.json"]
+    assert "priced by wildfire-prior-flat; overlays: wildfire.notch.json" in say("ctx")
+    assert "(priced by wildfire-prior-flat; overlays: wildfire.notch.json)" in say("run 3")
+    assert "overlays: wildfire.notch.json" in say("narrate user 1")
+    say("notch pop")
+    assert "priced by wildfire-prior-flat; overlays: none" in say("ctx")
+
+
+def test_without_the_directive_the_base_binding_prices():
+    out = io.StringIO()
+    r = Repl(WILD, seed=1, terminal=True, stdout=out)
+    out.truncate(0)
+    out.seek(0)
+    r.onecmd("ctx")
+    assert "priced by wildfire-prior-flat; overlays: none" in out.getvalue()
