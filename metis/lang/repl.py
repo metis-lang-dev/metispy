@@ -487,7 +487,7 @@ class Repl(LoopVerbs, Cmd):
         if not f.exists():
             self._say(f"no overlay file {arg}")
             return
-        from metis.domains.rddl_recorder import _overlay_table
+        from metis.lang.overlay import overlay_table as _overlay_table
         try:
             tables = _overlay_table(f)
         except (ValueError, KeyError, TypeError) as e:
