@@ -504,3 +504,23 @@ def test_a_zero_event_cone_reads_as_impossible_not_as_p_zero():
     assert "(blocked through the readout) — impossible — no event can " \
         "produce brickhouse under the active masks" in out
 
+
+
+def test_band_and_do_agree_on_chosen_steps():
+    """A chosen step (`step EVENT`) is conditioning, not an intervention:
+    the ctx band counts it apart from the do's, and bare `do` names it
+    without listing it as one (specialist step 2a: the band said
+    '1 forced/do' while `do` listed '(none)')."""
+    r, say = shell()
+    say("step " + sorted(tier(r))[0])
+    assert [h["how"] for h in r.fired_how] == ["forced"]
+    band = say("ctx")
+    assert "1 chosen step (out of the likelihood)" in band and " do (" not in band
+    lst = say("do")
+    assert "(none)" in lst and "chosen steps (step EVENT — conditioning, not interventions): 1" in lst
+    say("do " + sorted(tier(r))[0])
+    band = say("ctx")
+    assert "1 chosen step, 1 do (out of the likelihood)" in band
+    lst = say("do")
+    assert "(none)" not in lst.split("masks:")[0] and "chosen steps" in lst
+    assert r._ctx_interventions()["likelihood"]["forced"] == 2

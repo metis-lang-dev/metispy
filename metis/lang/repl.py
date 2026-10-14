@@ -760,10 +760,14 @@ class Repl(LoopVerbs, Cmd):
         if not a:
             k0 = self._base[0]
             n_exo = sum(1 for h in self.fired_how if h["how"] == "exo")
+            n_chosen = sum(1 for h in self.fired_how if h["how"] == "forced")
             rows = [f"  {d['k']:>3}  do {d['op']}" for d in self.ledger]
             self._say("\n".join(
                 ["interventions this session (after occurrence k):"]
                 + (rows or ["  (none)"])
+                + ([f"chosen steps (step EVENT — conditioning, not "
+                    f"interventions): {n_chosen} — 'log' marks them "
+                    "[forced]"] if n_chosen else [])
                 + [f"masks: {' '.join(sorted(self.masks)) or '(none)'}",
                    f"base #{k0}: " + (
                        "do " + ", ".join(self._base_do)
@@ -1820,8 +1824,14 @@ class Repl(LoopVerbs, Cmd):
         under = sorted({m for h in self.fired_how
                         if h.get("how") == "sampled"
                         for m in h.get("masks", ())})
+        # a chosen step (`step EVENT`, how=forced) is conditioning but not
+        # an intervention: `do` lists the ledger only, so the band counts
+        # the two apart (specialist step 2a: '1 forced/do' beside a `do`
+        # that listed none)
+        chosen = sum(1 for h in self.fired_how if h["how"] == "forced")
         return {"likelihood": {"value": lik, "sampled": ns,
-                               "forced": nf, "under_masks": under},
+                               "forced": nf, "chosen": chosen,
+                               "do": nf - chosen, "under_masks": under},
                 "masks": sorted(self.masks),
                 "base_do": list(self._base_do),
                 "fork": ({"at": self.fork_at,
@@ -1862,8 +1872,12 @@ class Repl(LoopVerbs, Cmd):
         lk, fk = c["likelihood"], c["fork"]
         if lk["forced"] or c["masks"] or c["base_do"] or fk:
             out.append("DO      " + "  ".join(x for x in (
-                f"{lk['forced']} forced/do (out of the likelihood)"
-                if lk["forced"] else "",
+                ", ".join(x for x in (
+                    f"{lk['chosen']} chosen step"
+                    f"{'' if lk['chosen'] == 1 else 's'}"
+                    if lk["chosen"] else "",
+                    f"{lk['do']} do" if lk["do"] else "") if x)
+                + " (out of the likelihood)" if lk["forced"] else "",
                 "base do " + ", ".join(c["base_do"]) if c["base_do"]
                 else "",
                 "blocked " + " ".join(c["masks"]) if c["masks"] else "",
