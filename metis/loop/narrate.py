@@ -173,8 +173,13 @@ def gloss(line: str, docs: Dict[str, str], ev=None) -> str:
     if binds:
         keys = "|".join(map(re.escape, sorted(binds, key=len,
                                                 reverse=True)))
-        first = re.sub(rf"\b({keys})\b",
-                       lambda k: binds[k.group(1)], first)
+        # a quoted span is source text verbatim (wgc's row doc "A farmer
+        # with a wolf…" under A=far): role letters are replaced outside
+        # quotes only, never inside a quotation
+        parts = re.split(r'("[^"]*")', first)
+        first = "".join(p if i % 2 else re.sub(
+            rf"\b({keys})\b", lambda k: binds[k.group(1)], p)
+            for i, p in enumerate(parts))
     return f"{line.rstrip()}  — {first}{eff}"
 
 

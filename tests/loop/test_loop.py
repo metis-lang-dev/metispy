@@ -278,3 +278,16 @@ def test_repair_prompt_caps_a_runaway_candidate():
     p = render_repair_prompt(TEXT, junk, rep)
     assert len(p) < CANDIDATE_CAP + 3000
     assert "candidate truncated" in p
+
+
+def test_gloss_keeps_quoted_doc_verbatim():
+    """'narrate user' (specialist step 1, nina): wgc's row doc is a verbatim
+    quote starting with the article "A"; the event binds A=far. Role
+    letters are substituted outside quotes only."""
+    from metis.loop.narrate import gloss
+    docs = {"row": '"A farmer with a wolf, a goat, and a cabbage must cross '
+                   'a river by boat." (the boat crosses with the farmer alone too)',
+            "warn": "C warns D about the gossip."}
+    g = gloss("3 | row [A=far,B=near]", docs)
+    assert '"A farmer with a wolf' in g and "far farmer" not in g
+    assert "ada warns bo" in gloss("1 | warn [C=ada,D=bo]", docs)
