@@ -108,8 +108,15 @@ llm [SPEC]          show/set + VALIDATE the LLM endpoint
                     command:ARGV; seeded by the config dot file:
                     $METIS_CONFIG | .metis.toml |
                     ~/.config/metis/config.toml)
-narrate [SEED]      the session so far (or a seeded trace) as prose:
-                    Foata beats + %% docs through the llm endpoint
+narrate [SEED]      the session so far as prose — or, with a number, a
+                    fresh trace SAMPLED with that seed (not N beats):
+                    Foata beats + %% docs through the llm endpoint.
+                    Catalog %% conventions: `%% [fold]` bookkeeping
+                    (not told), `%% [fold P] words` (a run of it is
+                    one line + the net-new P atoms), `%% a | b` on a
+                    ⊕ rule (branch N tells phrase N); `% evidence:`
+                    lines never reach the narrator. A narration cut at
+                    the endpoint's cap ends on a sentence and says so
 narrate system|user show the system / certified-material prompt
                     (no model call; the UI halves). `narrate system
                     <<EOF` sets a session override; the persistent
@@ -2252,12 +2259,16 @@ class Repl(LoopVerbs, Cmd):
 
     def do_narrate(self, arg):
         """tell this session's fired events since the last reset/edit
-        (or 'narrate SEED' for a
-        fresh seeded trace) as prose: Foata beats + final state + the
-        catalog's %% docs through the configured llm endpoint — the
-        loop's narrate-out boundary. `narrate system` prints the
-        doctrine prompt, `narrate user [SEED]` the certified
-        material, neither calls the model."""
+        (or 'narrate SEED' for a fresh trace sampled with that seed —
+        a seed, not a number of beats) as prose: Foata beats + final
+        state + the catalog's %% docs through the configured llm
+        endpoint — the loop's narrate-out boundary. `narrate system`
+        prints the doctrine prompt, `narrate user [SEED]` the
+        certified material, neither calls the model. The catalog's %%
+        conventions (metis/loop/narrate.py): [fold] / [fold P] rows
+        are machinery, folded; `a | b` gives a ⊕ rule's branches their
+        phrases; `% evidence:` stays out. A narration the endpoint cut
+        at its cap ends on its last sentence and says so."""
         from metis.loop.narrate import narrate, user_prompt
         parts = arg.split()
         show = parts.pop(0) if parts and parts[0] in ("system",

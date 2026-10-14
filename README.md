@@ -43,3 +43,33 @@ python3 -m pytest tests/ -q -m 'not slow'   # the dev loop
 Optional extras: `pip install overcooked-ai scipy` (kitchen),
 `pyRDDLGym` (sysadmin), `pgmpy` (graph-evaluator comparisons).
 Oracle parity vs the wayplan ll2pg lineage: `METIS_ORACLE_PATH`.
+
+## Narration (`narrate`, metis/loop/narrate.py)
+
+`narrate` tells the session's fired events as prose (`narrate SEED`: a
+fresh trace sampled with that seed). The narrator sees only certified
+material — the Foata beats, the final state and the catalog's `%%`
+docs — so the docs are its vocabulary: one plain sentence per story
+row. Four conventions keep a mined or machinery-heavy catalog
+tellable:
+
+| in the catalog | what the narrator gets |
+|---|---|
+| `%% [fold]` | bookkeeping: not told |
+| `%% [fold P …] words` | a run of these events → one beat line: the words, `⇒ left:` the net-new atoms of P |
+| `%% phrase one \| phrase two` (⊕ rule) | branch N's event tells phrase N |
+| `% evidence: "…"` | nothing — single-`%` lines never reach the narrator |
+
+Example, metis-catalog `domains/rddl/wildfire.llp`:
+
+```
+  % evidence: "k, the number of its neighbors burning at the start of the step"
+  %% [fold tally] the fire counts the burning neighbours of each cell
+  see_fire [dyn] : scan(X, Y, S) * tally(X, Y, K) * ... -o scan(X, Y, S2) * tally(X, Y, K2).
+  %% X,Y, with K burning neighbours, catches fire | X,Y, with K burning neighbours, stays unburnt.
+  catch [dyn] : fresh(X, Y) * tally(X, Y, K) * not_burning(X, Y) -o (burning(X, Y) @w pign(K) | not_burning(X, Y) @w ~pign(K)).
+```
+
+The material asks for a length sized to what is told, and a narration
+the endpoint cut at its token cap ends on its last full sentence with
+"(narration cut at N tokens; ask fewer beats)".
