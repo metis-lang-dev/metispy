@@ -272,6 +272,7 @@ class Repl(LoopVerbs, Cmd):
         self._notch = None              # a fitted, not yet shipped fit
         self._overlays = []             # shipped notch overlays (names)
         self._overlay_names = []        # per overlay: "notch fit" or its file
+        self._overlay_srcs = []         # per overlay: (resolved file, ports) — a file ships once
         # `plugin SPEC|off` (or the constructor) pins the spec over the
         # file's #plugin / the dot file's [ports] plugin; None = unpinned
         self._plugin_pin = plugin
@@ -452,7 +453,7 @@ class Repl(LoopVerbs, Cmd):
             self._env_attach()
             # a fresh registry carries no overlay: the file's #notch
             # lines ship again on it (as `notch load` would)
-            self._overlays, self._overlay_names = [], []
+            self._overlays, self._overlay_names, self._overlay_srcs = [], [], []
             self._notch_pending = list(case.get("notch") or []) \
                 if plugin is not None else []
 
@@ -540,10 +541,19 @@ class Repl(LoopVerbs, Cmd):
             self._say(f"{f.name} prices port(s) this catalog does not "
                       f"declare: {', '.join(unknown)} — not loaded")
             return False
+        src = (str(f.resolve()), tuple(sorted(tables)))
+        if src in self._overlay_srcs:
+            # the #notch directive (or an earlier load) shipped this file on
+            # these ports: a second copy would price the catalog twice
+            if not quiet:
+                self._say(f"overlay {f.name} already shipped on {', '.join(sorted(tables))}"
+                          f" (depth {len(self._overlays)}) — not loaded twice; `notch pop` drops it")
+            return True
         for port, ov in sorted(tables.items()):
             self.registry.overlay(port, ov)
         self._overlays.append(sorted(tables))
         self._overlay_names.append(f.name)
+        self._overlay_srcs.append(src)
         self._rebuild_pricer()
         if quiet:
             return True
@@ -2621,7 +2631,7 @@ class Repl(LoopVerbs, Cmd):
             findings = getattr(e, "findings", None) or [str(e)]
             self._say("plugin not changed:\n  " + "\n  ".join(findings))
             return
-        self._overlays, self._overlay_names = [], []
+        self._overlays, self._overlay_names, self._overlay_srcs = [], [], []
         self._ship_pending_notch()
         self._notch = None
         for w in self._port_warns:
@@ -2746,6 +2756,8 @@ class Repl(LoopVerbs, Cmd):
                 self.registry.pop_overlay(f)
             if self._overlay_names:
                 self._overlay_names.pop()
+            if self._overlay_srcs:
+                self._overlay_srcs.pop()
             self._rebuild_pricer()
             self._say(f"overlay dropped ({len(self._overlays)} left)")
             return
@@ -2785,6 +2797,7 @@ class Repl(LoopVerbs, Cmd):
             shipped.append(f)
         self._overlays.append(shipped)
         self._overlay_names.append("notch fit")
+        self._overlay_srcs.append(("notch fit", tuple(sorted(shipped))))
         self._notch = None
         self._rebuild_pricer()
         self._say(f"overlay shipped on {', '.join(shipped)} (depth "

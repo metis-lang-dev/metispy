@@ -47,9 +47,21 @@ def test_unbound_port_without_a_plugin_keeps_the_generic_hint(tmp_path):
     assert "pkg.mod:factory" in " ".join(e.value.findings)
 
 
-def test_notch_load_ships_the_overlay_and_pop_drops_it():
+def undirected_copy(tmp_path):
+    """wildfire.llp without its #notch line (the catalog ships the overlay
+    at serve since metis-catalog 0d8f53c): the base binding alone."""
+    d = tmp_path / "rddl"
+    d.mkdir()
+    (d / "wildfire.llp").write_text("".join(
+        ln for ln in WILD.read_text().splitlines(keepends=True) if not ln.startswith("#notch")))
+    os.symlink(RDDL / "wildfire", d / "wildfire")
+    os.symlink(RDDL / "wildfire.notch.json", d / "wildfire.notch.json")
+    return d / "wildfire.llp"
+
+
+def test_notch_load_ships_the_overlay_and_pop_drops_it(tmp_path):
     out = io.StringIO()
-    r = Repl(WILD, seed=1, terminal=True, stdout=out)
+    r = Repl(undirected_copy(tmp_path), seed=1, terminal=True, stdout=out)
 
     def say(line):
         out.truncate(0)
@@ -63,7 +75,7 @@ def test_notch_load_ships_the_overlay_and_pop_drops_it():
     assert "dropped (0 left)" in say("notch pop")
 
 
-def test_seeded_narrate_trace_is_priced_by_the_session():
+def test_seeded_narrate_trace_is_priced_by_the_session(tmp_path):
     """`narrate SEED` builds its trace with the session's ports: flat while
     the base binding is prior-flat (pign = 0.5), the fitted law once the
     overlay is loaded — the same pricing `run` uses (the narrate-bug
@@ -80,9 +92,10 @@ def test_seeded_narrate_trace_is_priced_by_the_session():
                     total += 1
                     fired += m.group(1) == "1"
         return fired, total
-    flat = Repl(WILD, seed=1, terminal=True, stdout=io.StringIO())
+    bare = undirected_copy(tmp_path)
+    flat = Repl(bare, seed=1, terminal=True, stdout=io.StringIO())
     f0, n0 = k0_fires(flat)
-    fitted = Repl(WILD, seed=1, terminal=True, stdout=io.StringIO())
+    fitted = Repl(bare, seed=1, terminal=True, stdout=io.StringIO())
     fitted.onecmd("notch load wildfire.notch.json")
     f1, n1 = k0_fires(fitted)
     assert n0 and n1
@@ -94,7 +107,9 @@ def directed_copy(tmp_path):
     """wildfire.llp with '#notch wildfire.notch.json' beside its #plugin line."""
     d = tmp_path / "rddl"
     d.mkdir()
-    (d / "wildfire.llp").write_text(WILD.read_text() + "\n#notch wildfire.notch.json\n")
+    (d / "wildfire.llp").write_text("".join(
+        ln for ln in WILD.read_text().splitlines(keepends=True) if not ln.startswith("#notch"))
+        + "\n#notch wildfire.notch.json\n")
     os.symlink(RDDL / "wildfire", d / "wildfire")
     os.symlink(RDDL / "wildfire.notch.json", d / "wildfire.notch.json")
     return d / "wildfire.llp"
@@ -120,10 +135,30 @@ def test_notch_directive_ships_at_serve_and_pop_drops_it(tmp_path):
     assert "priced by wildfire-prior-flat; overlays: none" in say("ctx")
 
 
-def test_without_the_directive_the_base_binding_prices():
+def test_without_the_directive_the_base_binding_prices(tmp_path):
     out = io.StringIO()
-    r = Repl(WILD, seed=1, terminal=True, stdout=out)
+    r = Repl(undirected_copy(tmp_path), seed=1, terminal=True, stdout=out)
     out.truncate(0)
     out.seek(0)
     r.onecmd("ctx")
     assert "priced by wildfire-prior-flat; overlays: none" in out.getvalue()
+
+
+def test_notch_load_after_the_directive_ships_nothing_twice():
+    """The catalog as shipped (#notch in wildfire.llp): a person typing
+    `notch load` of the same file gets told it is shipped already, and the
+    catalog is priced once — one overlay, one name — not twice."""
+    out = io.StringIO()
+    r = Repl(WILD, seed=1, terminal=True, stdout=out)
+    assert r._overlay_names == ["wildfire.notch.json"]
+    out.truncate(0)
+    out.seek(0)
+    r.onecmd("notch load wildfire.notch.json")
+    assert "already shipped on pign" in out.getvalue()
+    assert len(r._overlays) == 1 and r._overlay_names == ["wildfire.notch.json"]
+    r.onecmd("notch pop")
+    assert r._overlays == [] and r._overlay_names == []
+    out.truncate(0)
+    out.seek(0)
+    r.onecmd("notch load wildfire.notch.json")        # after the pop it ships again
+    assert "shipped on pign (depth 1)" in out.getvalue()
