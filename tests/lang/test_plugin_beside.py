@@ -61,3 +61,30 @@ def test_notch_load_ships_the_overlay_and_pop_drops_it():
     assert len(r._overlays) == 1
     assert "no overlay file" in say("notch load nothing.json")
     assert "dropped (0 left)" in say("notch pop")
+
+
+def test_seeded_narrate_trace_is_priced_by_the_session():
+    """`narrate SEED` builds its trace with the session's ports: flat while
+    the base binding is prior-flat (pign = 0.5), the fitted law once the
+    overlay is loaded — the same pricing `run` uses (the narrate-bug
+    report: 34/80 k0 ignitions came from the un-notched world)."""
+    import re
+
+    def k0_fires(r):
+        fired = total = 0
+        for seed in range(1, 21):
+            rows, _, _ = r._seeded_trace(seed)
+            for _, _, ev in rows:
+                m = re.match(r"catch-(\d)\[.*K=k0\]", ev.name)
+                if m:
+                    total += 1
+                    fired += m.group(1) == "1"
+        return fired, total
+    flat = Repl(WILD, seed=1, terminal=True, stdout=io.StringIO())
+    f0, n0 = k0_fires(flat)
+    fitted = Repl(WILD, seed=1, terminal=True, stdout=io.StringIO())
+    fitted.onecmd("notch load wildfire.notch.json")
+    f1, n1 = k0_fires(fitted)
+    assert n0 and n1
+    assert f0 / n0 > 0.25          # pign(k0) = 0.5 under the base binding
+    assert f1 / n1 < 0.05          # the fitted law: pign(k0) ≈ 0.009

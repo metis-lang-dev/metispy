@@ -446,6 +446,18 @@ class Repl(LoopVerbs, Cmd):
         if attach:
             self._env_attach()
 
+    def _seeded_trace(self, seed):
+        """`narrate SEED`'s fresh trace: the reference sampler from the
+        initial state, priced by THIS session's weight ports — the
+        plugin's base binding and every notch overlay shipped on it
+        (`notch accept`, `notch load`). A prior-flat base port prices
+        flat until a fitted overlay is shipped."""
+        idx, (stage, kappa) = run_trace(
+            self.prog, self.case["steps"] or 6, seed,
+            policy=self.pricer.policy(self.prog, canonical=True)
+            if self.pricer else None)
+        return [self.events_tbl[i] for i in idx], stage, kappa
+
     def _plugin_beside(self):
         """A port plugin by convention beside the catalog — <stem>_plugin.py
         or <stem>/<stem>_plugin.py, its factory `make` (else its first
@@ -2282,11 +2294,7 @@ class Repl(LoopVerbs, Cmd):
             except ValueError:
                 self._say("usage: narrate [system|user] [SEED]")
                 return
-            idx, (stage, kappa) = run_trace(
-                self.prog, self.case["steps"] or 6, seed,
-                policy=self.pricer.policy(self.prog, canonical=True)
-                if self.pricer else None)
-            rows = [self.events_tbl[i] for i in idx]
+            rows, stage, kappa = self._seeded_trace(seed)
             hows, bdo = None, ()          # a fresh sampled trace
         else:
             seed = 0
