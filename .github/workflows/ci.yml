@@ -64,4 +64,7 @@ jobs:
             echo "::warning::catalog-reading tests NOT run (no METIS_READ_TOKEN — Contents: read on metis-lang-dev/metis-catalog): $CATALOG_TESTS"
             echo "### NOT run (needs METIS_READ_TOKEN): $CATALOG_TESTS" >> "$GITHUB_STEP_SUMMARY"
           fi
-          pytest -q -m "not slow" --ignore=tests/kitchen -k "not sumo" $IGNORE
+          # the host-only gate (marker oracle: the wayplan ll2pg oracle checkout) is
+          # deselected by name, never skipped silently; -rs names every skip
+          echo "### host-only gate NOT run here: -m oracle (test_oracle_parity, test_ground_parity — the wayplan ll2pg oracle checkout)" >> "$GITHUB_STEP_SUMMARY"
+          pytest -q -rs -m "not slow and not oracle" --ignore=tests/kitchen -k "not sumo" $IGNORE

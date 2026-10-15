@@ -14,8 +14,10 @@ metis = "metis.lang.repl:main"
 
 [project.optional-dependencies]
 sysadmin = ["pyRDDLGym", "rddlrepository"]
-# CI / dev: the scoped flake rerun (CI.md D2) lives in pytest-rerunfailures
-test = ["pytest", "pytest-rerunfailures"]
+# CI / dev: the scoped flake rerun (CI.md D2) lives in pytest-rerunfailures;
+# pyRDDLGym + rddlrepository: the slow parity gates that read RDDL (without
+# them 9 of the 24 skip — the nightly slow job runs all of them)
+test = ["pytest", "pytest-rerunfailures", "pyRDDLGym", "rddlrepository"]
 
 [tool.setuptools.packages.find]
 include = ["metis*"]
@@ -25,4 +27,5 @@ testpaths = ["tests"]
 markers = [
     "slow: heavy parity gates (golden corpus, differential); skip in the dev loop with -m 'not slow'",
     "flaky: known-flaky (CI.md D2) — rerun ONLY on the named exception via pytest-rerunfailures; never skipped",
+    "oracle: needs the wayplan ll2pg oracle checkout (tests/oracle.py) — a HOST-ONLY gate: CI deselects it by name (-m 'not oracle', said in the run's summary); METIS_ORACLE_REQUIRED=1 makes a missing oracle fail instead of skip",
 ]

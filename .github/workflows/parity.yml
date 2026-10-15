@@ -41,8 +41,44 @@ jobs:
         run: pip install -e './metispy[test]'
       - name: Parity suite (metisc <-> referee)
         working-directory: metispy
-        run: pytest -q tests/test_ocaml_parity.py
+        run: pytest -q -rs tests/test_ocaml_parity.py
       - name: Registry drift (gen_metisc_registry regenerates diag.ml; diff must be clean)
         run: |
           python metispy/tools/gen_metisc_registry.py metis-lang/src/diag.ml
           git -C metis-lang diff --exit-code -- src/diag.ml
+
+  # the slow parity gates (-m slow), nightly and on demand: the fast job
+  # deselects them and the job above runs only the metisc four. RDDL's
+  # pyRDDLGym + rddlrepository come with [test] (without them 9 of the 24
+  # skip); the kitchen (overcooked) and sumo stay out as in the fast suite,
+  # the oracle gate is host-only (deselected by name); -rs names every skip
+  slow:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metispy
+      - name: Checkout metis-lang@master (public sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-lang
+          ref: master
+          path: metis-lang
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: metispy/pyproject.toml
+      - name: Install OCaml + build metisc
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ocaml-nox g++
+          make -C metis-lang metisc
+      - name: Install metispy (with the slow gates' RDDL)
+        run: pip install -e './metispy[test]'
+      - name: The slow parity gates
+        working-directory: metispy
+        run: |
+          echo "### slow gates: -m 'slow and not oracle', kitchen and sumo excluded; the oracle gate is host-only" >> "$GITHUB_STEP_SUMMARY"
+          pytest -q -rs -m "slow and not oracle" --ignore=tests/kitchen -k "not sumo"

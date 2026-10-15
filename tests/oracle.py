@@ -19,9 +19,16 @@ def _default_oracle():
 
 ORACLE = Path(os.environ.get("METIS_ORACLE_PATH") or _default_oracle())
 
-requires_oracle = pytest.mark.skipif(
-    not (ORACLE / "ll2pg").is_dir(),
-    reason=f"wayplan ll2pg oracle not found at {ORACLE}")
+# a HOST-ONLY gate (marker `oracle`): CI deselects it by name and says so;
+# on a host it skips with the reason (`-rs` names it) — or, with
+# METIS_ORACLE_REQUIRED=1 (the gate's own run), a missing oracle FAILS
+_MISSING = not (ORACLE / "ll2pg").is_dir()
+if _MISSING and os.environ.get("METIS_ORACLE_REQUIRED") == "1":
+    requires_oracle = [pytest.mark.oracle, pytest.mark.usefixtures("_oracle_required")]
+else:
+    requires_oracle = [pytest.mark.oracle, pytest.mark.skipif(
+        _MISSING, reason=f"wayplan ll2pg oracle not found at {ORACLE} (host-only gate: METIS_ORACLE_PATH)")]
+
 
 
 def oracle_modules(*names):
