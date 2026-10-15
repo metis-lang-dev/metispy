@@ -1,0 +1,307 @@
+{
+ "format": "metis-repl-api/1",
+ "tools": [
+  {
+   "name": "activate",
+   "description": "attach a catalog domain to the runtime tree",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "the catalog domain (card)",
+      "enum_from": "catalog"
+     },
+     "bindings": {
+      "type": "STRING",
+      "description": "the card's bindings, when any"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "refused",
+    "failed"
+   ],
+   "served_by": "tree"
+  },
+  {
+   "name": "deactivate",
+   "description": "detach a catalog domain from the runtime tree",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "the catalog domain (card)",
+      "enum_from": "catalog"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "refused",
+    "failed"
+   ],
+   "served_by": "tree"
+  },
+  {
+   "name": "keep",
+   "description": "change nothing: the context change needs no domain attached or detached",
+   "parameters": null,
+   "final": [
+    "applied"
+   ],
+   "served_by": "orchestrator"
+  },
+  {
+   "name": "state",
+   "description": "the domain's current state, as its agent reads it",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "repl"
+  },
+  {
+   "name": "ctx",
+   "description": "the domain's context band: catalog, stage, beat, what is enabled",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "repl"
+  },
+  {
+   "name": "events",
+   "description": "the domain's recent events",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "repl"
+  },
+  {
+   "name": "why",
+   "description": "why an atom holds or not, in the domain",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     },
+     "atom": {
+      "type": "STRING",
+      "description": "the atom"
+     }
+    },
+    "required": [
+     "domain",
+     "atom"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "repl"
+  },
+  {
+   "name": "findings",
+   "description": "what the domain's agent has found so far",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     }
+    },
+    "required": [
+     "domain"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "repl"
+  },
+  {
+   "name": "consult",
+   "description": "ask the domain's agent a question; its reply has kind consult and an answer_kind",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     },
+     "question": {
+      "type": "STRING",
+      "description": "one question, usually why <the reason>?"
+     },
+     "max_calls": {
+      "type": "INTEGER",
+      "description": "the agent's call budget, when you set one"
+     }
+    },
+    "required": [
+     "domain",
+     "question"
+    ]
+   },
+   "final": [
+    "applied",
+    "failed"
+   ],
+   "served_by": "agent"
+  },
+  {
+   "name": "reset",
+   "description": "the reading was noise: set it aside and resume on the model",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     },
+     "record": {
+      "type": "STRING",
+      "description": "the id of the reply this closes: the refused call's id, or the surprise's record (#N)"
+     }
+    },
+    "required": [
+     "domain",
+     "record"
+    ]
+   },
+   "final": [
+    "admitted",
+    "refused"
+   ],
+   "served_by": "watch"
+  },
+  {
+   "name": "explain",
+   "description": "a sibling card's move explains it",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     },
+     "record": {
+      "type": "STRING",
+      "description": "the id of the reply this closes: the refused call's id, or the surprise's record (#N)"
+     },
+     "card": {
+      "type": "STRING",
+      "description": "the sibling card"
+     },
+     "move": {
+      "type": "STRING",
+      "description": "the card's move"
+     }
+    },
+    "required": [
+     "domain",
+     "record",
+     "card",
+     "move"
+    ]
+   },
+   "final": [
+    "admitted",
+    "admitted+notice",
+    "refused"
+   ],
+   "served_by": "watch"
+  },
+  {
+   "name": "escalate",
+   "description": "nothing explains it: describe it for the people who revise the model",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "domain": {
+      "type": "STRING",
+      "description": "a loaded domain",
+      "enum_from": "loaded"
+     },
+     "record": {
+      "type": "STRING",
+      "description": "the id of the reply this closes: the refused call's id, or the surprise's record (#N)"
+     },
+     "text": {
+      "type": "STRING",
+      "description": "one plain sentence: what was seen"
+     }
+    },
+    "required": [
+     "domain",
+     "record",
+     "text"
+    ]
+   },
+   "final": [
+    "admitted",
+    "refused"
+   ],
+   "served_by": "watch"
+  }
+ ]
+}

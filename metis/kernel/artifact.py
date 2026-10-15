@@ -8,6 +8,10 @@ merged in order, so the key is the union's). The module keeps its name
       ground.wire              N/E/I/S/B (wire.emit_artifact) — the runtime's load
       sidecar.json             what the harness needs beyond the wire, keyed
                                to it by event index (below)
+      tools.json               the REPL API's tool declarations (metis.lang.repl_api,
+                               repl-tools step 3): what the Go runtime renders the
+                               orchestrator's REPL tools from; a bundle without it
+                               is stale (re-emit)
       program.ir               the product IR (ir.ir_artifact_lines) — only
                                with --ir: marginals and the planner; no
                                runtime row needs it, and it factorizes only
@@ -159,6 +163,7 @@ def ir_lines(doc, case, prog) -> List[str]:
 def build(program: Path, extensions: Sequence[Path] = (), with_ir=False) -> dict:
     """{file name: text} of the bundle."""
     from metis.kernel.wire import emit_artifact
+    from metis.lang.repl_api import tools_json
     doc, case, _ = served_doc(program, extensions)
     prog = doc.catalog.ground(dict(case["init"]))
     files = {"ground.wire": emit_artifact(doc, prog, case["steps"])}
@@ -168,6 +173,7 @@ def build(program: Path, extensions: Sequence[Path] = (), with_ir=False) -> dict
                    ir="program.ir" if with_ir else None)
     files["sidecar.json"] = json.dumps(side, indent=1,
                                        ensure_ascii=False) + "\n"
+    files["tools.json"] = tools_json()
     return files
 
 
@@ -245,7 +251,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m metis.kernel.artifact",
         description="emit a domain package's bundle: ground.wire + sidecar.json "
-                    "(+ program.ir), the program plus its extensions")
+                    "+ tools.json (+ program.ir), the program plus its extensions")
     ap.add_argument("target", help="a catalog domain name, or a .llp file")
     ap.add_argument("-o", "--out", type=Path,
                     help="the bundle directory (default: "

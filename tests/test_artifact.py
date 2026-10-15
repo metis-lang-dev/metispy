@@ -237,7 +237,7 @@ def test_the_cli_writes_the_artifact(lamp, capsys):
     assert main([str(lamp / "lamp.llp"), "-o", str(out),
                  "--extension", str(lamp / "extensions" / "b_surge.llp")]) == 0
     assert sorted(p.name for p in out.iterdir()) == \
-        ["ground.wire", "sidecar.json"]
+        ["ground.wire", "sidecar.json", "tools.json"]
     assert _side({"sidecar.json": (out / "sidecar.json").read_text()})[
         "extensions"] == ["b_surge.llp"]
     assert "lamp+surge" in capsys.readouterr().out
@@ -273,3 +273,12 @@ def test_the_kitchen_pair_golden(name, scene):
     assert "B weight w_load" in files["ground.wire"]
     check_golden(name, files)
 
+
+
+def test_the_bundle_carries_the_repl_api(lamp):
+    """tools.json is the REPL API's data (repl-tools step 3): the Go
+    runtime renders the orchestrator's REPL tools from the bundle."""
+    from metis.lang.repl_api import repl_api
+    files = build(lamp / "lamp.llp")
+    doc = json.loads(files["tools.json"])
+    assert doc["format"] == "metis-repl-api/1" and doc["tools"] == repl_api()
