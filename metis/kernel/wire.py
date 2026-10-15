@@ -39,6 +39,17 @@ def weight_refs(doc, prog) -> Dict[int, Ref]:
     return refs
 
 
+def weight_text(w: float) -> str:
+    """A weight as the wire carries it: the shortest text that reads back
+    as the same double (repr; an integral value without its ".0"), so a
+    C++ runtime samples on python's doubles exactly (the architect's
+    ruling, runtime-binding step 4 — %.12g lost the last digits)."""
+    w = float(w)
+    if w.is_integer() and abs(w) < 2.0 ** 53:
+        return str(int(w))
+    return repr(w)
+
+
 def emit_program(prog, steps: int,
                  refs: Optional[Dict[int, Ref]] = None,
                  ports=None) -> List[str]:
@@ -78,7 +89,7 @@ def emit_program(prog, steps: int,
             wsec = f" ; w {factor} {1 if compl else 0}"
             for a in args:
                 wsec += f" {a}"
-        out.append(f"E {stage_idx[stage]} {post} {ev.weight:.12g} "
+        out.append(f"E {stage_idx[stage]} {post} {weight_text(ev.weight)} "
                    f"{ev.name.replace(' ', '_')}{sections(ev)}{wsec}")
     init = " ".join(f"{a} {n}" for a, n in sorted(prog.init.items()))
     out.append(f"I {init}")

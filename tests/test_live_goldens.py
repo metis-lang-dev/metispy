@@ -3,11 +3,13 @@ metispy's live REPL, seeded, on the catalog domains' served programs with
 a scripted host, every row and the counts after it — what metis::Live
 (metis-lang runtime/include/metis/live.hpp) must reproduce byte for byte.
 
-  fast: the REPL still writes the committed goldens (METIS_BLESS=1
+  fast: the REPL still writes the committed goldens, the live traces and
+        the projections (K4: surprise_record's likelihoods; METIS_BLESS=1
         regenerates); the golden's kitchen bindings are the host's
-  slow: metis-lang's live_run replays each golden on the artifact
+  slow: metis-lang's live_run replays each live golden on the artifact
         golden's ground.wire (the C++ loader loads every emitted wire,
-        the architect's step-2 ask) — LIVE PARITY n/n
+        the architect's step-2 ask) — LIVE PARITY n/n and K3 CONTINUITY
+        n/n; project_run checks the projections — K4 LIKELIHOOD n/n
 
 Reads metis-catalog (the domains; CI: CATALOG_TESTS)."""
 
@@ -30,15 +32,24 @@ CXX = shutil.which("g++") or shutil.which("clang++")
 HEAD = "# metis live golden — tools/gen_live_goldens.py; METIS_BLESS=1 regenerates\n"
 
 
+PHEAD = ("# metis projection golden — tools/gen_live_goldens.py; "
+         "METIS_BLESS=1 regenerates\n")
+
+
+def _pin(p, text):
+    if os.environ.get("METIS_BLESS"):
+        p.parent.mkdir(exist_ok=True)
+        p.write_text(text)
+    assert text == p.read_text(), \
+        f"{p.name} drifted (METIS_BLESS=1 to regenerate, then review)"
+
+
 @pytest.mark.parametrize("name", sorted(gen.DOMAINS))
 def test_the_repl_writes_the_golden(name):
     _, golden = gen.domain_trace(name)
-    p = GOLDENS / "live" / f"{name}.txt"
-    if os.environ.get("METIS_BLESS"):
-        p.parent.mkdir(exist_ok=True)
-        p.write_text(HEAD + golden)
-    assert HEAD + golden == p.read_text(), \
-        f"live/{name}.txt drifted (METIS_BLESS=1 to regenerate, then review)"
+    _pin(GOLDENS / "live" / f"{name}.txt", HEAD + golden)
+    _pin(GOLDENS / "live" / f"proj_{name}.txt",
+         PHEAD + gen.domain_projection(name, golden))
 
 
 def test_the_goldens_kitchen_bindings_are_the_hosts():
@@ -82,3 +93,29 @@ def test_metis_live_replays_the_golden(name, live_run):
     # the C++ loader loads the emitted wire whole: every sidecar event
     side = json.loads((art / "sidecar.json").read_text())
     assert int(m.group(3)) == len(side["events"]), r.stdout
+    k3 = re.search(r"K3 CONTINUITY (\d+)/(\d+)", r.stdout)
+    assert k3 and k3.group(1) == k3.group(2) and int(k3.group(2)) > 0, r.stdout
+
+
+@pytest.fixture(scope="module")
+def project_run(tmp_path_factory):
+    exe = tmp_path_factory.mktemp("proj") / "project_run"
+    subprocess.run([CXX, "-std=c++17", "-O2", f"-I{LANG / 'runtime/include'}",
+                    str(LANG / "runtime/tools/project_run.cpp"), "-o", str(exe)],
+                   check=True)
+    return exe
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(CXX is None, reason="no C++ compiler")
+@pytest.mark.parametrize("name", sorted(gen.DOMAINS))
+def test_metis_live_projects_the_records(name, project_run):
+    """K4: the likelihoods of the recorded surprises (the plant's visitor,
+    the kitchen's partner_load) and of the trace's windows."""
+    r = subprocess.run([str(project_run),
+                        str(GOLDENS / "artifact" / f"{name}.metis" / "ground.wire"),
+                        str(GOLDENS / "live" / f"proj_{name}.txt")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    m = re.search(r"K4 LIKELIHOOD (\d+)/(\d+) .*identity ok", r.stdout)
+    assert m and m.group(1) == m.group(2) and int(m.group(2)) > 0, r.stdout

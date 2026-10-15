@@ -141,6 +141,22 @@ def test_a_pack_that_does_not_admit_raises(lamp):
         build(lamp / "lamp.llp", [bad])
 
 
+def test_the_wire_carries_weights_at_full_precision(tmp_path):
+    """The shortest text that reads back as python's double (wire.py
+    weight_text; %.12g dropped digits): the device samples on the same
+    doubles."""
+    from metis.kernel.wire import weight_text
+    for w in (1.0, 8.0, 0.1, 1 / 3, 0.30000000000000004, 2e-7 / 3, 1e22):
+        assert float(weight_text(w)) == w
+    assert weight_text(8.0) == "8" and weight_text(1 / 3) == repr(1 / 3)
+    src = LAMP.replace("switch_on [dyn] : off * cmd_on -o on.",
+                       "switch_on [dyn] : off * cmd_on -o on  @w 0.3333333333333333.")
+    (tmp_path / "lamp.llp").write_text(src)
+    wire = build(tmp_path / "lamp.llp")["ground.wire"]
+    e = next(ln for ln in wire.splitlines() if " switch_on " in ln)
+    assert float(e.split()[3]) == 1 / 3
+
+
 def test_program_ir_on_request(lamp):
     files = build(lamp / "lamp.llp", with_ir=True)
     ir = files["program.ir"].splitlines()

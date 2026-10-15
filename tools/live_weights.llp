@@ -1,0 +1,25 @@
+% weights — the live goldens' fixture for fractional rule weights
+% (tools/gen_live_goldens.py): three moves compete for one token at
+% weights a %.12g wire would round; the wire carries them at repr.
+catalog weights 1.
+provenance text "fractional weights compete for a token" "2026-10-15".
+layers (dyn).
+stages (main).
+
+namespace w produce (dyn).
+
+pred tok : w.
+pred x : w.
+pred y : w.
+pred z : w.
+
+stage main {
+  %% A third of the time the token becomes x.
+  to_x [dyn] : tok -o x  @w 0.3333333333333333.
+  %% A tenth of the time it becomes y.
+  to_y [dyn] : tok -o y  @w 0.1.
+  %% Otherwise it becomes z.
+  to_z [dyn] : tok -o z  @w 0.5666666666666667.
+}
+
+#init tok 1
