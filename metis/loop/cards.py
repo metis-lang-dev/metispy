@@ -3,7 +3,7 @@ offerable at the served node, GENERATED from what every catalog already
 carries — never authored:
 
   text      its `provenance text "..."` line (the one-line purpose)
-  relation  `extends <served>` (a pack: admitted over the served world)
+  relation  `extends <served>` (an extension: admitted over the served world)
             or `sibling` (another catalog including the same base file
             as the served scene — an alternative world, not an addition)
   moves     the ground events the card adds over the served world — the
@@ -46,7 +46,7 @@ def _scan(path: Path) -> Optional[dict]:
 
 def card_program(shell, card: dict, init: Dict[str, int], stage: str):
     """The card's world grounded at (init, stage): a sibling stands
-    alone, a pack is admitted over the served catalog."""
+    alone, an extension is admitted over the served catalog."""
     from metis.lang import load_llp
     if card["relation"] == "served":
         cat = shell.doc.catalog
@@ -102,7 +102,7 @@ def cards(shell) -> List[dict]:
 
 
 def card_line(c: dict) -> str:
-    rel = {"served": "active", "extends": "pack",
+    rel = {"served": "active", "extends": "extension",
            "sibling": "sibling"}[c["relation"]]
     def eff(e):
         ops = ([f"-{a}" + (f" {n}" if n != 1 else "")
@@ -154,7 +154,7 @@ def script_of(card: dict) -> dict:
     clause {name, doc (its %% comment), premises, effects (atom names),
     target}, per atom {name, doc}. No authored interpretation: reading a
     fragment against the entries is the narrator's job (RAG §11.1). A
-    sibling or pack lists only the clauses it adds over the served world
+    sibling or extension lists only the clauses it adds over the served world
     (its card's moves) and the atoms they touch."""
     from metis.lang import ast
     from metis.lang.compiler import resolve_includes
@@ -187,13 +187,13 @@ def script_of(card: dict) -> dict:
                         "atom_doc": [d.name for d in preds if not d.doc]}}
 
 
-def script(shell, packs=()) -> List[dict]:
+def script(shell, extensions=()) -> List[dict]:
     """The script of every card offerable at the served node: the served
-    catalog's clauses and atoms, each sibling/pack's added clauses.
-    `packs`: the files merged into the served program (packs/*.llp, in
-    order) — their clauses follow the program's in the served card's
-    script, each tagged "pack": <file name> (the architect's ruling F3,
-    runtime-binding step 2)."""
+    catalog's clauses and atoms, each sibling/extension card's added
+    clauses. `extensions`: the files merged into the served program (the
+    package's extensions/*.llp, in order) — their clauses follow the
+    program's in the served card's script, each tagged "extension": <file
+    name> (the architect's ruling F3, runtime-binding step 2)."""
     out = []
     for c in cards(shell):
         try:
@@ -202,12 +202,12 @@ def script(shell, packs=()) -> List[dict]:
             out.append({"name": c["name"], "relation": c["relation"],
                         "text": c["text"], "clauses": [], "atoms": [],
                         "error": f"{type(e).__name__}: {e}"})
-    if packs and out and out[0]["relation"] == "served":
+    if extensions and out and out[0]["relation"] == "served":
         served = out[0]
-        for p in packs:
+        for p in extensions:
             s = script_of({"name": served["name"], "file": str(p),
                            "relation": "served", "text": None})
-            served["clauses"] += [dict(c, pack=Path(p).name)
+            served["clauses"] += [dict(c, extension=Path(p).name)
                                   for c in s["clauses"]]
             served.setdefault("missing", {"clause_doc": [], "atom_doc": []})
             served["missing"]["clause_doc"] += [

@@ -2,7 +2,7 @@
  "format": "metis-sidecar/1",
  "catalog": "plant+visitor",
  "key": "aa1aca319a942def6db1d28b8b2d21571fc237e01afc30682a8816511e08307a",
- "packs": [
+ "extensions": [
   "visitor.llp"
  ],
  "init": {
@@ -205,7 +205,7 @@
       }
      ],
      "target": null,
-     "pack": "visitor.llp"
+     "extension": "visitor.llp"
     }
    ],
    "atoms": [

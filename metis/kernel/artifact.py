@@ -1,7 +1,8 @@
-"""The domain artifact — what the C++ runtime serves (runtime-binding
+"""The domain bundle — what the C++ runtime serves (runtime-binding
 step 2; metis-agent docs/RUNTIME-BINDING.md §2): one directory per
-domain, the SERVED program (the program plus its packs, merged in order,
-so the key is the union's).
+domain package, the SERVED program (the program plus its extensions,
+merged in order, so the key is the union's). The module keeps its name
+(metis.kernel.artifact); the word is bundle (catalog-entry step 2).
 
     <dir>/                     default: domains/<n>/build/<n>.metis
       ground.wire              N/E/I/S/B (wire.emit_artifact) — the runtime's load
@@ -15,8 +16,10 @@ so the key is the union's).
 sidecar.json ("format": "metis-sidecar/1"):
   catalog, key      the served catalog's name and program_key (records,
                     replies, the KV prefix cache)
-  packs             the merged packs' file names, in order
-  init, steps       the case (#init, #steps) the program is grounded on
+  extensions        the merged extensions' file names, in order
+  init, steps       the case (#init, #steps) the program is grounded on;
+                    init in the program's #init order (the live counts'
+                    insertion order, which Go decodes order-preserving)
   stages            the wire's stage indices by name
   events            per wire event i (Program.events() order, the
                     wire's): canon (its index in the normative sampler's
@@ -27,18 +30,19 @@ sidecar.json ("format": "metis-sidecar/1"):
   cards             the cards offerable at the served node (cards.cards,
                     without the file paths): what explain may adopt
   queries           the #query atoms (the mirror line)
-  script            cards.script(shell, packs): the narrator's and the
-                    consult's text — the packs' clauses follow the
-                    program's in the served card, each tagged "pack"
+  script            cards.script(shell, extensions): the narrator's and
+                    the consult's text — the extensions' clauses follow
+                    the program's in the served card, each tagged
+                    "extension": <file name>
   ir                "program.ir" or null
 
-    python -m metis.kernel.artifact <domain|file.llp> [-o DIR] [--pack P]... [--ir]
+    python -m metis.kernel.artifact <domain|file.llp> [-o DIR] [--extension E]... [--ir]
 
 A domain name is resolved through metis_catalog (installed, or the
 checkout at $METIS_CATALOG, else the sibling ../metis-catalog): its
 manifest's served program, Domain.serves() — `serves: [files]`, else
-the program and every packs/*.llp. A .llp path serves that file with
-the --pack files given.
+the program and its extensions. A .llp path serves that file with
+the --extension files given.
 
 The swap is atomic: `<dir>` is a symlink to a versioned directory
 `<dir>.v-<hash12>` (the files' content hash). A new version is written
@@ -62,12 +66,12 @@ from typing import List, Optional, Sequence
 FORMAT = "metis-sidecar/1"
 
 
-def served_doc(program: Path, packs: Sequence[Path] = ()):
+def served_doc(program: Path, extensions: Sequence[Path] = ()):
     """(doc, case, text): the program compiled with its includes, every
-    pack compiled against the world so far and admitted over it, the
-    ports merged — the loop's gate → accept chain, structurally (the
-    packs in packs/ were gated when they were accepted). A pack that
-    does not admit raises with its findings."""
+    extension compiled against the world so far and admitted over it,
+    the ports merged — the loop's gate → accept chain, structurally (the
+    package's extensions were gated when they were accepted). An
+    extension that does not admit raises with its findings."""
     from metis.lang.compiler import (compile_catalog, load_llp,
                                      merge_ports, resolve_includes)
     from metis.lang.directives import embedded_case
@@ -76,16 +80,16 @@ def served_doc(program: Path, packs: Sequence[Path] = ()):
     text = program.read_text()
     doc = compile_catalog(resolve_includes(parse(text, file=str(program)),
                                            program.parent))
-    for p in packs:
-        pack = load_llp(str(p), base=doc)
-        doc = replace(doc, catalog=doc.catalog.admit(pack.catalog),
-                      ports=merge_ports(doc.ports, pack.ports))
+    for p in extensions:
+        ext = load_llp(str(p), base=doc)
+        doc = replace(doc, catalog=doc.catalog.admit(ext.catalog),
+                      ports=merge_ports(doc.ports, ext.ports))
     return doc, embedded_case(text), text
 
 
 def rule_lines(files: Sequence[Path]) -> dict:
     """rule → (its %% doc in words, its tags), over the files with their
-    includes spliced (a pack's rules speak their own lines)."""
+    includes spliced (an extension's rules speak their own lines)."""
     from metis.lang import ast
     from metis.lang.compiler import resolve_includes
     from metis.lang.parser import parse_file
@@ -103,12 +107,12 @@ def rule_lines(files: Sequence[Path]) -> dict:
 _RULE = re.compile(r"[\[(]")
 
 
-def sidecar(program: Path, packs: Sequence[Path], doc, case, prog,
+def sidecar(program: Path, extensions: Sequence[Path], doc, case, prog,
             ir: Optional[str] = None) -> dict:
     from metis.kernel.nets import program_key
     from metis.kernel.refsample import canonical_events
     from metis.loop.cards import cards, script
-    lines = rule_lines([program, *packs])
+    lines = rule_lines([program, *extensions])
     canon_tbl = canonical_events(prog)
     canon = {id(ev): j for j, (_, _, ev) in enumerate(canon_tbl)}
     events = []
@@ -128,20 +132,20 @@ def sidecar(program: Path, packs: Sequence[Path], doc, case, prog,
     return {"format": FORMAT,
             "catalog": doc.catalog.name,
             "key": program_key(prog),
-            "packs": [Path(p).name for p in packs],
-            "init": dict(sorted(case["init"].items())),
+            "extensions": [Path(p).name for p in extensions],
+            "init": dict(case["init"]),
             "steps": case["steps"],
             "stages": list(prog.stage_names),
             "events": events,
             "cards": offered,
             "queries": list(case["queries"]),
-            "script": script(shell, packs),
+            "script": script(shell, extensions),
             "ir": ir}
 
 
 def ir_lines(doc, case, prog) -> List[str]:
     """program.ir: the product IR of a port-free program at its #steps
-    (6 when none), its #query atoms the artifact's queries."""
+    (6 when none), its #query atoms the bundle's queries."""
     from metis.kernel.factorize import FactoredProgram
     from metis.kernel.ir import ir_artifact_lines
     from metis.lang import factor_hooks
@@ -152,15 +156,15 @@ def ir_lines(doc, case, prog) -> List[str]:
                              ports=doc.ports)
 
 
-def build(program: Path, packs: Sequence[Path] = (), with_ir=False) -> dict:
-    """{file name: text} of the artifact."""
+def build(program: Path, extensions: Sequence[Path] = (), with_ir=False) -> dict:
+    """{file name: text} of the bundle."""
     from metis.kernel.wire import emit_artifact
-    doc, case, _ = served_doc(program, packs)
+    doc, case, _ = served_doc(program, extensions)
     prog = doc.catalog.ground(dict(case["init"]))
     files = {"ground.wire": emit_artifact(doc, prog, case["steps"])}
     if with_ir:
         files["program.ir"] = "\n".join(ir_lines(doc, case, prog)) + "\n"
-    side = sidecar(program, packs, doc, case, prog,
+    side = sidecar(program, extensions, doc, case, prog,
                    ir="program.ir" if with_ir else None)
     files["sidecar.json"] = json.dumps(side, indent=1,
                                        ensure_ascii=False) + "\n"
@@ -174,7 +178,7 @@ def _umask() -> int:
 
 
 def write(out: Path, files: dict) -> Path:
-    """Publish `files` as the artifact `out`, atomically: the versioned
+    """Publish `files` as the bundle `out`, atomically: the versioned
     directory `<out>.v-<hash12>` (written in full under a temporary name,
     then renamed into place, mode as the umask makes it — never mkdtemp's
     0700), then the symlink `out` replaced to point at it. Versions other
@@ -223,40 +227,40 @@ def _catalog():
     return metis_catalog
 
 
-def resolve(target: str, packs: Sequence[str] = ()):
-    """(program, packs, default out dir) for a domain name or a file."""
+def resolve(target: str, extensions: Sequence[str] = ()):
+    """(program, extensions, default out dir) for a domain name or a file."""
     p = Path(target)
     if p.suffix == ".llp":
-        return p.resolve(), [Path(x).resolve() for x in packs], \
+        return p.resolve(), [Path(x).resolve() for x in extensions], \
             p.parent / "build" / f"{p.stem}.metis"
     d = _catalog().get(target)
     files = d.serves()                 # the manifest's served program
     if not files:
         raise SystemExit(f"domain {target!r} serves no program")
-    return files[0], files[1:] + [Path(x).resolve() for x in packs], \
+    return files[0], files[1:] + [Path(x).resolve() for x in extensions], \
         d.dir / "build" / f"{d.name}.metis"
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m metis.kernel.artifact",
-        description="emit a domain's artifact: ground.wire + sidecar.json "
-                    "(+ program.ir), the program plus its packs")
+        description="emit a domain package's bundle: ground.wire + sidecar.json "
+                    "(+ program.ir), the program plus its extensions")
     ap.add_argument("target", help="a catalog domain name, or a .llp file")
     ap.add_argument("-o", "--out", type=Path,
-                    help="the artifact directory (default: "
+                    help="the bundle directory (default: "
                          "domains/<n>/build/<n>.metis)")
-    ap.add_argument("--pack", action="append", default=[],
-                    help="a pack to merge after the domain's own (repeat)")
+    ap.add_argument("--extension", action="append", default=[],
+                    help="an extension to merge after the package's own (repeat)")
     ap.add_argument("--ir", action="store_true",
                     help="also write program.ir (a port-free program)")
     a = ap.parse_args(argv)
-    program, packs, out = resolve(a.target, a.pack)
-    files = build(program, packs, with_ir=a.ir)
+    program, extensions, out = resolve(a.target, a.extension)
+    files = build(program, extensions, with_ir=a.ir)
     write(a.out or out, files)
     side = json.loads(files["sidecar.json"])
     print(f"{a.out or out}: {side['catalog']} key {side['key'][:12]}… "
-          f"{len(side['events'])} events, packs {side['packs'] or '-'}, "
+          f"{len(side['events'])} events, extensions {side['extensions'] or '-'}, "
           f"{', '.join(sorted(files))}")
     return 0
 

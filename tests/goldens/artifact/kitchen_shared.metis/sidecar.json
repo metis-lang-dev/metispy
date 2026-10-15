@@ -2,7 +2,7 @@
  "format": "metis-sidecar/1",
  "catalog": "kitchen_shared",
  "key": "133de546d5476034d0daa06466e4f0406f711d30bc304858e9270c630081ce08",
- "packs": [],
+ "extensions": [],
  "init": {
   "hand_free": 1
  },

@@ -1,6 +1,6 @@
 """The domain artifact (metis/kernel/artifact.py, runtime-binding step 2):
 ground.wire + sidecar.json (+ program.ir) of the served program — the
-program plus its packs, merged in order.
+program plus its extensions, merged in order.
 
 Goldens pin the kitchen pair's artifact directories (tests/goldens/
 artifact/<n>.metis); the dog's and the plant's are in
@@ -20,7 +20,7 @@ GOLDENS = Path(__file__).parent / "goldens" / "artifact"
 KITCHEN = ROOT / "metis" / "domains" / "kitchen" / "catalogs"
 
 LAMP = """\
-% lamp — the artifact emitter's fixture: a program and two packs
+% lamp — the artifact emitter's fixture: a program and two extensions
 catalog lamp 1.
 provenance text "a lamp the person switches" "2026-10-15".
 layers (dyn).
@@ -65,10 +65,10 @@ stage main {
 
 @pytest.fixture
 def lamp(tmp_path):
-    (tmp_path / "packs").mkdir()
+    (tmp_path / "extensions").mkdir()
     (tmp_path / "lamp.llp").write_text(LAMP)
-    (tmp_path / "packs" / "a_flicker.llp").write_text(FLICKER)
-    (tmp_path / "packs" / "b_surge.llp").write_text(SURGE)
+    (tmp_path / "extensions" / "a_flicker.llp").write_text(FLICKER)
+    (tmp_path / "extensions" / "b_surge.llp").write_text(SURGE)
     return tmp_path
 
 
@@ -81,14 +81,14 @@ def _wire_events(text):
 
 
 def test_every_pack_is_served_in_order(lamp):
-    """Two packs: both merged, the second over the first (each pack is
+    """Two extensions: both merged, the second over the first (each extension is
     compiled against the world so far), the key the union's."""
-    one = build(lamp / "lamp.llp", [lamp / "packs" / "a_flicker.llp"])
-    two = build(lamp / "lamp.llp", [lamp / "packs" / "a_flicker.llp",
-                                    lamp / "packs" / "b_surge.llp"])
+    one = build(lamp / "lamp.llp", [lamp / "extensions" / "a_flicker.llp"])
+    two = build(lamp / "lamp.llp", [lamp / "extensions" / "a_flicker.llp",
+                                    lamp / "extensions" / "b_surge.llp"])
     s = _side(two)
     assert s["catalog"] == "lamp+flicker+surge"
-    assert s["packs"] == ["a_flicker.llp", "b_surge.llp"]
+    assert s["extensions"] == ["a_flicker.llp", "b_surge.llp"]
     assert [e["rule"] for e in s["events"]] == \
         ["switch_on", "burn_out", "flicker", "surge"]
     assert {e["rule"]: e["line"] for e in s["events"]}["surge"] == \
@@ -97,7 +97,7 @@ def test_every_pack_is_served_in_order(lamp):
 
 
 def test_the_sidecar_is_keyed_to_the_wire(lamp):
-    files = build(lamp / "lamp.llp", [lamp / "packs" / "a_flicker.llp"])
+    files = build(lamp / "lamp.llp", [lamp / "extensions" / "a_flicker.llp"])
     s = _side(files)
     assert s["format"] == "metis-sidecar/1"
     assert [e["name"] for e in s["events"]] == \
@@ -110,8 +110,8 @@ def test_the_sidecar_is_keyed_to_the_wire(lamp):
     # the served card first; no file paths travel in the artifact
     assert s["cards"][0]["relation"] == "served"
     assert "file" not in json.dumps(s["cards"])
-    # the pack's clauses follow the program's, tagged (ruling F3)
-    assert [(c["name"], c.get("pack")) for c in s["script"][0]["clauses"]] \
+    # the extension's clauses follow the program's, tagged (ruling F3)
+    assert [(c["name"], c.get("extension")) for c in s["script"][0]["clauses"]] \
         == [("switch_on", None), ("burn_out", None),
             ("flicker", "a_flicker.llp")]
 
@@ -121,9 +121,9 @@ def test_canon_is_the_samplers_order(lamp):
     (the law the live runtime samples by; the wire keeps its own order)."""
     from metis.kernel.artifact import served_doc
     from metis.kernel.refsample import canonical_events
-    packs = [lamp / "packs" / "a_flicker.llp", lamp / "packs" / "b_surge.llp"]
-    s = _side(build(lamp / "lamp.llp", packs))
-    doc, case, _ = served_doc(lamp / "lamp.llp", packs)
+    extensions = [lamp / "extensions" / "a_flicker.llp", lamp / "extensions" / "b_surge.llp"]
+    s = _side(build(lamp / "lamp.llp", extensions))
+    doc, case, _ = served_doc(lamp / "lamp.llp", extensions)
     tbl = canonical_events(doc.catalog.ground(dict(case["init"])))
     assert sorted(e["canon"] for e in s["events"]) == \
         list(range(len(s["events"])))
@@ -134,7 +134,7 @@ def test_canon_is_the_samplers_order(lamp):
 
 
 def test_a_pack_that_does_not_admit_raises(lamp):
-    bad = lamp / "packs" / "c_bad.llp"
+    bad = lamp / "extensions" / "c_bad.llp"
     bad.write_text("catalog bad 1.\nextends lamp.\nnamespace lamp produce "
                    "(dyn).\npred on : lamp.\n")
     with pytest.raises(Exception, match="redeclares"):
@@ -235,11 +235,11 @@ def test_a_reader_never_finds_no_artifact(tmp_path):
 def test_the_cli_writes_the_artifact(lamp, capsys):
     out = lamp / "art"
     assert main([str(lamp / "lamp.llp"), "-o", str(out),
-                 "--pack", str(lamp / "packs" / "b_surge.llp")]) == 0
+                 "--extension", str(lamp / "extensions" / "b_surge.llp")]) == 0
     assert sorted(p.name for p in out.iterdir()) == \
         ["ground.wire", "sidecar.json"]
     assert _side({"sidecar.json": (out / "sidecar.json").read_text()})[
-        "packs"] == ["b_surge.llp"]
+        "extensions"] == ["b_surge.llp"]
     assert "lamp+surge" in capsys.readouterr().out
 
 
@@ -264,7 +264,7 @@ def check_golden(name, files):
     ("kitchen_shared", KITCHEN / "shared" / "kitchen_shared.llp")])
 def test_the_kitchen_pair_golden(name, scene):
     """The pair's two cooks as their domain agents serve them (metis/
-    domains/kitchen/pair.py SCENES): no packs, the weight ports in the
+    domains/kitchen/pair.py SCENES): no extensions, the weight ports in the
     wire's B manifest and w sections, the rules' lines from the include."""
     files = build(scene)
     s = _side(files)
@@ -272,3 +272,4 @@ def test_the_kitchen_pair_golden(name, scene):
     assert all(e["line"] for e in s["events"])
     assert "B weight w_load" in files["ground.wire"]
     check_golden(name, files)
+
