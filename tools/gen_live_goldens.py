@@ -20,6 +20,8 @@ The golden (live_run's input):
   A <k> <line> ; <line> …                       a tick mid-activity: applied
                                                 before sample k (Repl._tick, as
                                                 the watch ticks every beat)
+  F <k> <event>                                 a forced row before sample k (after
+                                                its A): Repl._fire(i, "forced")
   R <kind> <canon> <stage> | <name> | <a:n …>   one per sample
   E <stage>
 
@@ -69,7 +71,8 @@ PUBLIC = {
                     ticks=[["+ta"], [], ["+tb"], ["+ta", "+tb"], ["-za 5"],
                            ["+ta 2"], ["+tb 2"], ["do +ta"], ["+tb 0"], [],
                            ["+ta", "-a"], ["+tb"]],
-                    at={0: ["+ta 3"], 3: ["+tb 3"], 6: ["+tb 2", "+ta"]}),
+                    at={0: ["+ta 3"], 3: ["+tb 3"], 6: ["+tb 2", "+ta"]},
+                    force={1: "aon", 5: "boff"}),
     # multiplicities: a one-stage world sampled at length
     "love_triangle": dict(program=LANG / "corpus/love_triangle.llp", seed=5,
                           samples=60, bindings=[],
@@ -149,10 +152,11 @@ def make(case):
     return ScriptHost(case)
 
 
-def trace(name, program, packs, seed, samples, ticks, bindings, at=None):
+def trace(name, program, packs, seed, samples, ticks, bindings, at=None,
+          force=None):
     """(ground.wire, golden text) of one case; `at`: {sample k: do-lines}
-    ticked before sample k."""
-    at = at or {}
+    ticked before sample k; `force`: {sample k: event} fired before it."""
+    at, force = at or {}, force or {}
     from metis.kernel.artifact import build, served_doc
     from metis.lang.repl import Repl
     files = build(program, packs)
@@ -171,6 +175,7 @@ def trace(name, program, packs, seed, samples, ticks, bindings, at=None):
     out += [binding_line(b) for b in bindings]
     out += ["T " + (" ; ".join(t) if t else "-") for t in ticks]
     out += [f"A {k} " + " ; ".join(at[k]) for k in sorted(at)]
+    out += [f"F {k} {force[k]}" for k in sorted(force)]
 
     def row():
         kind, _, ev = r.fired_rows[-1]
@@ -181,6 +186,12 @@ def trace(name, program, packs, seed, samples, ticks, bindings, at=None):
         if k in at:
             r.plugin.pending = list(at[k])
             r._tick()
+            row()
+        if k in force:
+            ws = r._candidates()
+            i = [j for j, _ in ws if r.events_tbl[j][2].name == force[k]]
+            assert i, f"{name}: {force[k]} is not enabled before sample {k}"
+            r._fire(i[0], "forced", ws)
             row()
         if r._sample() is None:
             break
@@ -211,7 +222,7 @@ def main():
     for name, case in PUBLIC.items():
         wire, golden = trace(name, case["program"], [], case["seed"],
                              case["samples"], case["ticks"], case["bindings"],
-                             case.get("at"))
+                             case.get("at"), case.get("force"))
         (out / f"live_{name}.wire").write_text(wire)
         (out / f"live_{name}.txt").write_text(golden)
     print(f"wrote {2 * len(PUBLIC)} live fixtures in {out}")
