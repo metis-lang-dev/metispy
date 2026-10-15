@@ -46,6 +46,8 @@ jobs:
         run: |
           python metispy/tools/gen_metisc_registry.py metis-lang/src/diag.ml
           git -C metis-lang diff --exit-code -- src/diag.ml
+      - name: Smoke fixtures drift (gen_smoke_fixtures regenerates metis-lang runtime/fixtures; diff must be clean)
+        run: python metispy/tools/gen_smoke_fixtures.py --check metis-lang/runtime/fixtures
 
   # the slow parity gates (-m slow), nightly and on demand: the fast job
   # deselects them and the job above runs only the metisc four. RDDL's
