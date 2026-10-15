@@ -43,7 +43,7 @@ recorded surprises (RECORDS) and windows of the live trace (from the
 state before a run of h program rows: the counts after it in full, one
 atom of them, and the full counts with one atom off by one):
   L <name> · G <stages> · B <bindings>
-  P <stage> | <counts> | <h> | <observed, zeros kept> | <likelihood repr>
+  P <stage> | <counts> | <h> | <observed, zeros kept> | <likelihood, 12 digits>
 
 gen_smoke_fixtures.py writes the public ones into metis-lang
 runtime/fixtures with the provenance header; tests/test_live_goldens.py
@@ -307,8 +307,11 @@ def projection(name, program, packs, bindings, golden, records=()):
     out = [f"L {name}", side_stages] + [binding_line(b) for b in bindings]
     for stage, before, h, obs in cases:
         like = likelihood(doc, bindings, stage, before, h, obs)
+        # 12 significant digits: the filter sums paths in hash order, so
+        # the last bits vary with PYTHONHASHSEED (0.9999999999999999 or
+        # 1.0); a zero stays exactly 0 (structural)
         out.append(f"P {stage} | {_text(before)} | {h} | {_text(obs)} | "
-                   f"{float(like)!r}")
+                   f"{float(like):.12g}")
     return "\n".join(out) + "\n"
 
 
