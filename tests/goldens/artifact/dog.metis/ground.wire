@@ -1,0 +1,493 @@
+# metis ground-wire artifact — catalog dog v1; GENERATED, do not edit.
+N 1 0
+E 0 -1 1 stand[P=sitting] ; c cmd_stand 1 posture(sitting) 1 ; o done(stand) 1 posture(standing) 1 ; p battery_ok 1 idle 1
+E 0 -1 1 stand[P=lying] ; c cmd_stand 1 posture(lying) 1 ; o done(stand) 1 posture(standing) 1 ; p battery_ok 1 idle 1
+E 0 -1 1 stand_low[P=sitting] ; c cmd_stand 1 ; o refused(stand) 1 ; p battery_low 1 idle 1 posture(sitting) 1
+E 0 -1 1 stand_low[P=lying] ; c cmd_stand 1 ; o refused(stand) 1 ; p battery_low 1 idle 1 posture(lying) 1
+E 0 -1 1 stand_already ; c cmd_stand 1 ; o refused(stand) 1 ; p idle 1 posture(standing) 1
+E 0 -1 1 sit[P=standing] ; c cmd_sit 1 posture(standing) 1 ; o done(sit) 1 posture(sitting) 1 ; p floor_dry 1 idle 1
+E 0 -1 1 sit[P=lying] ; c cmd_sit 1 posture(lying) 1 ; o done(sit) 1 posture(sitting) 1 ; p floor_dry 1 idle 1
+E 0 -1 1 sit_wet[P=standing] ; c cmd_sit 1 ; o refused(sit) 1 ; p floor_wet 1 idle 1 posture(standing) 1
+E 0 -1 1 sit_wet[P=lying] ; c cmd_sit 1 ; o refused(sit) 1 ; p floor_wet 1 idle 1 posture(lying) 1
+E 0 -1 1 sit_already ; c cmd_sit 1 ; o refused(sit) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 lie[P=standing] ; c cmd_lie 1 posture(standing) 1 ; o done(lie) 1 posture(lying) 1 ; p idle 1
+E 0 -1 1 lie[P=sitting] ; c cmd_lie 1 posture(sitting) 1 ; o done(lie) 1 posture(lying) 1 ; p idle 1
+E 0 -1 1 lie_already ; c cmd_lie 1 ; o refused(lie) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 turn[S=left] ; c cmd_turn(left) 1 ; o done(turn) 1 ; p free(left) 1 idle 1 posture(standing) 1
+E 0 -1 1 turn[S=right] ; c cmd_turn(right) 1 ; o done(turn) 1 ; p free(right) 1 idle 1 posture(standing) 1
+E 0 -1 1 turn[S=around] ; c cmd_turn(around) 1 ; o done(turn) 1 ; p free(around) 1 idle 1 posture(standing) 1
+E 0 -1 1 turn_obstacle[S=left] ; c cmd_turn(left) 1 ; o refused(turn) 1 ; p idle 1 obstacle(left) 1 posture(standing) 1
+E 0 -1 1 turn_obstacle[S=right] ; c cmd_turn(right) 1 ; o refused(turn) 1 ; p idle 1 obstacle(right) 1 posture(standing) 1
+E 0 -1 1 turn_obstacle[S=around] ; c cmd_turn(around) 1 ; o refused(turn) 1 ; p idle 1 obstacle(around) 1 posture(standing) 1
+E 0 -1 1 turn_must_stand[S=left,P=sitting] ; c cmd_turn(left) 1 ; o refused(turn) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 turn_must_stand[S=left,P=lying] ; c cmd_turn(left) 1 ; o refused(turn) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 turn_must_stand[S=right,P=sitting] ; c cmd_turn(right) 1 ; o refused(turn) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 turn_must_stand[S=right,P=lying] ; c cmd_turn(right) 1 ; o refused(turn) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 turn_must_stand[S=around,P=sitting] ; c cmd_turn(around) 1 ; o refused(turn) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 turn_must_stand[S=around,P=lying] ; c cmd_turn(around) 1 ; o refused(turn) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 move[W=forward] ; c cmd_move(forward) 1 ; o done(move) 1 ; p clear(forward) 1 idle 1 posture(standing) 1
+E 0 -1 1 move[W=backward] ; c cmd_move(backward) 1 ; o done(move) 1 ; p clear(backward) 1 idle 1 posture(standing) 1
+E 0 -1 1 move_wall[W=forward] ; c cmd_move(forward) 1 ; o refused(move) 1 ; p idle 1 posture(standing) 1 wall(forward) 1
+E 0 -1 1 move_wall[W=backward] ; c cmd_move(backward) 1 ; o refused(move) 1 ; p idle 1 posture(standing) 1 wall(backward) 1
+E 0 -1 1 move_must_stand[W=forward,P=sitting] ; c cmd_move(forward) 1 ; o refused(move) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 move_must_stand[W=forward,P=lying] ; c cmd_move(forward) 1 ; o refused(move) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 move_must_stand[W=backward,P=sitting] ; c cmd_move(backward) 1 ; o refused(move) 1 ; p idle 1 posture(sitting) 1
+E 0 -1 1 move_must_stand[W=backward,P=lying] ; c cmd_move(backward) 1 ; o refused(move) 1 ; p idle 1 posture(lying) 1
+E 0 -1 1 paw ; c cmd_paw 1 ; o done(paw) 1 ; p idle 1 leg_ok 1
+E 0 -1 1 paw_hot ; c cmd_paw 1 ; o refused(paw) 1 ; p idle 1 leg_hot 1
+E 0 -1 1 sit_busy ; c cmd_sit 1 ; o refused(sit) 1 ; p busy 1
+E 0 -1 1 lie_busy ; c cmd_lie 1 ; o refused(lie) 1 ; p busy 1
+E 0 -1 1 turn_busy[S=left] ; c cmd_turn(left) 1 ; o refused(turn) 1 ; p busy 1
+E 0 -1 1 turn_busy[S=right] ; c cmd_turn(right) 1 ; o refused(turn) 1 ; p busy 1
+E 0 -1 1 turn_busy[S=around] ; c cmd_turn(around) 1 ; o refused(turn) 1 ; p busy 1
+E 0 -1 1 move_busy[W=forward] ; c cmd_move(forward) 1 ; o refused(move) 1 ; p busy 1
+E 0 -1 1 move_busy[W=backward] ; c cmd_move(backward) 1 ; o refused(move) 1 ; p busy 1
+E 0 -1 1 paw_busy ; c cmd_paw 1 ; o refused(paw) 1 ; p busy 1
+E 0 -1 1 go[P=door] ; c cmd_go(door) 1 idle 1 ; o busy 1 moving(door) 1 progress(go) 1 ; p mapped(door) 1 open(door) 1 posture(standing) 1
+E 0 -1 1 go[P=kitchen] ; c cmd_go(kitchen) 1 idle 1 ; o busy 1 moving(kitchen) 1 progress(go) 1 ; p mapped(kitchen) 1 open(kitchen) 1 posture(standing) 1
+E 0 -1 1 go[P=sofa] ; c cmd_go(sofa) 1 idle 1 ; o busy 1 moving(sofa) 1 progress(go) 1 ; p mapped(sofa) 1 open(sofa) 1 posture(standing) 1
+E 0 -1 1 go[P=window_chair] ; c cmd_go(window_chair) 1 idle 1 ; o busy 1 moving(window_chair) 1 progress(go) 1 ; p mapped(window_chair) 1 open(window_chair) 1 posture(standing) 1
+E 0 -1 1 go[P=tag5] ; c cmd_go(tag5) 1 idle 1 ; o busy 1 moving(tag5) 1 progress(go) 1 ; p mapped(tag5) 1 open(tag5) 1 posture(standing) 1
+E 0 -1 1 go[P=tag3] ; c cmd_go(tag3) 1 idle 1 ; o busy 1 moving(tag3) 1 progress(go) 1 ; p mapped(tag3) 1 open(tag3) 1 posture(standing) 1
+E 0 -1 1 go[P=tag_near] ; c cmd_go(tag_near) 1 idle 1 ; o busy 1 moving(tag_near) 1 progress(go) 1 ; p mapped(tag_near) 1 open(tag_near) 1 posture(standing) 1
+E 0 -1 1 go[P=elsewhere] ; c cmd_go(elsewhere) 1 idle 1 ; o busy 1 moving(elsewhere) 1 progress(go) 1 ; p mapped(elsewhere) 1 open(elsewhere) 1 posture(standing) 1
+E 0 -1 1 go_unmapped[P=door] ; c cmd_go(door) 1 ; o refused(go) 1 ; p unmapped(door) 1
+E 0 -1 1 go_unmapped[P=kitchen] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p unmapped(kitchen) 1
+E 0 -1 1 go_unmapped[P=sofa] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p unmapped(sofa) 1
+E 0 -1 1 go_unmapped[P=window_chair] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p unmapped(window_chair) 1
+E 0 -1 1 go_unmapped[P=tag5] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p unmapped(tag5) 1
+E 0 -1 1 go_unmapped[P=tag3] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p unmapped(tag3) 1
+E 0 -1 1 go_unmapped[P=tag_near] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p unmapped(tag_near) 1
+E 0 -1 1 go_unmapped[P=elsewhere] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p unmapped(elsewhere) 1
+E 0 -1 1 go_closed[P=door] ; c cmd_go(door) 1 ; o refused(go) 1 ; p closed(door) 1 mapped(door) 1
+E 0 -1 1 go_closed[P=kitchen] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p closed(kitchen) 1 mapped(kitchen) 1
+E 0 -1 1 go_closed[P=sofa] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p closed(sofa) 1 mapped(sofa) 1
+E 0 -1 1 go_closed[P=window_chair] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p closed(window_chair) 1 mapped(window_chair) 1
+E 0 -1 1 go_closed[P=tag5] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p closed(tag5) 1 mapped(tag5) 1
+E 0 -1 1 go_closed[P=tag3] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p closed(tag3) 1 mapped(tag3) 1
+E 0 -1 1 go_closed[P=tag_near] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p closed(tag_near) 1 mapped(tag_near) 1
+E 0 -1 1 go_closed[P=elsewhere] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p closed(elsewhere) 1 mapped(elsewhere) 1
+E 0 -1 1 go_must_stand[P=door,Q=sitting] ; c cmd_go(door) 1 ; o refused(go) 1 ; p idle 1 mapped(door) 1 open(door) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=door,Q=lying] ; c cmd_go(door) 1 ; o refused(go) 1 ; p idle 1 mapped(door) 1 open(door) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=kitchen,Q=sitting] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p idle 1 mapped(kitchen) 1 open(kitchen) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=kitchen,Q=lying] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p idle 1 mapped(kitchen) 1 open(kitchen) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=sofa,Q=sitting] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p idle 1 mapped(sofa) 1 open(sofa) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=sofa,Q=lying] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p idle 1 mapped(sofa) 1 open(sofa) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=window_chair,Q=sitting] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p idle 1 mapped(window_chair) 1 open(window_chair) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=window_chair,Q=lying] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p idle 1 mapped(window_chair) 1 open(window_chair) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=tag5,Q=sitting] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p idle 1 mapped(tag5) 1 open(tag5) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=tag5,Q=lying] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p idle 1 mapped(tag5) 1 open(tag5) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=tag3,Q=sitting] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p idle 1 mapped(tag3) 1 open(tag3) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=tag3,Q=lying] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p idle 1 mapped(tag3) 1 open(tag3) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=tag_near,Q=sitting] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p idle 1 mapped(tag_near) 1 open(tag_near) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=tag_near,Q=lying] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p idle 1 mapped(tag_near) 1 open(tag_near) 1 posture(lying) 1
+E 0 -1 1 go_must_stand[P=elsewhere,Q=sitting] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p idle 1 mapped(elsewhere) 1 open(elsewhere) 1 posture(sitting) 1
+E 0 -1 1 go_must_stand[P=elsewhere,Q=lying] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p idle 1 mapped(elsewhere) 1 open(elsewhere) 1 posture(lying) 1
+E 0 -1 1 go_busy[P=door,Q=door] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=door,Q=kitchen] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=door,Q=sofa] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=door,Q=window_chair] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=door,Q=tag5] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=door,Q=tag3] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=door,Q=tag_near] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=door,Q=elsewhere] ; c cmd_go(door) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=kitchen,Q=door] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=kitchen,Q=kitchen] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=kitchen,Q=sofa] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=kitchen,Q=window_chair] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=kitchen,Q=tag5] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=kitchen,Q=tag3] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=kitchen,Q=tag_near] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=kitchen,Q=elsewhere] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=sofa,Q=door] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=sofa,Q=kitchen] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=sofa,Q=sofa] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=sofa,Q=window_chair] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=sofa,Q=tag5] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=sofa,Q=tag3] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=sofa,Q=tag_near] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=sofa,Q=elsewhere] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=window_chair,Q=door] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=window_chair,Q=kitchen] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=window_chair,Q=sofa] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=window_chair,Q=window_chair] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=window_chair,Q=tag5] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=window_chair,Q=tag3] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=window_chair,Q=tag_near] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=window_chair,Q=elsewhere] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=tag5,Q=door] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=tag5,Q=kitchen] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=tag5,Q=sofa] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=tag5,Q=window_chair] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=tag5,Q=tag5] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=tag5,Q=tag3] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=tag5,Q=tag_near] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=tag5,Q=elsewhere] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=tag3,Q=door] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=tag3,Q=kitchen] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=tag3,Q=sofa] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=tag3,Q=window_chair] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=tag3,Q=tag5] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=tag3,Q=tag3] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=tag3,Q=tag_near] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=tag3,Q=elsewhere] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=tag_near,Q=door] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=tag_near,Q=kitchen] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=tag_near,Q=sofa] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=tag_near,Q=window_chair] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=tag_near,Q=tag5] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=tag_near,Q=tag3] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=tag_near,Q=tag_near] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=tag_near,Q=elsewhere] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=door] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(door) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=kitchen] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(kitchen) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=sofa] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(sofa) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=window_chair] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(window_chair) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=tag5] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(tag5) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=tag3] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(tag3) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=tag_near] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(tag_near) 1
+E 0 -1 1 go_busy[P=elsewhere,Q=elsewhere] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p moving(elsewhere) 1
+E 0 -1 1 go_busy_find[P=door,T=extinguisher] ; c cmd_go(door) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=door,T=keys] ; c cmd_go(door) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=door,T=bottle] ; c cmd_go(door) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=door,T=chair] ; c cmd_go(door) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=door,T=table] ; c cmd_go(door) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=kitchen,T=extinguisher] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=kitchen,T=keys] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=kitchen,T=bottle] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=kitchen,T=chair] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=kitchen,T=table] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=sofa,T=extinguisher] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=sofa,T=keys] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=sofa,T=bottle] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=sofa,T=chair] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=sofa,T=table] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=window_chair,T=extinguisher] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=window_chair,T=keys] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=window_chair,T=bottle] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=window_chair,T=chair] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=window_chair,T=table] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=tag5,T=extinguisher] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=tag5,T=keys] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=tag5,T=bottle] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=tag5,T=chair] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=tag5,T=table] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=tag3,T=extinguisher] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=tag3,T=keys] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=tag3,T=bottle] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=tag3,T=chair] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=tag3,T=table] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=tag_near,T=extinguisher] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=tag_near,T=keys] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=tag_near,T=bottle] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=tag_near,T=chair] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=tag_near,T=table] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_find[P=elsewhere,T=extinguisher] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p searching(extinguisher) 1
+E 0 -1 1 go_busy_find[P=elsewhere,T=keys] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p searching(keys) 1
+E 0 -1 1 go_busy_find[P=elsewhere,T=bottle] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p searching(bottle) 1
+E 0 -1 1 go_busy_find[P=elsewhere,T=chair] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p searching(chair) 1
+E 0 -1 1 go_busy_find[P=elsewhere,T=table] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p searching(table) 1
+E 0 -1 1 go_busy_follow[P=door] ; c cmd_go(door) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=kitchen] ; c cmd_go(kitchen) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=sofa] ; c cmd_go(sofa) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=window_chair] ; c cmd_go(window_chair) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=tag5] ; c cmd_go(tag5) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=tag3] ; c cmd_go(tag3) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=tag_near] ; c cmd_go(tag_near) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 go_busy_follow[P=elsewhere] ; c cmd_go(elsewhere) 1 ; o refused(go) 1 ; p following 1
+E 0 -1 1 arrive[P=door,Q=door] ; c arrived(door) 1 at(door) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=kitchen] ; c arrived(door) 1 at(kitchen) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=sofa] ; c arrived(door) 1 at(sofa) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=window_chair] ; c arrived(door) 1 at(window_chair) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=tag5] ; c arrived(door) 1 at(tag5) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=tag3] ; c arrived(door) 1 at(tag3) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=tag_near] ; c arrived(door) 1 at(tag_near) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=door,Q=elsewhere] ; c arrived(door) 1 at(elsewhere) 1 busy 1 moving(door) 1 ; o at(door) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=door] ; c arrived(kitchen) 1 at(door) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=kitchen] ; c arrived(kitchen) 1 at(kitchen) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=sofa] ; c arrived(kitchen) 1 at(sofa) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=window_chair] ; c arrived(kitchen) 1 at(window_chair) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=tag5] ; c arrived(kitchen) 1 at(tag5) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=tag3] ; c arrived(kitchen) 1 at(tag3) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=tag_near] ; c arrived(kitchen) 1 at(tag_near) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=kitchen,Q=elsewhere] ; c arrived(kitchen) 1 at(elsewhere) 1 busy 1 moving(kitchen) 1 ; o at(kitchen) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=door] ; c arrived(sofa) 1 at(door) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=kitchen] ; c arrived(sofa) 1 at(kitchen) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=sofa] ; c arrived(sofa) 1 at(sofa) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=window_chair] ; c arrived(sofa) 1 at(window_chair) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=tag5] ; c arrived(sofa) 1 at(tag5) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=tag3] ; c arrived(sofa) 1 at(tag3) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=tag_near] ; c arrived(sofa) 1 at(tag_near) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=sofa,Q=elsewhere] ; c arrived(sofa) 1 at(elsewhere) 1 busy 1 moving(sofa) 1 ; o at(sofa) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=door] ; c arrived(window_chair) 1 at(door) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=kitchen] ; c arrived(window_chair) 1 at(kitchen) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=sofa] ; c arrived(window_chair) 1 at(sofa) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=window_chair] ; c arrived(window_chair) 1 at(window_chair) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=tag5] ; c arrived(window_chair) 1 at(tag5) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=tag3] ; c arrived(window_chair) 1 at(tag3) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=tag_near] ; c arrived(window_chair) 1 at(tag_near) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=window_chair,Q=elsewhere] ; c arrived(window_chair) 1 at(elsewhere) 1 busy 1 moving(window_chair) 1 ; o at(window_chair) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=door] ; c arrived(tag5) 1 at(door) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=kitchen] ; c arrived(tag5) 1 at(kitchen) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=sofa] ; c arrived(tag5) 1 at(sofa) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=window_chair] ; c arrived(tag5) 1 at(window_chair) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=tag5] ; c arrived(tag5) 1 at(tag5) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=tag3] ; c arrived(tag5) 1 at(tag3) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=tag_near] ; c arrived(tag5) 1 at(tag_near) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag5,Q=elsewhere] ; c arrived(tag5) 1 at(elsewhere) 1 busy 1 moving(tag5) 1 ; o at(tag5) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=door] ; c arrived(tag3) 1 at(door) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=kitchen] ; c arrived(tag3) 1 at(kitchen) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=sofa] ; c arrived(tag3) 1 at(sofa) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=window_chair] ; c arrived(tag3) 1 at(window_chair) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=tag5] ; c arrived(tag3) 1 at(tag5) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=tag3] ; c arrived(tag3) 1 at(tag3) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=tag_near] ; c arrived(tag3) 1 at(tag_near) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag3,Q=elsewhere] ; c arrived(tag3) 1 at(elsewhere) 1 busy 1 moving(tag3) 1 ; o at(tag3) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=door] ; c arrived(tag_near) 1 at(door) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=kitchen] ; c arrived(tag_near) 1 at(kitchen) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=sofa] ; c arrived(tag_near) 1 at(sofa) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=window_chair] ; c arrived(tag_near) 1 at(window_chair) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=tag5] ; c arrived(tag_near) 1 at(tag5) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=tag3] ; c arrived(tag_near) 1 at(tag3) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=tag_near] ; c arrived(tag_near) 1 at(tag_near) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=tag_near,Q=elsewhere] ; c arrived(tag_near) 1 at(elsewhere) 1 busy 1 moving(tag_near) 1 ; o at(tag_near) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=door] ; c arrived(elsewhere) 1 at(door) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=kitchen] ; c arrived(elsewhere) 1 at(kitchen) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=sofa] ; c arrived(elsewhere) 1 at(sofa) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=window_chair] ; c arrived(elsewhere) 1 at(window_chair) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=tag5] ; c arrived(elsewhere) 1 at(tag5) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=tag3] ; c arrived(elsewhere) 1 at(tag3) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=tag_near] ; c arrived(elsewhere) 1 at(tag_near) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 arrive[P=elsewhere,Q=elsewhere] ; c arrived(elsewhere) 1 at(elsewhere) 1 busy 1 moving(elsewhere) 1 ; o at(elsewhere) 1 done(go) 1 idle 1
+E 0 -1 1 go_blocked[P=door] ; c blocked(door) 1 busy 1 moving(door) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=kitchen] ; c blocked(kitchen) 1 busy 1 moving(kitchen) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=sofa] ; c blocked(sofa) 1 busy 1 moving(sofa) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=window_chair] ; c blocked(window_chair) 1 busy 1 moving(window_chair) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=tag5] ; c blocked(tag5) 1 busy 1 moving(tag5) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=tag3] ; c blocked(tag3) 1 busy 1 moving(tag3) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=tag_near] ; c blocked(tag_near) 1 busy 1 moving(tag_near) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_blocked[P=elsewhere] ; c blocked(elsewhere) 1 busy 1 moving(elsewhere) 1 ; o idle 1 refused(go) 1
+E 0 -1 1 go_expire[P=door] ; c busy 1 moving(door) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=kitchen] ; c busy 1 moving(kitchen) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=sofa] ; c busy 1 moving(sofa) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=window_chair] ; c busy 1 moving(window_chair) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=tag5] ; c busy 1 moving(tag5) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=tag3] ; c busy 1 moving(tag3) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=tag_near] ; c busy 1 moving(tag_near) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 go_expire[P=elsewhere] ; c busy 1 moving(elsewhere) 1 timeout 1 ; o expired(go) 1 idle 1
+E 0 -1 1 find[T=extinguisher] ; c cmd_find(extinguisher) 1 idle 1 ; o busy 1 progress(find) 1 searching(extinguisher) 1 ; p battery_ok 1
+E 0 -1 1 find[T=keys] ; c cmd_find(keys) 1 idle 1 ; o busy 1 progress(find) 1 searching(keys) 1 ; p battery_ok 1
+E 0 -1 1 find[T=bottle] ; c cmd_find(bottle) 1 idle 1 ; o busy 1 progress(find) 1 searching(bottle) 1 ; p battery_ok 1
+E 0 -1 1 find[T=chair] ; c cmd_find(chair) 1 idle 1 ; o busy 1 progress(find) 1 searching(chair) 1 ; p battery_ok 1
+E 0 -1 1 find[T=table] ; c cmd_find(table) 1 idle 1 ; o busy 1 progress(find) 1 searching(table) 1 ; p battery_ok 1
+E 0 -1 1 find_low[T=extinguisher] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p battery_low 1
+E 0 -1 1 find_low[T=keys] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p battery_low 1
+E 0 -1 1 find_low[T=bottle] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p battery_low 1
+E 0 -1 1 find_low[T=chair] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p battery_low 1
+E 0 -1 1 find_low[T=table] ; c cmd_find(table) 1 ; o refused(find) 1 ; p battery_low 1
+E 0 -1 1 find_busy[T=extinguisher,P=door] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(door) 1
+E 0 -1 1 find_busy[T=extinguisher,P=kitchen] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(kitchen) 1
+E 0 -1 1 find_busy[T=extinguisher,P=sofa] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(sofa) 1
+E 0 -1 1 find_busy[T=extinguisher,P=window_chair] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(window_chair) 1
+E 0 -1 1 find_busy[T=extinguisher,P=tag5] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(tag5) 1
+E 0 -1 1 find_busy[T=extinguisher,P=tag3] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(tag3) 1
+E 0 -1 1 find_busy[T=extinguisher,P=tag_near] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(tag_near) 1
+E 0 -1 1 find_busy[T=extinguisher,P=elsewhere] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p moving(elsewhere) 1
+E 0 -1 1 find_busy[T=keys,P=door] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(door) 1
+E 0 -1 1 find_busy[T=keys,P=kitchen] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(kitchen) 1
+E 0 -1 1 find_busy[T=keys,P=sofa] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(sofa) 1
+E 0 -1 1 find_busy[T=keys,P=window_chair] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(window_chair) 1
+E 0 -1 1 find_busy[T=keys,P=tag5] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(tag5) 1
+E 0 -1 1 find_busy[T=keys,P=tag3] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(tag3) 1
+E 0 -1 1 find_busy[T=keys,P=tag_near] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(tag_near) 1
+E 0 -1 1 find_busy[T=keys,P=elsewhere] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p moving(elsewhere) 1
+E 0 -1 1 find_busy[T=bottle,P=door] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(door) 1
+E 0 -1 1 find_busy[T=bottle,P=kitchen] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(kitchen) 1
+E 0 -1 1 find_busy[T=bottle,P=sofa] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(sofa) 1
+E 0 -1 1 find_busy[T=bottle,P=window_chair] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(window_chair) 1
+E 0 -1 1 find_busy[T=bottle,P=tag5] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(tag5) 1
+E 0 -1 1 find_busy[T=bottle,P=tag3] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(tag3) 1
+E 0 -1 1 find_busy[T=bottle,P=tag_near] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(tag_near) 1
+E 0 -1 1 find_busy[T=bottle,P=elsewhere] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p moving(elsewhere) 1
+E 0 -1 1 find_busy[T=chair,P=door] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(door) 1
+E 0 -1 1 find_busy[T=chair,P=kitchen] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(kitchen) 1
+E 0 -1 1 find_busy[T=chair,P=sofa] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(sofa) 1
+E 0 -1 1 find_busy[T=chair,P=window_chair] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(window_chair) 1
+E 0 -1 1 find_busy[T=chair,P=tag5] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(tag5) 1
+E 0 -1 1 find_busy[T=chair,P=tag3] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(tag3) 1
+E 0 -1 1 find_busy[T=chair,P=tag_near] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(tag_near) 1
+E 0 -1 1 find_busy[T=chair,P=elsewhere] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p moving(elsewhere) 1
+E 0 -1 1 find_busy[T=table,P=door] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(door) 1
+E 0 -1 1 find_busy[T=table,P=kitchen] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(kitchen) 1
+E 0 -1 1 find_busy[T=table,P=sofa] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(sofa) 1
+E 0 -1 1 find_busy[T=table,P=window_chair] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(window_chair) 1
+E 0 -1 1 find_busy[T=table,P=tag5] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(tag5) 1
+E 0 -1 1 find_busy[T=table,P=tag3] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(tag3) 1
+E 0 -1 1 find_busy[T=table,P=tag_near] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(tag_near) 1
+E 0 -1 1 find_busy[T=table,P=elsewhere] ; c cmd_find(table) 1 ; o refused(find) 1 ; p moving(elsewhere) 1
+E 0 -1 1 find_busy_find[T=extinguisher,U=extinguisher] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p searching(extinguisher) 1
+E 0 -1 1 find_busy_find[T=extinguisher,U=keys] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p searching(keys) 1
+E 0 -1 1 find_busy_find[T=extinguisher,U=bottle] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p searching(bottle) 1
+E 0 -1 1 find_busy_find[T=extinguisher,U=chair] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p searching(chair) 1
+E 0 -1 1 find_busy_find[T=extinguisher,U=table] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p searching(table) 1
+E 0 -1 1 find_busy_find[T=keys,U=extinguisher] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p searching(extinguisher) 1
+E 0 -1 1 find_busy_find[T=keys,U=keys] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p searching(keys) 1
+E 0 -1 1 find_busy_find[T=keys,U=bottle] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p searching(bottle) 1
+E 0 -1 1 find_busy_find[T=keys,U=chair] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p searching(chair) 1
+E 0 -1 1 find_busy_find[T=keys,U=table] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p searching(table) 1
+E 0 -1 1 find_busy_find[T=bottle,U=extinguisher] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p searching(extinguisher) 1
+E 0 -1 1 find_busy_find[T=bottle,U=keys] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p searching(keys) 1
+E 0 -1 1 find_busy_find[T=bottle,U=bottle] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p searching(bottle) 1
+E 0 -1 1 find_busy_find[T=bottle,U=chair] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p searching(chair) 1
+E 0 -1 1 find_busy_find[T=bottle,U=table] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p searching(table) 1
+E 0 -1 1 find_busy_find[T=chair,U=extinguisher] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p searching(extinguisher) 1
+E 0 -1 1 find_busy_find[T=chair,U=keys] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p searching(keys) 1
+E 0 -1 1 find_busy_find[T=chair,U=bottle] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p searching(bottle) 1
+E 0 -1 1 find_busy_find[T=chair,U=chair] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p searching(chair) 1
+E 0 -1 1 find_busy_find[T=chair,U=table] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p searching(table) 1
+E 0 -1 1 find_busy_find[T=table,U=extinguisher] ; c cmd_find(table) 1 ; o refused(find) 1 ; p searching(extinguisher) 1
+E 0 -1 1 find_busy_find[T=table,U=keys] ; c cmd_find(table) 1 ; o refused(find) 1 ; p searching(keys) 1
+E 0 -1 1 find_busy_find[T=table,U=bottle] ; c cmd_find(table) 1 ; o refused(find) 1 ; p searching(bottle) 1
+E 0 -1 1 find_busy_find[T=table,U=chair] ; c cmd_find(table) 1 ; o refused(find) 1 ; p searching(chair) 1
+E 0 -1 1 find_busy_find[T=table,U=table] ; c cmd_find(table) 1 ; o refused(find) 1 ; p searching(table) 1
+E 0 -1 1 find_busy_follow[T=extinguisher] ; c cmd_find(extinguisher) 1 ; o refused(find) 1 ; p following 1
+E 0 -1 1 find_busy_follow[T=keys] ; c cmd_find(keys) 1 ; o refused(find) 1 ; p following 1
+E 0 -1 1 find_busy_follow[T=bottle] ; c cmd_find(bottle) 1 ; o refused(find) 1 ; p following 1
+E 0 -1 1 find_busy_follow[T=chair] ; c cmd_find(chair) 1 ; o refused(find) 1 ; p following 1
+E 0 -1 1 find_busy_follow[T=table] ; c cmd_find(table) 1 ; o refused(find) 1 ; p following 1
+E 0 -1 1 found[T=extinguisher] ; c busy 1 searching(extinguisher) 1 spotted(extinguisher) 1 unseen(extinguisher) 1 ; o done(find) 1 idle 1 seen(extinguisher) 1
+E 0 -1 1 found[T=keys] ; c busy 1 searching(keys) 1 spotted(keys) 1 unseen(keys) 1 ; o done(find) 1 idle 1 seen(keys) 1
+E 0 -1 1 found[T=bottle] ; c busy 1 searching(bottle) 1 spotted(bottle) 1 unseen(bottle) 1 ; o done(find) 1 idle 1 seen(bottle) 1
+E 0 -1 1 found[T=chair] ; c busy 1 searching(chair) 1 spotted(chair) 1 unseen(chair) 1 ; o done(find) 1 idle 1 seen(chair) 1
+E 0 -1 1 found[T=table] ; c busy 1 searching(table) 1 spotted(table) 1 unseen(table) 1 ; o done(find) 1 idle 1 seen(table) 1
+E 0 -1 1 found_again[T=extinguisher] ; c busy 1 searching(extinguisher) 1 spotted(extinguisher) 1 ; o done(find) 1 idle 1 ; p seen(extinguisher) 1
+E 0 -1 1 found_again[T=keys] ; c busy 1 searching(keys) 1 spotted(keys) 1 ; o done(find) 1 idle 1 ; p seen(keys) 1
+E 0 -1 1 found_again[T=bottle] ; c busy 1 searching(bottle) 1 spotted(bottle) 1 ; o done(find) 1 idle 1 ; p seen(bottle) 1
+E 0 -1 1 found_again[T=chair] ; c busy 1 searching(chair) 1 spotted(chair) 1 ; o done(find) 1 idle 1 ; p seen(chair) 1
+E 0 -1 1 found_again[T=table] ; c busy 1 searching(table) 1 spotted(table) 1 ; o done(find) 1 idle 1 ; p seen(table) 1
+E 0 -1 1 find_locked[T=extinguisher] ; c busy 1 locked_away(extinguisher) 1 searching(extinguisher) 1 ; o idle 1 refused(find) 1
+E 0 -1 1 find_locked[T=keys] ; c busy 1 locked_away(keys) 1 searching(keys) 1 ; o idle 1 refused(find) 1
+E 0 -1 1 find_locked[T=bottle] ; c busy 1 locked_away(bottle) 1 searching(bottle) 1 ; o idle 1 refused(find) 1
+E 0 -1 1 find_locked[T=chair] ; c busy 1 locked_away(chair) 1 searching(chair) 1 ; o idle 1 refused(find) 1
+E 0 -1 1 find_locked[T=table] ; c busy 1 locked_away(table) 1 searching(table) 1 ; o idle 1 refused(find) 1
+E 0 -1 1 find_expire[T=extinguisher] ; c busy 1 searching(extinguisher) 1 timeout 1 ; o expired(find) 1 idle 1
+E 0 -1 1 find_expire[T=keys] ; c busy 1 searching(keys) 1 timeout 1 ; o expired(find) 1 idle 1
+E 0 -1 1 find_expire[T=bottle] ; c busy 1 searching(bottle) 1 timeout 1 ; o expired(find) 1 idle 1
+E 0 -1 1 find_expire[T=chair] ; c busy 1 searching(chair) 1 timeout 1 ; o expired(find) 1 idle 1
+E 0 -1 1 find_expire[T=table] ; c busy 1 searching(table) 1 timeout 1 ; o expired(find) 1 idle 1
+E 0 -1 1 follow ; c cmd_follow 1 idle 1 ; o busy 1 following 1 progress(follow) 1 ; p person_in_view 1 posture(standing) 1
+E 0 -1 1 follow_nobody ; c cmd_follow 1 ; o refused(follow) 1 ; p nobody 1
+E 0 -1 1 follow_must_stand[Q=sitting] ; c cmd_follow 1 ; o refused(follow) 1 ; p idle 1 person_in_view 1 posture(sitting) 1
+E 0 -1 1 follow_must_stand[Q=lying] ; c cmd_follow 1 ; o refused(follow) 1 ; p idle 1 person_in_view 1 posture(lying) 1
+E 0 -1 1 follow_busy[P=door] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(door) 1
+E 0 -1 1 follow_busy[P=kitchen] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(kitchen) 1
+E 0 -1 1 follow_busy[P=sofa] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(sofa) 1
+E 0 -1 1 follow_busy[P=window_chair] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(window_chair) 1
+E 0 -1 1 follow_busy[P=tag5] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(tag5) 1
+E 0 -1 1 follow_busy[P=tag3] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(tag3) 1
+E 0 -1 1 follow_busy[P=tag_near] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(tag_near) 1
+E 0 -1 1 follow_busy[P=elsewhere] ; c cmd_follow 1 ; o refused(follow) 1 ; p moving(elsewhere) 1
+E 0 -1 1 follow_busy_find[T=extinguisher] ; c cmd_follow 1 ; o refused(follow) 1 ; p searching(extinguisher) 1
+E 0 -1 1 follow_busy_find[T=keys] ; c cmd_follow 1 ; o refused(follow) 1 ; p searching(keys) 1
+E 0 -1 1 follow_busy_find[T=bottle] ; c cmd_follow 1 ; o refused(follow) 1 ; p searching(bottle) 1
+E 0 -1 1 follow_busy_find[T=chair] ; c cmd_follow 1 ; o refused(follow) 1 ; p searching(chair) 1
+E 0 -1 1 follow_busy_find[T=table] ; c cmd_follow 1 ; o refused(follow) 1 ; p searching(table) 1
+E 0 -1 1 follow_already ; c cmd_follow 1 ; o refused(follow) 1 ; p following 1
+E 0 -1 1 follow_lost ; c busy 1 following 1 lost 1 ; o expired(follow) 1 idle 1
+E 0 -1 1 stop_go[P=door] ; c busy 1 cmd_stop 1 moving(door) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=kitchen] ; c busy 1 cmd_stop 1 moving(kitchen) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=sofa] ; c busy 1 cmd_stop 1 moving(sofa) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=window_chair] ; c busy 1 cmd_stop 1 moving(window_chair) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=tag5] ; c busy 1 cmd_stop 1 moving(tag5) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=tag3] ; c busy 1 cmd_stop 1 moving(tag3) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=tag_near] ; c busy 1 cmd_stop 1 moving(tag_near) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_go[P=elsewhere] ; c busy 1 cmd_stop 1 moving(elsewhere) 1 ; o cancelled(go) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_find[T=extinguisher] ; c busy 1 cmd_stop 1 searching(extinguisher) 1 ; o cancelled(find) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_find[T=keys] ; c busy 1 cmd_stop 1 searching(keys) 1 ; o cancelled(find) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_find[T=bottle] ; c busy 1 cmd_stop 1 searching(bottle) 1 ; o cancelled(find) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_find[T=chair] ; c busy 1 cmd_stop 1 searching(chair) 1 ; o cancelled(find) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_find[T=table] ; c busy 1 cmd_stop 1 searching(table) 1 ; o cancelled(find) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_follow ; c busy 1 cmd_stop 1 following 1 ; o cancelled(follow) 1 done(stop) 1 idle 1
+E 0 -1 1 stop_still ; c cmd_stop 1 ; o refused(stop) 1 ; p idle 1
+E 0 -1 1 cancel_go[P=door] ; c busy 1 cmd_cancel 1 moving(door) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=kitchen] ; c busy 1 cmd_cancel 1 moving(kitchen) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=sofa] ; c busy 1 cmd_cancel 1 moving(sofa) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=window_chair] ; c busy 1 cmd_cancel 1 moving(window_chair) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=tag5] ; c busy 1 cmd_cancel 1 moving(tag5) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=tag3] ; c busy 1 cmd_cancel 1 moving(tag3) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=tag_near] ; c busy 1 cmd_cancel 1 moving(tag_near) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_go[P=elsewhere] ; c busy 1 cmd_cancel 1 moving(elsewhere) 1 ; o cancelled(go) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_find[T=extinguisher] ; c busy 1 cmd_cancel 1 searching(extinguisher) 1 ; o cancelled(find) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_find[T=keys] ; c busy 1 cmd_cancel 1 searching(keys) 1 ; o cancelled(find) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_find[T=bottle] ; c busy 1 cmd_cancel 1 searching(bottle) 1 ; o cancelled(find) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_find[T=chair] ; c busy 1 cmd_cancel 1 searching(chair) 1 ; o cancelled(find) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_find[T=table] ; c busy 1 cmd_cancel 1 searching(table) 1 ; o cancelled(find) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_follow ; c busy 1 cmd_cancel 1 following 1 ; o cancelled(follow) 1 done(cancel) 1 idle 1
+E 0 -1 1 cancel_none ; c cmd_cancel 1 ; o done(cancel) 1 ; p idle 1
+E 0 -1 1 query_seen[T=extinguisher,P=door] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,door) 1
+E 0 -1 1 query_seen[T=extinguisher,P=kitchen] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,kitchen) 1
+E 0 -1 1 query_seen[T=extinguisher,P=sofa] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,sofa) 1
+E 0 -1 1 query_seen[T=extinguisher,P=window_chair] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,window_chair) 1
+E 0 -1 1 query_seen[T=extinguisher,P=tag5] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,tag5) 1
+E 0 -1 1 query_seen[T=extinguisher,P=tag3] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,tag3) 1
+E 0 -1 1 query_seen[T=extinguisher,P=tag_near] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,tag_near) 1
+E 0 -1 1 query_seen[T=extinguisher,P=elsewhere] ; c cmd_query(extinguisher) 1 ; o done(query) 1 ; p seen(extinguisher) 1 where(extinguisher,elsewhere) 1
+E 0 -1 1 query_seen[T=keys,P=door] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,door) 1
+E 0 -1 1 query_seen[T=keys,P=kitchen] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,kitchen) 1
+E 0 -1 1 query_seen[T=keys,P=sofa] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,sofa) 1
+E 0 -1 1 query_seen[T=keys,P=window_chair] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,window_chair) 1
+E 0 -1 1 query_seen[T=keys,P=tag5] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,tag5) 1
+E 0 -1 1 query_seen[T=keys,P=tag3] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,tag3) 1
+E 0 -1 1 query_seen[T=keys,P=tag_near] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,tag_near) 1
+E 0 -1 1 query_seen[T=keys,P=elsewhere] ; c cmd_query(keys) 1 ; o done(query) 1 ; p seen(keys) 1 where(keys,elsewhere) 1
+E 0 -1 1 query_seen[T=bottle,P=door] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,door) 1
+E 0 -1 1 query_seen[T=bottle,P=kitchen] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,kitchen) 1
+E 0 -1 1 query_seen[T=bottle,P=sofa] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,sofa) 1
+E 0 -1 1 query_seen[T=bottle,P=window_chair] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,window_chair) 1
+E 0 -1 1 query_seen[T=bottle,P=tag5] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,tag5) 1
+E 0 -1 1 query_seen[T=bottle,P=tag3] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,tag3) 1
+E 0 -1 1 query_seen[T=bottle,P=tag_near] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,tag_near) 1
+E 0 -1 1 query_seen[T=bottle,P=elsewhere] ; c cmd_query(bottle) 1 ; o done(query) 1 ; p seen(bottle) 1 where(bottle,elsewhere) 1
+E 0 -1 1 query_seen[T=chair,P=door] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,door) 1
+E 0 -1 1 query_seen[T=chair,P=kitchen] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,kitchen) 1
+E 0 -1 1 query_seen[T=chair,P=sofa] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,sofa) 1
+E 0 -1 1 query_seen[T=chair,P=window_chair] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,window_chair) 1
+E 0 -1 1 query_seen[T=chair,P=tag5] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,tag5) 1
+E 0 -1 1 query_seen[T=chair,P=tag3] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,tag3) 1
+E 0 -1 1 query_seen[T=chair,P=tag_near] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,tag_near) 1
+E 0 -1 1 query_seen[T=chair,P=elsewhere] ; c cmd_query(chair) 1 ; o done(query) 1 ; p seen(chair) 1 where(chair,elsewhere) 1
+E 0 -1 1 query_seen[T=table,P=door] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,door) 1
+E 0 -1 1 query_seen[T=table,P=kitchen] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,kitchen) 1
+E 0 -1 1 query_seen[T=table,P=sofa] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,sofa) 1
+E 0 -1 1 query_seen[T=table,P=window_chair] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,window_chair) 1
+E 0 -1 1 query_seen[T=table,P=tag5] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,tag5) 1
+E 0 -1 1 query_seen[T=table,P=tag3] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,tag3) 1
+E 0 -1 1 query_seen[T=table,P=tag_near] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,tag_near) 1
+E 0 -1 1 query_seen[T=table,P=elsewhere] ; c cmd_query(table) 1 ; o done(query) 1 ; p seen(table) 1 where(table,elsewhere) 1
+E 0 -1 1 query_unseen[T=extinguisher] ; c cmd_query(extinguisher) 1 ; o refused(query) 1 ; p unseen(extinguisher) 1
+E 0 -1 1 query_unseen[T=keys] ; c cmd_query(keys) 1 ; o refused(query) 1 ; p unseen(keys) 1
+E 0 -1 1 query_unseen[T=bottle] ; c cmd_query(bottle) 1 ; o refused(query) 1 ; p unseen(bottle) 1
+E 0 -1 1 query_unseen[T=chair] ; c cmd_query(chair) 1 ; o refused(query) 1 ; p unseen(chair) 1
+E 0 -1 1 query_unseen[T=table] ; c cmd_query(table) 1 ; o refused(query) 1 ; p unseen(table) 1
+E 0 -1 1 look[P=door] ; c cmd_look(door) 1 ; o done(look) 1 ; p mapped(door) 1
+E 0 -1 1 look[P=kitchen] ; c cmd_look(kitchen) 1 ; o done(look) 1 ; p mapped(kitchen) 1
+E 0 -1 1 look[P=sofa] ; c cmd_look(sofa) 1 ; o done(look) 1 ; p mapped(sofa) 1
+E 0 -1 1 look[P=window_chair] ; c cmd_look(window_chair) 1 ; o done(look) 1 ; p mapped(window_chair) 1
+E 0 -1 1 look[P=tag5] ; c cmd_look(tag5) 1 ; o done(look) 1 ; p mapped(tag5) 1
+E 0 -1 1 look[P=tag3] ; c cmd_look(tag3) 1 ; o done(look) 1 ; p mapped(tag3) 1
+E 0 -1 1 look[P=tag_near] ; c cmd_look(tag_near) 1 ; o done(look) 1 ; p mapped(tag_near) 1
+E 0 -1 1 look[P=elsewhere] ; c cmd_look(elsewhere) 1 ; o done(look) 1 ; p mapped(elsewhere) 1
+E 0 -1 1 look_unmapped[P=door] ; c cmd_look(door) 1 ; o refused(look) 1 ; p unmapped(door) 1
+E 0 -1 1 look_unmapped[P=kitchen] ; c cmd_look(kitchen) 1 ; o refused(look) 1 ; p unmapped(kitchen) 1
+E 0 -1 1 look_unmapped[P=sofa] ; c cmd_look(sofa) 1 ; o refused(look) 1 ; p unmapped(sofa) 1
+E 0 -1 1 look_unmapped[P=window_chair] ; c cmd_look(window_chair) 1 ; o refused(look) 1 ; p unmapped(window_chair) 1
+E 0 -1 1 look_unmapped[P=tag5] ; c cmd_look(tag5) 1 ; o refused(look) 1 ; p unmapped(tag5) 1
+E 0 -1 1 look_unmapped[P=tag3] ; c cmd_look(tag3) 1 ; o refused(look) 1 ; p unmapped(tag3) 1
+E 0 -1 1 look_unmapped[P=tag_near] ; c cmd_look(tag_near) 1 ; o refused(look) 1 ; p unmapped(tag_near) 1
+E 0 -1 1 look_unmapped[P=elsewhere] ; c cmd_look(elsewhere) 1 ; o refused(look) 1 ; p unmapped(elsewhere) 1
+E 0 -1 1 time ; c cmd_time 1 ; o done(time) 1
+E 0 -1 1 date ; c cmd_date 1 ; o done(date) 1
+E 0 -1 1 chat ; c cmd_chat 1 ; o done(chat) 1
+E 0 -1 1 unknown ; c cmd_unknown 1 ; o refused(unknown) 1
+I at(door) 1 battery_ok 1 clear(forward) 1 closed(kitchen) 1 closed(window_chair) 1 floor_dry 1 free(around) 1 free(left) 1 free(right) 1 idle 1 leg_ok 1 mapped(door) 1 mapped(kitchen) 1 mapped(tag3) 1 mapped(tag_near) 1 mapped(window_chair) 1 open(door) 1 open(tag3) 1 open(tag_near) 1 person_in_view 1 posture(standing) 1 seen(chair) 1 seen(table) 1 unmapped(elsewhere) 1 unmapped(sofa) 1 unmapped(tag5) 1 unseen(bottle) 1 unseen(extinguisher) 1 unseen(keys) 1 wall(backward) 1 where(chair,kitchen) 1 where(table,kitchen) 1
+S 6

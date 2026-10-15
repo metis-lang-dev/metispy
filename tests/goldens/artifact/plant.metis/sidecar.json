@@ -1,0 +1,230 @@
+{
+ "format": "metis-sidecar/1",
+ "catalog": "plant+visitor",
+ "key": "aa1aca319a942def6db1d28b8b2d21571fc237e01afc30682a8816511e08307a",
+ "packs": [
+  "visitor.llp"
+ ],
+ "init": {
+  "moist": 1
+ },
+ "steps": 0,
+ "stages": [
+  "main"
+ ],
+ "events": [
+  {
+   "i": 0,
+   "name": "dry_out",
+   "rule": "dry_out",
+   "kind": "clause",
+   "stage": "main",
+   "line": "The sun has been on me for a while; my soil dries out."
+  },
+  {
+   "i": 1,
+   "name": "water",
+   "rule": "water",
+   "kind": "clause",
+   "stage": "main",
+   "line": "When I am dry and you water me, my soil is moist again."
+  },
+  {
+   "i": 2,
+   "name": "check_moist",
+   "rule": "check_moist",
+   "kind": "clause",
+   "stage": "main",
+   "line": "When you check on me while I am moist, I tell you I am moist."
+  },
+  {
+   "i": 3,
+   "name": "check_dry",
+   "rule": "check_dry",
+   "kind": "clause",
+   "stage": "main",
+   "line": "When you check on me while I am dry, I tell you I am dry."
+  },
+  {
+   "i": 4,
+   "name": "visitor_waters",
+   "rule": "visitor_waters",
+   "kind": "clause",
+   "stage": "main",
+   "line": "A visitor has watered me; my soil is moist again."
+  }
+ ],
+ "cards": [
+  {
+   "name": "plant+visitor",
+   "text": "a potted plant that dries out: the person waters it or asks how it is",
+   "relation": "served",
+   "moves": [],
+   "effects": [],
+   "slots": []
+  }
+ ],
+ "queries": [],
+ "script": [
+  {
+   "name": "plant+visitor",
+   "relation": "served",
+   "text": "a potted plant that dries out: the person waters it or asks how it is",
+   "clauses": [
+    {
+     "name": "dry_out",
+     "stage": "main",
+     "doc": "The sun has been on me for a while; my soil dries out.",
+     "premises": [
+      {
+       "atom": "moist",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "sun",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "dry",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "water",
+     "stage": "main",
+     "doc": "When I am dry and you water me, my soil is moist again.",
+     "premises": [
+      {
+       "atom": "dry",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cmd_water",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "moist",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(water)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "check_moist",
+     "stage": "main",
+     "doc": "When you check on me while I am moist, I tell you I am moist.",
+     "premises": [
+      {
+       "atom": "cmd_check",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moist",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "checked(moist)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "check_dry",
+     "stage": "main",
+     "doc": "When you check on me while I am dry, I tell you I am dry.",
+     "premises": [
+      {
+       "atom": "cmd_check",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "dry",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "checked(dry)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    }
+   ],
+   "atoms": [
+    {
+     "name": "moist",
+     "doc": ""
+    },
+    {
+     "name": "dry",
+     "doc": ""
+    },
+    {
+     "name": "cmd_water",
+     "doc": ""
+    },
+    {
+     "name": "cmd_check",
+     "doc": ""
+    },
+    {
+     "name": "done",
+     "doc": ""
+    },
+    {
+     "name": "checked",
+     "doc": ""
+    },
+    {
+     "name": "sun",
+     "doc": ""
+    },
+    {
+     "name": "visitor",
+     "doc": ""
+    }
+   ],
+   "missing": {
+    "clause_doc": [],
+    "atom_doc": [
+     "moist",
+     "dry",
+     "cmd_water",
+     "cmd_check",
+     "done",
+     "checked",
+     "sun",
+     "visitor"
+    ]
+   }
+  }
+ ],
+ "ir": null
+}

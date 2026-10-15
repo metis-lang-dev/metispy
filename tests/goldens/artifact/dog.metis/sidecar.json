@@ -1,0 +1,6292 @@
+{
+ "format": "metis-sidecar/1",
+ "catalog": "dog",
+ "key": "f2927673f8e455d9f5bb83ce678f6a4adc533aa100cb29f40ccc082e1f82cb67",
+ "packs": [],
+ "init": {
+  "at(door)": 1,
+  "battery_ok": 1,
+  "clear(forward)": 1,
+  "closed(kitchen)": 1,
+  "closed(window_chair)": 1,
+  "floor_dry": 1,
+  "free(around)": 1,
+  "free(left)": 1,
+  "free(right)": 1,
+  "idle": 1,
+  "leg_ok": 1,
+  "mapped(door)": 1,
+  "mapped(kitchen)": 1,
+  "mapped(tag3)": 1,
+  "mapped(tag_near)": 1,
+  "mapped(window_chair)": 1,
+  "open(door)": 1,
+  "open(tag3)": 1,
+  "open(tag_near)": 1,
+  "person_in_view": 1,
+  "posture(standing)": 1,
+  "seen(chair)": 1,
+  "seen(table)": 1,
+  "unmapped(elsewhere)": 1,
+  "unmapped(sofa)": 1,
+  "unmapped(tag5)": 1,
+  "unseen(bottle)": 1,
+  "unseen(extinguisher)": 1,
+  "unseen(keys)": 1,
+  "wall(backward)": 1,
+  "where(chair,kitchen)": 1,
+  "where(table,kitchen)": 1
+ },
+ "steps": 6,
+ "stages": [
+  "serve"
+ ],
+ "events": [
+  {
+   "i": 0,
+   "name": "stand[P=sitting]",
+   "rule": "stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stand up."
+  },
+  {
+   "i": 1,
+   "name": "stand[P=lying]",
+   "rule": "stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stand up."
+  },
+  {
+   "i": 2,
+   "name": "stand_low[P=sitting]",
+   "rule": "stand_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't stand: the battery is too low to stand."
+  },
+  {
+   "i": 3,
+   "name": "stand_low[P=lying]",
+   "rule": "stand_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't stand: the battery is too low to stand."
+  },
+  {
+   "i": 4,
+   "name": "stand_already",
+   "rule": "stand_already",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I am already standing."
+  },
+  {
+   "i": 5,
+   "name": "sit[P=standing]",
+   "rule": "sit",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I sit down."
+  },
+  {
+   "i": 6,
+   "name": "sit[P=lying]",
+   "rule": "sit",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I sit down."
+  },
+  {
+   "i": 7,
+   "name": "sit_wet[P=standing]",
+   "rule": "sit_wet",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't sit: the floor here is wet."
+  },
+  {
+   "i": 8,
+   "name": "sit_wet[P=lying]",
+   "rule": "sit_wet",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't sit: the floor here is wet."
+  },
+  {
+   "i": 9,
+   "name": "sit_already",
+   "rule": "sit_already",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I am already sitting."
+  },
+  {
+   "i": 10,
+   "name": "lie[P=standing]",
+   "rule": "lie",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I lie down."
+  },
+  {
+   "i": 11,
+   "name": "lie[P=sitting]",
+   "rule": "lie",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I lie down."
+  },
+  {
+   "i": 12,
+   "name": "lie_already",
+   "rule": "lie_already",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I am already lying down."
+  },
+  {
+   "i": 13,
+   "name": "turn[S=left]",
+   "rule": "turn",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I turn the way you said."
+  },
+  {
+   "i": 14,
+   "name": "turn[S=right]",
+   "rule": "turn",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I turn the way you said."
+  },
+  {
+   "i": 15,
+   "name": "turn[S=around]",
+   "rule": "turn",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I turn the way you said."
+  },
+  {
+   "i": 16,
+   "name": "turn_obstacle[S=left]",
+   "rule": "turn_obstacle",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn that way: an obstacle is too close on that side."
+  },
+  {
+   "i": 17,
+   "name": "turn_obstacle[S=right]",
+   "rule": "turn_obstacle",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn that way: an obstacle is too close on that side."
+  },
+  {
+   "i": 18,
+   "name": "turn_obstacle[S=around]",
+   "rule": "turn_obstacle",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn that way: an obstacle is too close on that side."
+  },
+  {
+   "i": 19,
+   "name": "turn_must_stand[S=left,P=sitting]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 20,
+   "name": "turn_must_stand[S=left,P=lying]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 21,
+   "name": "turn_must_stand[S=right,P=sitting]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 22,
+   "name": "turn_must_stand[S=right,P=lying]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 23,
+   "name": "turn_must_stand[S=around,P=sitting]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 24,
+   "name": "turn_must_stand[S=around,P=lying]",
+   "rule": "turn_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn: I have to stand up first."
+  },
+  {
+   "i": 25,
+   "name": "move[W=forward]",
+   "rule": "move",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I move the way you said."
+  },
+  {
+   "i": 26,
+   "name": "move[W=backward]",
+   "rule": "move",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I move the way you said."
+  },
+  {
+   "i": 27,
+   "name": "move_wall[W=forward]",
+   "rule": "move_wall",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move that way: there is a wall right there."
+  },
+  {
+   "i": 28,
+   "name": "move_wall[W=backward]",
+   "rule": "move_wall",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move that way: there is a wall right there."
+  },
+  {
+   "i": 29,
+   "name": "move_must_stand[W=forward,P=sitting]",
+   "rule": "move_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move: I have to stand up first."
+  },
+  {
+   "i": 30,
+   "name": "move_must_stand[W=forward,P=lying]",
+   "rule": "move_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move: I have to stand up first."
+  },
+  {
+   "i": 31,
+   "name": "move_must_stand[W=backward,P=sitting]",
+   "rule": "move_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move: I have to stand up first."
+  },
+  {
+   "i": 32,
+   "name": "move_must_stand[W=backward,P=lying]",
+   "rule": "move_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move: I have to stand up first."
+  },
+  {
+   "i": 33,
+   "name": "paw",
+   "rule": "paw",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I give you my paw."
+  },
+  {
+   "i": 34,
+   "name": "paw_hot",
+   "rule": "paw_hot",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't lift my paw: my front leg is overheating."
+  },
+  {
+   "i": 35,
+   "name": "sit_busy",
+   "rule": "sit_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't sit now: I am on a task."
+  },
+  {
+   "i": 36,
+   "name": "lie_busy",
+   "rule": "lie_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't lie down now: I am on a task."
+  },
+  {
+   "i": 37,
+   "name": "turn_busy[S=left]",
+   "rule": "turn_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn now: I am on a task."
+  },
+  {
+   "i": 38,
+   "name": "turn_busy[S=right]",
+   "rule": "turn_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn now: I am on a task."
+  },
+  {
+   "i": 39,
+   "name": "turn_busy[S=around]",
+   "rule": "turn_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't turn now: I am on a task."
+  },
+  {
+   "i": 40,
+   "name": "move_busy[W=forward]",
+   "rule": "move_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move now: I am on a task."
+  },
+  {
+   "i": 41,
+   "name": "move_busy[W=backward]",
+   "rule": "move_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't move now: I am on a task."
+  },
+  {
+   "i": 42,
+   "name": "paw_busy",
+   "rule": "paw_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't give my paw now: I am on a task."
+  },
+  {
+   "i": 43,
+   "name": "go[P=door]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 44,
+   "name": "go[P=kitchen]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 45,
+   "name": "go[P=sofa]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 46,
+   "name": "go[P=window_chair]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 47,
+   "name": "go[P=tag5]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 48,
+   "name": "go[P=tag3]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 49,
+   "name": "go[P=tag_near]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 50,
+   "name": "go[P=elsewhere]",
+   "rule": "go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I set off for {P}."
+  },
+  {
+   "i": 51,
+   "name": "go_unmapped[P=door]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 52,
+   "name": "go_unmapped[P=kitchen]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 53,
+   "name": "go_unmapped[P=sofa]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 54,
+   "name": "go_unmapped[P=window_chair]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 55,
+   "name": "go_unmapped[P=tag5]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 56,
+   "name": "go_unmapped[P=tag3]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 57,
+   "name": "go_unmapped[P=tag_near]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 58,
+   "name": "go_unmapped[P=elsewhere]",
+   "rule": "go_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: it is not on my map."
+  },
+  {
+   "i": 59,
+   "name": "go_closed[P=door]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 60,
+   "name": "go_closed[P=kitchen]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 61,
+   "name": "go_closed[P=sofa]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 62,
+   "name": "go_closed[P=window_chair]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 63,
+   "name": "go_closed[P=tag5]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 64,
+   "name": "go_closed[P=tag3]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 65,
+   "name": "go_closed[P=tag_near]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 66,
+   "name": "go_closed[P=elsewhere]",
+   "rule": "go_closed",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go to {P}: the way to it is closed."
+  },
+  {
+   "i": 67,
+   "name": "go_must_stand[P=door,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 68,
+   "name": "go_must_stand[P=door,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 69,
+   "name": "go_must_stand[P=kitchen,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 70,
+   "name": "go_must_stand[P=kitchen,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 71,
+   "name": "go_must_stand[P=sofa,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 72,
+   "name": "go_must_stand[P=sofa,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 73,
+   "name": "go_must_stand[P=window_chair,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 74,
+   "name": "go_must_stand[P=window_chair,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 75,
+   "name": "go_must_stand[P=tag5,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 76,
+   "name": "go_must_stand[P=tag5,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 77,
+   "name": "go_must_stand[P=tag3,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 78,
+   "name": "go_must_stand[P=tag3,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 79,
+   "name": "go_must_stand[P=tag_near,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 80,
+   "name": "go_must_stand[P=tag_near,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 81,
+   "name": "go_must_stand[P=elsewhere,Q=sitting]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 82,
+   "name": "go_must_stand[P=elsewhere,Q=lying]",
+   "rule": "go_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't go yet: I have to stand up first."
+  },
+  {
+   "i": 83,
+   "name": "go_busy[P=door,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 84,
+   "name": "go_busy[P=door,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 85,
+   "name": "go_busy[P=door,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 86,
+   "name": "go_busy[P=door,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 87,
+   "name": "go_busy[P=door,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 88,
+   "name": "go_busy[P=door,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 89,
+   "name": "go_busy[P=door,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 90,
+   "name": "go_busy[P=door,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 91,
+   "name": "go_busy[P=kitchen,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 92,
+   "name": "go_busy[P=kitchen,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 93,
+   "name": "go_busy[P=kitchen,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 94,
+   "name": "go_busy[P=kitchen,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 95,
+   "name": "go_busy[P=kitchen,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 96,
+   "name": "go_busy[P=kitchen,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 97,
+   "name": "go_busy[P=kitchen,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 98,
+   "name": "go_busy[P=kitchen,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 99,
+   "name": "go_busy[P=sofa,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 100,
+   "name": "go_busy[P=sofa,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 101,
+   "name": "go_busy[P=sofa,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 102,
+   "name": "go_busy[P=sofa,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 103,
+   "name": "go_busy[P=sofa,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 104,
+   "name": "go_busy[P=sofa,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 105,
+   "name": "go_busy[P=sofa,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 106,
+   "name": "go_busy[P=sofa,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 107,
+   "name": "go_busy[P=window_chair,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 108,
+   "name": "go_busy[P=window_chair,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 109,
+   "name": "go_busy[P=window_chair,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 110,
+   "name": "go_busy[P=window_chair,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 111,
+   "name": "go_busy[P=window_chair,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 112,
+   "name": "go_busy[P=window_chair,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 113,
+   "name": "go_busy[P=window_chair,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 114,
+   "name": "go_busy[P=window_chair,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 115,
+   "name": "go_busy[P=tag5,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 116,
+   "name": "go_busy[P=tag5,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 117,
+   "name": "go_busy[P=tag5,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 118,
+   "name": "go_busy[P=tag5,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 119,
+   "name": "go_busy[P=tag5,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 120,
+   "name": "go_busy[P=tag5,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 121,
+   "name": "go_busy[P=tag5,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 122,
+   "name": "go_busy[P=tag5,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 123,
+   "name": "go_busy[P=tag3,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 124,
+   "name": "go_busy[P=tag3,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 125,
+   "name": "go_busy[P=tag3,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 126,
+   "name": "go_busy[P=tag3,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 127,
+   "name": "go_busy[P=tag3,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 128,
+   "name": "go_busy[P=tag3,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 129,
+   "name": "go_busy[P=tag3,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 130,
+   "name": "go_busy[P=tag3,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 131,
+   "name": "go_busy[P=tag_near,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 132,
+   "name": "go_busy[P=tag_near,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 133,
+   "name": "go_busy[P=tag_near,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 134,
+   "name": "go_busy[P=tag_near,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 135,
+   "name": "go_busy[P=tag_near,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 136,
+   "name": "go_busy[P=tag_near,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 137,
+   "name": "go_busy[P=tag_near,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 138,
+   "name": "go_busy[P=tag_near,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 139,
+   "name": "go_busy[P=elsewhere,Q=door]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 140,
+   "name": "go_busy[P=elsewhere,Q=kitchen]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 141,
+   "name": "go_busy[P=elsewhere,Q=sofa]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 142,
+   "name": "go_busy[P=elsewhere,Q=window_chair]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 143,
+   "name": "go_busy[P=elsewhere,Q=tag5]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 144,
+   "name": "go_busy[P=elsewhere,Q=tag3]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 145,
+   "name": "go_busy[P=elsewhere,Q=tag_near]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 146,
+   "name": "go_busy[P=elsewhere,Q=elsewhere]",
+   "rule": "go_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 147,
+   "name": "go_busy_find[P=door,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 148,
+   "name": "go_busy_find[P=door,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 149,
+   "name": "go_busy_find[P=door,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 150,
+   "name": "go_busy_find[P=door,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 151,
+   "name": "go_busy_find[P=door,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 152,
+   "name": "go_busy_find[P=kitchen,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 153,
+   "name": "go_busy_find[P=kitchen,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 154,
+   "name": "go_busy_find[P=kitchen,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 155,
+   "name": "go_busy_find[P=kitchen,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 156,
+   "name": "go_busy_find[P=kitchen,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 157,
+   "name": "go_busy_find[P=sofa,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 158,
+   "name": "go_busy_find[P=sofa,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 159,
+   "name": "go_busy_find[P=sofa,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 160,
+   "name": "go_busy_find[P=sofa,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 161,
+   "name": "go_busy_find[P=sofa,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 162,
+   "name": "go_busy_find[P=window_chair,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 163,
+   "name": "go_busy_find[P=window_chair,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 164,
+   "name": "go_busy_find[P=window_chair,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 165,
+   "name": "go_busy_find[P=window_chair,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 166,
+   "name": "go_busy_find[P=window_chair,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 167,
+   "name": "go_busy_find[P=tag5,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 168,
+   "name": "go_busy_find[P=tag5,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 169,
+   "name": "go_busy_find[P=tag5,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 170,
+   "name": "go_busy_find[P=tag5,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 171,
+   "name": "go_busy_find[P=tag5,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 172,
+   "name": "go_busy_find[P=tag3,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 173,
+   "name": "go_busy_find[P=tag3,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 174,
+   "name": "go_busy_find[P=tag3,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 175,
+   "name": "go_busy_find[P=tag3,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 176,
+   "name": "go_busy_find[P=tag3,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 177,
+   "name": "go_busy_find[P=tag_near,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 178,
+   "name": "go_busy_find[P=tag_near,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 179,
+   "name": "go_busy_find[P=tag_near,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 180,
+   "name": "go_busy_find[P=tag_near,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 181,
+   "name": "go_busy_find[P=tag_near,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 182,
+   "name": "go_busy_find[P=elsewhere,T=extinguisher]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 183,
+   "name": "go_busy_find[P=elsewhere,T=keys]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 184,
+   "name": "go_busy_find[P=elsewhere,T=bottle]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 185,
+   "name": "go_busy_find[P=elsewhere,T=chair]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 186,
+   "name": "go_busy_find[P=elsewhere,T=table]",
+   "rule": "go_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am searching."
+  },
+  {
+   "i": 187,
+   "name": "go_busy_follow[P=door]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 188,
+   "name": "go_busy_follow[P=kitchen]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 189,
+   "name": "go_busy_follow[P=sofa]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 190,
+   "name": "go_busy_follow[P=window_chair]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 191,
+   "name": "go_busy_follow[P=tag5]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 192,
+   "name": "go_busy_follow[P=tag3]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 193,
+   "name": "go_busy_follow[P=tag_near]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 194,
+   "name": "go_busy_follow[P=elsewhere]",
+   "rule": "go_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 195,
+   "name": "arrive[P=door,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 196,
+   "name": "arrive[P=door,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 197,
+   "name": "arrive[P=door,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 198,
+   "name": "arrive[P=door,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 199,
+   "name": "arrive[P=door,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 200,
+   "name": "arrive[P=door,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 201,
+   "name": "arrive[P=door,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 202,
+   "name": "arrive[P=door,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 203,
+   "name": "arrive[P=kitchen,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 204,
+   "name": "arrive[P=kitchen,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 205,
+   "name": "arrive[P=kitchen,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 206,
+   "name": "arrive[P=kitchen,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 207,
+   "name": "arrive[P=kitchen,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 208,
+   "name": "arrive[P=kitchen,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 209,
+   "name": "arrive[P=kitchen,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 210,
+   "name": "arrive[P=kitchen,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 211,
+   "name": "arrive[P=sofa,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 212,
+   "name": "arrive[P=sofa,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 213,
+   "name": "arrive[P=sofa,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 214,
+   "name": "arrive[P=sofa,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 215,
+   "name": "arrive[P=sofa,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 216,
+   "name": "arrive[P=sofa,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 217,
+   "name": "arrive[P=sofa,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 218,
+   "name": "arrive[P=sofa,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 219,
+   "name": "arrive[P=window_chair,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 220,
+   "name": "arrive[P=window_chair,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 221,
+   "name": "arrive[P=window_chair,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 222,
+   "name": "arrive[P=window_chair,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 223,
+   "name": "arrive[P=window_chair,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 224,
+   "name": "arrive[P=window_chair,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 225,
+   "name": "arrive[P=window_chair,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 226,
+   "name": "arrive[P=window_chair,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 227,
+   "name": "arrive[P=tag5,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 228,
+   "name": "arrive[P=tag5,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 229,
+   "name": "arrive[P=tag5,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 230,
+   "name": "arrive[P=tag5,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 231,
+   "name": "arrive[P=tag5,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 232,
+   "name": "arrive[P=tag5,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 233,
+   "name": "arrive[P=tag5,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 234,
+   "name": "arrive[P=tag5,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 235,
+   "name": "arrive[P=tag3,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 236,
+   "name": "arrive[P=tag3,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 237,
+   "name": "arrive[P=tag3,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 238,
+   "name": "arrive[P=tag3,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 239,
+   "name": "arrive[P=tag3,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 240,
+   "name": "arrive[P=tag3,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 241,
+   "name": "arrive[P=tag3,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 242,
+   "name": "arrive[P=tag3,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 243,
+   "name": "arrive[P=tag_near,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 244,
+   "name": "arrive[P=tag_near,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 245,
+   "name": "arrive[P=tag_near,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 246,
+   "name": "arrive[P=tag_near,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 247,
+   "name": "arrive[P=tag_near,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 248,
+   "name": "arrive[P=tag_near,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 249,
+   "name": "arrive[P=tag_near,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 250,
+   "name": "arrive[P=tag_near,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 251,
+   "name": "arrive[P=elsewhere,Q=door]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 252,
+   "name": "arrive[P=elsewhere,Q=kitchen]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 253,
+   "name": "arrive[P=elsewhere,Q=sofa]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 254,
+   "name": "arrive[P=elsewhere,Q=window_chair]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 255,
+   "name": "arrive[P=elsewhere,Q=tag5]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 256,
+   "name": "arrive[P=elsewhere,Q=tag3]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 257,
+   "name": "arrive[P=elsewhere,Q=tag_near]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 258,
+   "name": "arrive[P=elsewhere,Q=elsewhere]",
+   "rule": "arrive",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I have arrived at {P}."
+  },
+  {
+   "i": 259,
+   "name": "go_blocked[P=door]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 260,
+   "name": "go_blocked[P=kitchen]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 261,
+   "name": "go_blocked[P=sofa]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 262,
+   "name": "go_blocked[P=window_chair]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 263,
+   "name": "go_blocked[P=tag5]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 264,
+   "name": "go_blocked[P=tag3]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 265,
+   "name": "go_blocked[P=tag_near]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 266,
+   "name": "go_blocked[P=elsewhere]",
+   "rule": "go_blocked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I had to stop: the way to {P} is blocked."
+  },
+  {
+   "i": 267,
+   "name": "go_expire[P=door]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 268,
+   "name": "go_expire[P=kitchen]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 269,
+   "name": "go_expire[P=sofa]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 270,
+   "name": "go_expire[P=window_chair]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 271,
+   "name": "go_expire[P=tag5]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 272,
+   "name": "go_expire[P=tag3]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 273,
+   "name": "go_expire[P=tag_near]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 274,
+   "name": "go_expire[P=elsewhere]",
+   "rule": "go_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Going to {P} timed out: nothing came back in time."
+  },
+  {
+   "i": 275,
+   "name": "find[T=extinguisher]",
+   "rule": "find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I start looking for {T}."
+  },
+  {
+   "i": 276,
+   "name": "find[T=keys]",
+   "rule": "find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I start looking for {T}."
+  },
+  {
+   "i": 277,
+   "name": "find[T=bottle]",
+   "rule": "find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I start looking for {T}."
+  },
+  {
+   "i": 278,
+   "name": "find[T=chair]",
+   "rule": "find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I start looking for {T}."
+  },
+  {
+   "i": 279,
+   "name": "find[T=table]",
+   "rule": "find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I start looking for {T}."
+  },
+  {
+   "i": 280,
+   "name": "find_low[T=extinguisher]",
+   "rule": "find_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't search: the battery is too low to search."
+  },
+  {
+   "i": 281,
+   "name": "find_low[T=keys]",
+   "rule": "find_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't search: the battery is too low to search."
+  },
+  {
+   "i": 282,
+   "name": "find_low[T=bottle]",
+   "rule": "find_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't search: the battery is too low to search."
+  },
+  {
+   "i": 283,
+   "name": "find_low[T=chair]",
+   "rule": "find_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't search: the battery is too low to search."
+  },
+  {
+   "i": 284,
+   "name": "find_low[T=table]",
+   "rule": "find_low",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't search: the battery is too low to search."
+  },
+  {
+   "i": 285,
+   "name": "find_busy[T=extinguisher,P=door]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 286,
+   "name": "find_busy[T=extinguisher,P=kitchen]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 287,
+   "name": "find_busy[T=extinguisher,P=sofa]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 288,
+   "name": "find_busy[T=extinguisher,P=window_chair]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 289,
+   "name": "find_busy[T=extinguisher,P=tag5]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 290,
+   "name": "find_busy[T=extinguisher,P=tag3]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 291,
+   "name": "find_busy[T=extinguisher,P=tag_near]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 292,
+   "name": "find_busy[T=extinguisher,P=elsewhere]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 293,
+   "name": "find_busy[T=keys,P=door]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 294,
+   "name": "find_busy[T=keys,P=kitchen]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 295,
+   "name": "find_busy[T=keys,P=sofa]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 296,
+   "name": "find_busy[T=keys,P=window_chair]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 297,
+   "name": "find_busy[T=keys,P=tag5]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 298,
+   "name": "find_busy[T=keys,P=tag3]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 299,
+   "name": "find_busy[T=keys,P=tag_near]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 300,
+   "name": "find_busy[T=keys,P=elsewhere]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 301,
+   "name": "find_busy[T=bottle,P=door]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 302,
+   "name": "find_busy[T=bottle,P=kitchen]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 303,
+   "name": "find_busy[T=bottle,P=sofa]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 304,
+   "name": "find_busy[T=bottle,P=window_chair]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 305,
+   "name": "find_busy[T=bottle,P=tag5]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 306,
+   "name": "find_busy[T=bottle,P=tag3]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 307,
+   "name": "find_busy[T=bottle,P=tag_near]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 308,
+   "name": "find_busy[T=bottle,P=elsewhere]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 309,
+   "name": "find_busy[T=chair,P=door]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 310,
+   "name": "find_busy[T=chair,P=kitchen]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 311,
+   "name": "find_busy[T=chair,P=sofa]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 312,
+   "name": "find_busy[T=chair,P=window_chair]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 313,
+   "name": "find_busy[T=chair,P=tag5]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 314,
+   "name": "find_busy[T=chair,P=tag3]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 315,
+   "name": "find_busy[T=chair,P=tag_near]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 316,
+   "name": "find_busy[T=chair,P=elsewhere]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 317,
+   "name": "find_busy[T=table,P=door]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 318,
+   "name": "find_busy[T=table,P=kitchen]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 319,
+   "name": "find_busy[T=table,P=sofa]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 320,
+   "name": "find_busy[T=table,P=window_chair]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 321,
+   "name": "find_busy[T=table,P=tag5]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 322,
+   "name": "find_busy[T=table,P=tag3]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 323,
+   "name": "find_busy[T=table,P=tag_near]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 324,
+   "name": "find_busy[T=table,P=elsewhere]",
+   "rule": "find_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 325,
+   "name": "find_busy_find[T=extinguisher,U=extinguisher]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 326,
+   "name": "find_busy_find[T=extinguisher,U=keys]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 327,
+   "name": "find_busy_find[T=extinguisher,U=bottle]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 328,
+   "name": "find_busy_find[T=extinguisher,U=chair]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 329,
+   "name": "find_busy_find[T=extinguisher,U=table]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 330,
+   "name": "find_busy_find[T=keys,U=extinguisher]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 331,
+   "name": "find_busy_find[T=keys,U=keys]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 332,
+   "name": "find_busy_find[T=keys,U=bottle]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 333,
+   "name": "find_busy_find[T=keys,U=chair]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 334,
+   "name": "find_busy_find[T=keys,U=table]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 335,
+   "name": "find_busy_find[T=bottle,U=extinguisher]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 336,
+   "name": "find_busy_find[T=bottle,U=keys]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 337,
+   "name": "find_busy_find[T=bottle,U=bottle]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 338,
+   "name": "find_busy_find[T=bottle,U=chair]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 339,
+   "name": "find_busy_find[T=bottle,U=table]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 340,
+   "name": "find_busy_find[T=chair,U=extinguisher]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 341,
+   "name": "find_busy_find[T=chair,U=keys]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 342,
+   "name": "find_busy_find[T=chair,U=bottle]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 343,
+   "name": "find_busy_find[T=chair,U=chair]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 344,
+   "name": "find_busy_find[T=chair,U=table]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 345,
+   "name": "find_busy_find[T=table,U=extinguisher]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 346,
+   "name": "find_busy_find[T=table,U=keys]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 347,
+   "name": "find_busy_find[T=table,U=bottle]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 348,
+   "name": "find_busy_find[T=table,U=chair]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 349,
+   "name": "find_busy_find[T=table,U=table]",
+   "rule": "find_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 350,
+   "name": "find_busy_follow[T=extinguisher]",
+   "rule": "find_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 351,
+   "name": "find_busy_follow[T=keys]",
+   "rule": "find_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 352,
+   "name": "find_busy_follow[T=bottle]",
+   "rule": "find_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 353,
+   "name": "find_busy_follow[T=chair]",
+   "rule": "find_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 354,
+   "name": "find_busy_follow[T=table]",
+   "rule": "find_busy_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am following you."
+  },
+  {
+   "i": 355,
+   "name": "found[T=extinguisher]",
+   "rule": "found",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T}."
+  },
+  {
+   "i": 356,
+   "name": "found[T=keys]",
+   "rule": "found",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T}."
+  },
+  {
+   "i": 357,
+   "name": "found[T=bottle]",
+   "rule": "found",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T}."
+  },
+  {
+   "i": 358,
+   "name": "found[T=chair]",
+   "rule": "found",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T}."
+  },
+  {
+   "i": 359,
+   "name": "found[T=table]",
+   "rule": "found",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T}."
+  },
+  {
+   "i": 360,
+   "name": "found_again[T=extinguisher]",
+   "rule": "found_again",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T} again."
+  },
+  {
+   "i": 361,
+   "name": "found_again[T=keys]",
+   "rule": "found_again",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T} again."
+  },
+  {
+   "i": 362,
+   "name": "found_again[T=bottle]",
+   "rule": "found_again",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T} again."
+  },
+  {
+   "i": 363,
+   "name": "found_again[T=chair]",
+   "rule": "found_again",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T} again."
+  },
+  {
+   "i": 364,
+   "name": "found_again[T=table]",
+   "rule": "found_again",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I found {T} again."
+  },
+  {
+   "i": 365,
+   "name": "find_locked[T=extinguisher]",
+   "rule": "find_locked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't reach {T}: it is locked away."
+  },
+  {
+   "i": 366,
+   "name": "find_locked[T=keys]",
+   "rule": "find_locked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't reach {T}: it is locked away."
+  },
+  {
+   "i": 367,
+   "name": "find_locked[T=bottle]",
+   "rule": "find_locked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't reach {T}: it is locked away."
+  },
+  {
+   "i": 368,
+   "name": "find_locked[T=chair]",
+   "rule": "find_locked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't reach {T}: it is locked away."
+  },
+  {
+   "i": 369,
+   "name": "find_locked[T=table]",
+   "rule": "find_locked",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't reach {T}: it is locked away."
+  },
+  {
+   "i": 370,
+   "name": "find_expire[T=extinguisher]",
+   "rule": "find_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "The search for {T} timed out: nothing found in time."
+  },
+  {
+   "i": 371,
+   "name": "find_expire[T=keys]",
+   "rule": "find_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "The search for {T} timed out: nothing found in time."
+  },
+  {
+   "i": 372,
+   "name": "find_expire[T=bottle]",
+   "rule": "find_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "The search for {T} timed out: nothing found in time."
+  },
+  {
+   "i": 373,
+   "name": "find_expire[T=chair]",
+   "rule": "find_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "The search for {T} timed out: nothing found in time."
+  },
+  {
+   "i": 374,
+   "name": "find_expire[T=table]",
+   "rule": "find_expire",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "The search for {T} timed out: nothing found in time."
+  },
+  {
+   "i": 375,
+   "name": "follow",
+   "rule": "follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I follow you."
+  },
+  {
+   "i": 376,
+   "name": "follow_nobody",
+   "rule": "follow_nobody",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't follow: no person is in view."
+  },
+  {
+   "i": 377,
+   "name": "follow_must_stand[Q=sitting]",
+   "rule": "follow_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't follow yet: I have to stand up first."
+  },
+  {
+   "i": 378,
+   "name": "follow_must_stand[Q=lying]",
+   "rule": "follow_must_stand",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't follow yet: I have to stand up first."
+  },
+  {
+   "i": 379,
+   "name": "follow_busy[P=door]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 380,
+   "name": "follow_busy[P=kitchen]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 381,
+   "name": "follow_busy[P=sofa]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 382,
+   "name": "follow_busy[P=window_chair]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 383,
+   "name": "follow_busy[P=tag5]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 384,
+   "name": "follow_busy[P=tag3]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 385,
+   "name": "follow_busy[P=tag_near]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 386,
+   "name": "follow_busy[P=elsewhere]",
+   "rule": "follow_busy",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already busy with a task."
+  },
+  {
+   "i": 387,
+   "name": "follow_busy_find[T=extinguisher]",
+   "rule": "follow_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 388,
+   "name": "follow_busy_find[T=keys]",
+   "rule": "follow_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 389,
+   "name": "follow_busy_find[T=bottle]",
+   "rule": "follow_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 390,
+   "name": "follow_busy_find[T=chair]",
+   "rule": "follow_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 391,
+   "name": "follow_busy_find[T=table]",
+   "rule": "follow_busy_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't take that now: I am already searching."
+  },
+  {
+   "i": 392,
+   "name": "follow_already",
+   "rule": "follow_already",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I am already following you."
+  },
+  {
+   "i": 393,
+   "name": "follow_lost",
+   "rule": "follow_lost",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I lost you: nobody is in view any more."
+  },
+  {
+   "i": 394,
+   "name": "stop_go[P=door]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 395,
+   "name": "stop_go[P=kitchen]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 396,
+   "name": "stop_go[P=sofa]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 397,
+   "name": "stop_go[P=window_chair]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 398,
+   "name": "stop_go[P=tag5]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 399,
+   "name": "stop_go[P=tag3]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 400,
+   "name": "stop_go[P=tag_near]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 401,
+   "name": "stop_go[P=elsewhere]",
+   "rule": "stop_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop going to {P}."
+  },
+  {
+   "i": 402,
+   "name": "stop_find[T=extinguisher]",
+   "rule": "stop_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop searching for {T}."
+  },
+  {
+   "i": 403,
+   "name": "stop_find[T=keys]",
+   "rule": "stop_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop searching for {T}."
+  },
+  {
+   "i": 404,
+   "name": "stop_find[T=bottle]",
+   "rule": "stop_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop searching for {T}."
+  },
+  {
+   "i": 405,
+   "name": "stop_find[T=chair]",
+   "rule": "stop_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop searching for {T}."
+  },
+  {
+   "i": 406,
+   "name": "stop_find[T=table]",
+   "rule": "stop_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop searching for {T}."
+  },
+  {
+   "i": 407,
+   "name": "stop_follow",
+   "rule": "stop_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I stop following you."
+  },
+  {
+   "i": 408,
+   "name": "stop_still",
+   "rule": "stop_still",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I am already stopped."
+  },
+  {
+   "i": 409,
+   "name": "cancel_go[P=door]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 410,
+   "name": "cancel_go[P=kitchen]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 411,
+   "name": "cancel_go[P=sofa]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 412,
+   "name": "cancel_go[P=window_chair]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 413,
+   "name": "cancel_go[P=tag5]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 414,
+   "name": "cancel_go[P=tag3]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 415,
+   "name": "cancel_go[P=tag_near]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 416,
+   "name": "cancel_go[P=elsewhere]",
+   "rule": "cancel_go",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop that: I am no longer going to {P}."
+  },
+  {
+   "i": 417,
+   "name": "cancel_find[T=extinguisher]",
+   "rule": "cancel_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop the search for {T}."
+  },
+  {
+   "i": 418,
+   "name": "cancel_find[T=keys]",
+   "rule": "cancel_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop the search for {T}."
+  },
+  {
+   "i": 419,
+   "name": "cancel_find[T=bottle]",
+   "rule": "cancel_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop the search for {T}."
+  },
+  {
+   "i": 420,
+   "name": "cancel_find[T=chair]",
+   "rule": "cancel_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop the search for {T}."
+  },
+  {
+   "i": 421,
+   "name": "cancel_find[T=table]",
+   "rule": "cancel_find",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I drop the search for {T}."
+  },
+  {
+   "i": 422,
+   "name": "cancel_follow",
+   "rule": "cancel_follow",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay, I stop following you."
+  },
+  {
+   "i": 423,
+   "name": "cancel_none",
+   "rule": "cancel_none",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "Okay: there was nothing to drop."
+  },
+  {
+   "i": 424,
+   "name": "query_seen[T=extinguisher,P=door]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 425,
+   "name": "query_seen[T=extinguisher,P=kitchen]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 426,
+   "name": "query_seen[T=extinguisher,P=sofa]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 427,
+   "name": "query_seen[T=extinguisher,P=window_chair]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 428,
+   "name": "query_seen[T=extinguisher,P=tag5]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 429,
+   "name": "query_seen[T=extinguisher,P=tag3]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 430,
+   "name": "query_seen[T=extinguisher,P=tag_near]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 431,
+   "name": "query_seen[T=extinguisher,P=elsewhere]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 432,
+   "name": "query_seen[T=keys,P=door]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 433,
+   "name": "query_seen[T=keys,P=kitchen]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 434,
+   "name": "query_seen[T=keys,P=sofa]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 435,
+   "name": "query_seen[T=keys,P=window_chair]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 436,
+   "name": "query_seen[T=keys,P=tag5]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 437,
+   "name": "query_seen[T=keys,P=tag3]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 438,
+   "name": "query_seen[T=keys,P=tag_near]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 439,
+   "name": "query_seen[T=keys,P=elsewhere]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 440,
+   "name": "query_seen[T=bottle,P=door]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 441,
+   "name": "query_seen[T=bottle,P=kitchen]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 442,
+   "name": "query_seen[T=bottle,P=sofa]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 443,
+   "name": "query_seen[T=bottle,P=window_chair]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 444,
+   "name": "query_seen[T=bottle,P=tag5]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 445,
+   "name": "query_seen[T=bottle,P=tag3]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 446,
+   "name": "query_seen[T=bottle,P=tag_near]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 447,
+   "name": "query_seen[T=bottle,P=elsewhere]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 448,
+   "name": "query_seen[T=chair,P=door]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 449,
+   "name": "query_seen[T=chair,P=kitchen]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 450,
+   "name": "query_seen[T=chair,P=sofa]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 451,
+   "name": "query_seen[T=chair,P=window_chair]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 452,
+   "name": "query_seen[T=chair,P=tag5]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 453,
+   "name": "query_seen[T=chair,P=tag3]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 454,
+   "name": "query_seen[T=chair,P=tag_near]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 455,
+   "name": "query_seen[T=chair,P=elsewhere]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 456,
+   "name": "query_seen[T=table,P=door]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 457,
+   "name": "query_seen[T=table,P=kitchen]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 458,
+   "name": "query_seen[T=table,P=sofa]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 459,
+   "name": "query_seen[T=table,P=window_chair]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 460,
+   "name": "query_seen[T=table,P=tag5]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 461,
+   "name": "query_seen[T=table,P=tag3]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 462,
+   "name": "query_seen[T=table,P=tag_near]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 463,
+   "name": "query_seen[T=table,P=elsewhere]",
+   "rule": "query_seen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you about {T}: last seen at {P}."
+  },
+  {
+   "i": 464,
+   "name": "query_unseen[T=extinguisher]",
+   "rule": "query_unseen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't say about {T}: not seen yet."
+  },
+  {
+   "i": 465,
+   "name": "query_unseen[T=keys]",
+   "rule": "query_unseen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't say about {T}: not seen yet."
+  },
+  {
+   "i": 466,
+   "name": "query_unseen[T=bottle]",
+   "rule": "query_unseen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't say about {T}: not seen yet."
+  },
+  {
+   "i": 467,
+   "name": "query_unseen[T=chair]",
+   "rule": "query_unseen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't say about {T}: not seen yet."
+  },
+  {
+   "i": 468,
+   "name": "query_unseen[T=table]",
+   "rule": "query_unseen",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't say about {T}: not seen yet."
+  },
+  {
+   "i": 469,
+   "name": "look[P=door]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 470,
+   "name": "look[P=kitchen]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 471,
+   "name": "look[P=sofa]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 472,
+   "name": "look[P=window_chair]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 473,
+   "name": "look[P=tag5]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 474,
+   "name": "look[P=tag3]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 475,
+   "name": "look[P=tag_near]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 476,
+   "name": "look[P=elsewhere]",
+   "rule": "look",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you what I see around {P}: it is on my map."
+  },
+  {
+   "i": 477,
+   "name": "look_unmapped[P=door]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 478,
+   "name": "look_unmapped[P=kitchen]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 479,
+   "name": "look_unmapped[P=sofa]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 480,
+   "name": "look_unmapped[P=window_chair]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 481,
+   "name": "look_unmapped[P=tag5]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 482,
+   "name": "look_unmapped[P=tag3]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 483,
+   "name": "look_unmapped[P=tag_near]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 484,
+   "name": "look_unmapped[P=elsewhere]",
+   "rule": "look_unmapped",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't look at {P}: it is not on my map."
+  },
+  {
+   "i": 485,
+   "name": "time",
+   "rule": "time",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you the time."
+  },
+  {
+   "i": 486,
+   "name": "date",
+   "rule": "date",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I tell you the date."
+  },
+  {
+   "i": 487,
+   "name": "chat",
+   "rule": "chat",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I answer in kind."
+  },
+  {
+   "i": 488,
+   "name": "unknown",
+   "rule": "unknown",
+   "kind": "clause",
+   "stage": "serve",
+   "line": "I can't do that: it is not something I can or may do."
+  }
+ ],
+ "cards": [
+  {
+   "name": "dog",
+   "text": "a quadruped robot dog: body actions, going places, searching, following, questions; each command accepted under the body's state or refused with a reason",
+   "relation": "served",
+   "moves": [],
+   "effects": [],
+   "slots": [
+    "posture",
+    "side",
+    "way",
+    "place",
+    "thing",
+    "act"
+   ]
+  }
+ ],
+ "queries": [
+  "idle",
+  "done(go)",
+  "refused(go)"
+ ],
+ "script": [
+  {
+   "name": "dog",
+   "relation": "served",
+   "text": "a quadruped robot dog: body actions, going places, searching, following, questions; each command accepted under the body's state or refused with a reason",
+   "clauses": [
+    {
+     "name": "stand",
+     "stage": "serve",
+     "doc": "I stand up.",
+     "premises": [
+      {
+       "atom": "cmd_stand",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "other(P,standing)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "battery_ok",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(stand)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stand_low",
+     "stage": "serve",
+     "doc": "I can't stand: the battery is too low to stand.",
+     "premises": [
+      {
+       "atom": "cmd_stand",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(P,standing)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "battery_low",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(stand)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stand_already",
+     "stage": "serve",
+     "doc": "I am already standing.",
+     "premises": [
+      {
+       "atom": "cmd_stand",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(stand)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "sit",
+     "stage": "serve",
+     "doc": "I sit down.",
+     "premises": [
+      {
+       "atom": "cmd_sit",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "other(P,sitting)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "floor_dry",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "posture(sitting)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(sit)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "sit_wet",
+     "stage": "serve",
+     "doc": "I can't sit: the floor here is wet.",
+     "premises": [
+      {
+       "atom": "cmd_sit",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(P,sitting)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "floor_wet",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(sit)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "sit_already",
+     "stage": "serve",
+     "doc": "I am already sitting.",
+     "premises": [
+      {
+       "atom": "cmd_sit",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(sitting)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(sit)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "lie",
+     "stage": "serve",
+     "doc": "I lie down.",
+     "premises": [
+      {
+       "atom": "cmd_lie",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "other(P,lying)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "posture(lying)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(lie)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "lie_already",
+     "stage": "serve",
+     "doc": "I am already lying down.",
+     "premises": [
+      {
+       "atom": "cmd_lie",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(lying)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(lie)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "turn",
+     "stage": "serve",
+     "doc": "I turn the way you said.",
+     "premises": [
+      {
+       "atom": "cmd_turn(S)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "free(S)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(turn)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "turn_obstacle",
+     "stage": "serve",
+     "doc": "I can't turn that way: an obstacle is too close on that side.",
+     "premises": [
+      {
+       "atom": "cmd_turn(S)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "obstacle(S)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(turn)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "turn_must_stand",
+     "stage": "serve",
+     "doc": "I can't turn: I have to stand up first.",
+     "premises": [
+      {
+       "atom": "cmd_turn(S)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(P,standing)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(turn)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "move",
+     "stage": "serve",
+     "doc": "I move the way you said.",
+     "premises": [
+      {
+       "atom": "cmd_move(W)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "clear(W)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(move)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "move_wall",
+     "stage": "serve",
+     "doc": "I can't move that way: there is a wall right there.",
+     "premises": [
+      {
+       "atom": "cmd_move(W)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "wall(W)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(move)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "move_must_stand",
+     "stage": "serve",
+     "doc": "I can't move: I have to stand up first.",
+     "premises": [
+      {
+       "atom": "cmd_move(W)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(P,standing)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(move)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "paw",
+     "stage": "serve",
+     "doc": "I give you my paw.",
+     "premises": [
+      {
+       "atom": "cmd_paw",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "leg_ok",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(paw)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "paw_hot",
+     "stage": "serve",
+     "doc": "I can't lift my paw: my front leg is overheating.",
+     "premises": [
+      {
+       "atom": "cmd_paw",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "leg_hot",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(paw)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "sit_busy",
+     "stage": "serve",
+     "doc": "I can't sit now: I am on a task.",
+     "premises": [
+      {
+       "atom": "cmd_sit",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(sit)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "lie_busy",
+     "stage": "serve",
+     "doc": "I can't lie down now: I am on a task.",
+     "premises": [
+      {
+       "atom": "cmd_lie",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(lie)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "turn_busy",
+     "stage": "serve",
+     "doc": "I can't turn now: I am on a task.",
+     "premises": [
+      {
+       "atom": "cmd_turn(S)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(turn)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "move_busy",
+     "stage": "serve",
+     "doc": "I can't move now: I am on a task.",
+     "premises": [
+      {
+       "atom": "cmd_move(W)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(move)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "paw_busy",
+     "stage": "serve",
+     "doc": "I can't give my paw now: I am on a task.",
+     "premises": [
+      {
+       "atom": "cmd_paw",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(paw)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go",
+     "stage": "serve",
+     "doc": "I set off for {P}.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "mapped(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "open(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "progress(go)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_unmapped",
+     "stage": "serve",
+     "doc": "I can't go to {P}: it is not on my map.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "unmapped(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_closed",
+     "stage": "serve",
+     "doc": "I can't go to {P}: the way to it is closed.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "mapped(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "closed(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_must_stand",
+     "stage": "serve",
+     "doc": "I can't go yet: I have to stand up first.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "mapped(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "open(P)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "posture(Q)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(Q,standing)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_busy",
+     "stage": "serve",
+     "doc": "I can't take that now: I am already busy with a task.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moving(Q)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_busy_find",
+     "stage": "serve",
+     "doc": "I can't take that now: I am searching.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_busy_follow",
+     "stage": "serve",
+     "doc": "I can't take that now: I am following you.",
+     "premises": [
+      {
+       "atom": "cmd_go(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "arrive",
+     "stage": "serve",
+     "doc": "I have arrived at {P}.",
+     "premises": [
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "arrived(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "at(Q)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "at(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_blocked",
+     "stage": "serve",
+     "doc": "I had to stop: the way to {P} is blocked.",
+     "premises": [
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "blocked(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "refused(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "go_expire",
+     "stage": "serve",
+     "doc": "Going to {P} timed out: nothing came back in time.",
+     "premises": [
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "timeout",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "expired(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find",
+     "stage": "serve",
+     "doc": "I start looking for {T}.",
+     "premises": [
+      {
+       "atom": "cmd_find(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "battery_ok",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "progress(find)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_low",
+     "stage": "serve",
+     "doc": "I can't search: the battery is too low to search.",
+     "premises": [
+      {
+       "atom": "cmd_find(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "battery_low",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_busy",
+     "stage": "serve",
+     "doc": "I can't take that now: I am already busy with a task.",
+     "premises": [
+      {
+       "atom": "cmd_find(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_busy_find",
+     "stage": "serve",
+     "doc": "I can't take that now: I am already searching.",
+     "premises": [
+      {
+       "atom": "cmd_find(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "searching(U)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_busy_follow",
+     "stage": "serve",
+     "doc": "I can't take that now: I am following you.",
+     "premises": [
+      {
+       "atom": "cmd_find(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "found",
+     "stage": "serve",
+     "doc": "I found {T}.",
+     "premises": [
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "spotted(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "unseen(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "seen(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "found_again",
+     "stage": "serve",
+     "doc": "I found {T} again.",
+     "premises": [
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "spotted(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "seen(T)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_locked",
+     "stage": "serve",
+     "doc": "I can't reach {T}: it is locked away.",
+     "premises": [
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "locked_away(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "refused(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "find_expire",
+     "stage": "serve",
+     "doc": "The search for {T} timed out: nothing found in time.",
+     "premises": [
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "timeout",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "expired(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow",
+     "stage": "serve",
+     "doc": "I follow you.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "posture(standing)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "person_in_view",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "progress(follow)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_nobody",
+     "stage": "serve",
+     "doc": "I can't follow: no person is in view.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "nobody",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_must_stand",
+     "stage": "serve",
+     "doc": "I can't follow yet: I have to stand up first.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "person_in_view",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "posture(Q)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "other(Q,standing)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_busy",
+     "stage": "serve",
+     "doc": "I can't take that now: I am already busy with a task.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_busy_find",
+     "stage": "serve",
+     "doc": "I can't take that now: I am already searching.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_already",
+     "stage": "serve",
+     "doc": "I am already following you.",
+     "premises": [
+      {
+       "atom": "cmd_follow",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "follow_lost",
+     "stage": "serve",
+     "doc": "I lost you: nobody is in view any more.",
+     "premises": [
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "lost",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "expired(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stop_go",
+     "stage": "serve",
+     "doc": "I stop going to {P}.",
+     "premises": [
+      {
+       "atom": "cmd_stop",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(stop)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stop_find",
+     "stage": "serve",
+     "doc": "I stop searching for {T}.",
+     "premises": [
+      {
+       "atom": "cmd_stop",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(stop)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stop_follow",
+     "stage": "serve",
+     "doc": "I stop following you.",
+     "premises": [
+      {
+       "atom": "cmd_stop",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(stop)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "stop_still",
+     "stage": "serve",
+     "doc": "I am already stopped.",
+     "premises": [
+      {
+       "atom": "cmd_stop",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(stop)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "cancel_go",
+     "stage": "serve",
+     "doc": "Okay, I drop that: I am no longer going to {P}.",
+     "premises": [
+      {
+       "atom": "cmd_cancel",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "moving(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(cancel)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(go)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "cancel_find",
+     "stage": "serve",
+     "doc": "Okay, I drop the search for {T}.",
+     "premises": [
+      {
+       "atom": "cmd_cancel",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "searching(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(cancel)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(find)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "cancel_follow",
+     "stage": "serve",
+     "doc": "Okay, I stop following you.",
+     "premises": [
+      {
+       "atom": "cmd_cancel",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "following",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "busy",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "done(cancel)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "cancelled(follow)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "cancel_none",
+     "stage": "serve",
+     "doc": "Okay: there was nothing to drop.",
+     "premises": [
+      {
+       "atom": "cmd_cancel",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "idle",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(cancel)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "query_seen",
+     "stage": "serve",
+     "doc": "I tell you about {T}: last seen at {P}.",
+     "premises": [
+      {
+       "atom": "cmd_query(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "seen(T)",
+       "n": 1,
+       "kept": true
+      },
+      {
+       "atom": "where(T,P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(query)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "query_unseen",
+     "stage": "serve",
+     "doc": "I can't say about {T}: not seen yet.",
+     "premises": [
+      {
+       "atom": "cmd_query(T)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "unseen(T)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(query)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "look",
+     "stage": "serve",
+     "doc": "I tell you what I see around {P}: it is on my map.",
+     "premises": [
+      {
+       "atom": "cmd_look(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "mapped(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(look)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "look_unmapped",
+     "stage": "serve",
+     "doc": "I can't look at {P}: it is not on my map.",
+     "premises": [
+      {
+       "atom": "cmd_look(P)",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "unmapped(P)",
+       "n": 1,
+       "kept": true
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(look)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "time",
+     "stage": "serve",
+     "doc": "I tell you the time.",
+     "premises": [
+      {
+       "atom": "cmd_time",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(time)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "date",
+     "stage": "serve",
+     "doc": "I tell you the date.",
+     "premises": [
+      {
+       "atom": "cmd_date",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(date)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "chat",
+     "stage": "serve",
+     "doc": "I answer in kind.",
+     "premises": [
+      {
+       "atom": "cmd_chat",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "done(chat)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    },
+    {
+     "name": "unknown",
+     "stage": "serve",
+     "doc": "I can't do that: it is not something I can or may do.",
+     "premises": [
+      {
+       "atom": "cmd_unknown",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "refused(unknown)",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null
+    }
+   ],
+   "atoms": [
+    {
+     "name": "posture",
+     "doc": ""
+    },
+    {
+     "name": "at",
+     "doc": ""
+    },
+    {
+     "name": "idle",
+     "doc": ""
+    },
+    {
+     "name": "moving",
+     "doc": ""
+    },
+    {
+     "name": "searching",
+     "doc": ""
+    },
+    {
+     "name": "following",
+     "doc": ""
+    },
+    {
+     "name": "seen",
+     "doc": ""
+    },
+    {
+     "name": "where",
+     "doc": ""
+    },
+    {
+     "name": "unseen",
+     "doc": ""
+    },
+    {
+     "name": "battery_ok",
+     "doc": ""
+    },
+    {
+     "name": "battery_low",
+     "doc": ""
+    },
+    {
+     "name": "floor_dry",
+     "doc": ""
+    },
+    {
+     "name": "floor_wet",
+     "doc": ""
+    },
+    {
+     "name": "free",
+     "doc": ""
+    },
+    {
+     "name": "obstacle",
+     "doc": ""
+    },
+    {
+     "name": "clear",
+     "doc": ""
+    },
+    {
+     "name": "wall",
+     "doc": ""
+    },
+    {
+     "name": "leg_ok",
+     "doc": ""
+    },
+    {
+     "name": "leg_hot",
+     "doc": ""
+    },
+    {
+     "name": "mapped",
+     "doc": ""
+    },
+    {
+     "name": "unmapped",
+     "doc": ""
+    },
+    {
+     "name": "open",
+     "doc": ""
+    },
+    {
+     "name": "closed",
+     "doc": ""
+    },
+    {
+     "name": "person_in_view",
+     "doc": ""
+    },
+    {
+     "name": "nobody",
+     "doc": ""
+    },
+    {
+     "name": "arrived",
+     "doc": ""
+    },
+    {
+     "name": "blocked",
+     "doc": ""
+    },
+    {
+     "name": "spotted",
+     "doc": ""
+    },
+    {
+     "name": "locked_away",
+     "doc": ""
+    },
+    {
+     "name": "lost",
+     "doc": ""
+    },
+    {
+     "name": "timeout",
+     "doc": ""
+    },
+    {
+     "name": "cmd_stand",
+     "doc": ""
+    },
+    {
+     "name": "cmd_sit",
+     "doc": ""
+    },
+    {
+     "name": "cmd_lie",
+     "doc": ""
+    },
+    {
+     "name": "cmd_turn",
+     "doc": ""
+    },
+    {
+     "name": "cmd_move",
+     "doc": ""
+    },
+    {
+     "name": "cmd_paw",
+     "doc": ""
+    },
+    {
+     "name": "busy",
+     "doc": ""
+    },
+    {
+     "name": "cmd_go",
+     "doc": ""
+    },
+    {
+     "name": "cmd_find",
+     "doc": ""
+    },
+    {
+     "name": "cmd_follow",
+     "doc": ""
+    },
+    {
+     "name": "cmd_stop",
+     "doc": ""
+    },
+    {
+     "name": "cmd_cancel",
+     "doc": ""
+    },
+    {
+     "name": "cmd_query",
+     "doc": ""
+    },
+    {
+     "name": "cmd_look",
+     "doc": ""
+    },
+    {
+     "name": "cmd_time",
+     "doc": ""
+    },
+    {
+     "name": "cmd_date",
+     "doc": ""
+    },
+    {
+     "name": "cmd_chat",
+     "doc": ""
+    },
+    {
+     "name": "cmd_unknown",
+     "doc": ""
+    },
+    {
+     "name": "done",
+     "doc": ""
+    },
+    {
+     "name": "refused",
+     "doc": ""
+    },
+    {
+     "name": "progress",
+     "doc": ""
+    },
+    {
+     "name": "expired",
+     "doc": ""
+    },
+    {
+     "name": "cancelled",
+     "doc": ""
+    }
+   ],
+   "missing": {
+    "clause_doc": [],
+    "atom_doc": [
+     "posture",
+     "at",
+     "idle",
+     "moving",
+     "searching",
+     "following",
+     "seen",
+     "where",
+     "unseen",
+     "battery_ok",
+     "battery_low",
+     "floor_dry",
+     "floor_wet",
+     "free",
+     "obstacle",
+     "clear",
+     "wall",
+     "leg_ok",
+     "leg_hot",
+     "mapped",
+     "unmapped",
+     "open",
+     "closed",
+     "person_in_view",
+     "nobody",
+     "arrived",
+     "blocked",
+     "spotted",
+     "locked_away",
+     "lost",
+     "timeout",
+     "cmd_stand",
+     "cmd_sit",
+     "cmd_lie",
+     "cmd_turn",
+     "cmd_move",
+     "cmd_paw",
+     "busy",
+     "cmd_go",
+     "cmd_find",
+     "cmd_follow",
+     "cmd_stop",
+     "cmd_cancel",
+     "cmd_query",
+     "cmd_look",
+     "cmd_time",
+     "cmd_date",
+     "cmd_chat",
+     "cmd_unknown",
+     "done",
+     "refused",
+     "progress",
+     "expired",
+     "cancelled"
+    ]
+   }
+  }
+ ],
+ "ir": null
+}
