@@ -44,6 +44,7 @@
  "events": [
   {
    "i": 0,
+   "canon": 470,
    "name": "stand[P=sitting]",
    "rule": "stand",
    "kind": "clause",
@@ -52,6 +53,7 @@
   },
   {
    "i": 1,
+   "canon": 469,
    "name": "stand[P=lying]",
    "rule": "stand",
    "kind": "clause",
@@ -60,6 +62,7 @@
   },
   {
    "i": 2,
+   "canon": 467,
    "name": "stand_low[P=sitting]",
    "rule": "stand_low",
    "kind": "clause",
@@ -68,6 +71,7 @@
   },
   {
    "i": 3,
+   "canon": 466,
    "name": "stand_low[P=lying]",
    "rule": "stand_low",
    "kind": "clause",
@@ -76,6 +80,7 @@
   },
   {
    "i": 4,
+   "canon": 468,
    "name": "stand_already",
    "rule": "stand_already",
    "kind": "clause",
@@ -84,6 +89,7 @@
   },
   {
    "i": 5,
+   "canon": 465,
    "name": "sit[P=standing]",
    "rule": "sit",
    "kind": "clause",
@@ -92,6 +98,7 @@
   },
   {
    "i": 6,
+   "canon": 464,
    "name": "sit[P=lying]",
    "rule": "sit",
    "kind": "clause",
@@ -100,6 +107,7 @@
   },
   {
    "i": 7,
+   "canon": 462,
    "name": "sit_wet[P=standing]",
    "rule": "sit_wet",
    "kind": "clause",
@@ -108,6 +116,7 @@
   },
   {
    "i": 8,
+   "canon": 461,
    "name": "sit_wet[P=lying]",
    "rule": "sit_wet",
    "kind": "clause",
@@ -116,6 +125,7 @@
   },
   {
    "i": 9,
+   "canon": 463,
    "name": "sit_already",
    "rule": "sit_already",
    "kind": "clause",
@@ -124,6 +134,7 @@
   },
   {
    "i": 10,
+   "canon": 385,
    "name": "lie[P=standing]",
    "rule": "lie",
    "kind": "clause",
@@ -132,6 +143,7 @@
   },
   {
    "i": 11,
+   "canon": 384,
    "name": "lie[P=sitting]",
    "rule": "lie",
    "kind": "clause",
@@ -140,6 +152,7 @@
   },
   {
    "i": 12,
+   "canon": 383,
    "name": "lie_already",
    "rule": "lie_already",
    "kind": "clause",
@@ -148,6 +161,7 @@
   },
   {
    "i": 13,
+   "canon": 478,
    "name": "turn[S=left]",
    "rule": "turn",
    "kind": "clause",
@@ -156,6 +170,7 @@
   },
   {
    "i": 14,
+   "canon": 483,
    "name": "turn[S=right]",
    "rule": "turn",
    "kind": "clause",
@@ -164,6 +179,7 @@
   },
   {
    "i": 15,
+   "canon": 473,
    "name": "turn[S=around]",
    "rule": "turn",
    "kind": "clause",
@@ -172,6 +188,7 @@
   },
   {
    "i": 16,
+   "canon": 480,
    "name": "turn_obstacle[S=left]",
    "rule": "turn_obstacle",
    "kind": "clause",
@@ -180,6 +197,7 @@
   },
   {
    "i": 17,
+   "canon": 485,
    "name": "turn_obstacle[S=right]",
    "rule": "turn_obstacle",
    "kind": "clause",
@@ -188,6 +206,7 @@
   },
   {
    "i": 18,
+   "canon": 475,
    "name": "turn_obstacle[S=around]",
    "rule": "turn_obstacle",
    "kind": "clause",
@@ -196,6 +215,7 @@
   },
   {
    "i": 19,
+   "canon": 482,
    "name": "turn_must_stand[S=left,P=sitting]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -204,6 +224,7 @@
   },
   {
    "i": 20,
+   "canon": 481,
    "name": "turn_must_stand[S=left,P=lying]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -212,6 +233,7 @@
   },
   {
    "i": 21,
+   "canon": 487,
    "name": "turn_must_stand[S=right,P=sitting]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -220,6 +242,7 @@
   },
   {
    "i": 22,
+   "canon": 486,
    "name": "turn_must_stand[S=right,P=lying]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -228,6 +251,7 @@
   },
   {
    "i": 23,
+   "canon": 477,
    "name": "turn_must_stand[S=around,P=sitting]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -236,6 +260,7 @@
   },
   {
    "i": 24,
+   "canon": 476,
    "name": "turn_must_stand[S=around,P=lying]",
    "rule": "turn_must_stand",
    "kind": "clause",
@@ -244,6 +269,7 @@
   },
   {
    "i": 25,
+   "canon": 407,
    "name": "move[W=forward]",
    "rule": "move",
    "kind": "clause",
@@ -252,6 +278,7 @@
   },
   {
    "i": 26,
+   "canon": 402,
    "name": "move[W=backward]",
    "rule": "move",
    "kind": "clause",
@@ -260,6 +287,7 @@
   },
   {
    "i": 27,
+   "canon": 411,
    "name": "move_wall[W=forward]",
    "rule": "move_wall",
    "kind": "clause",
@@ -268,6 +296,7 @@
   },
   {
    "i": 28,
+   "canon": 406,
    "name": "move_wall[W=backward]",
    "rule": "move_wall",
    "kind": "clause",
@@ -276,6 +305,7 @@
   },
   {
    "i": 29,
+   "canon": 410,
    "name": "move_must_stand[W=forward,P=sitting]",
    "rule": "move_must_stand",
    "kind": "clause",
@@ -284,6 +314,7 @@
   },
   {
    "i": 30,
+   "canon": 409,
    "name": "move_must_stand[W=forward,P=lying]",
    "rule": "move_must_stand",
    "kind": "clause",
@@ -292,6 +323,7 @@
   },
   {
    "i": 31,
+   "canon": 405,
    "name": "move_must_stand[W=backward,P=sitting]",
    "rule": "move_must_stand",
    "kind": "clause",
@@ -300,6 +332,7 @@
   },
   {
    "i": 32,
+   "canon": 404,
    "name": "move_must_stand[W=backward,P=lying]",
    "rule": "move_must_stand",
    "kind": "clause",
@@ -308,6 +341,7 @@
   },
   {
    "i": 33,
+   "canon": 412,
    "name": "paw",
    "rule": "paw",
    "kind": "clause",
@@ -316,6 +350,7 @@
   },
   {
    "i": 34,
+   "canon": 414,
    "name": "paw_hot",
    "rule": "paw_hot",
    "kind": "clause",
@@ -324,6 +359,7 @@
   },
   {
    "i": 35,
+   "canon": 460,
    "name": "sit_busy",
    "rule": "sit_busy",
    "kind": "clause",
@@ -332,6 +368,7 @@
   },
   {
    "i": 36,
+   "canon": 382,
    "name": "lie_busy",
    "rule": "lie_busy",
    "kind": "clause",
@@ -340,6 +377,7 @@
   },
   {
    "i": 37,
+   "canon": 479,
    "name": "turn_busy[S=left]",
    "rule": "turn_busy",
    "kind": "clause",
@@ -348,6 +386,7 @@
   },
   {
    "i": 38,
+   "canon": 484,
    "name": "turn_busy[S=right]",
    "rule": "turn_busy",
    "kind": "clause",
@@ -356,6 +395,7 @@
   },
   {
    "i": 39,
+   "canon": 474,
    "name": "turn_busy[S=around]",
    "rule": "turn_busy",
    "kind": "clause",
@@ -364,6 +404,7 @@
   },
   {
    "i": 40,
+   "canon": 408,
    "name": "move_busy[W=forward]",
    "rule": "move_busy",
    "kind": "clause",
@@ -372,6 +413,7 @@
   },
   {
    "i": 41,
+   "canon": 403,
    "name": "move_busy[W=backward]",
    "rule": "move_busy",
    "kind": "clause",
@@ -380,6 +422,7 @@
   },
   {
    "i": 42,
+   "canon": 413,
    "name": "paw_busy",
    "rule": "paw_busy",
    "kind": "clause",
@@ -388,6 +431,7 @@
   },
   {
    "i": 43,
+   "canon": 248,
    "name": "go[P=door]",
    "rule": "go",
    "kind": "clause",
@@ -396,6 +440,7 @@
   },
   {
    "i": 44,
+   "canon": 286,
    "name": "go[P=kitchen]",
    "rule": "go",
    "kind": "clause",
@@ -404,6 +449,7 @@
   },
   {
    "i": 45,
+   "canon": 305,
    "name": "go[P=sofa]",
    "rule": "go",
    "kind": "clause",
@@ -412,6 +458,7 @@
   },
   {
    "i": 46,
+   "canon": 381,
    "name": "go[P=window_chair]",
    "rule": "go",
    "kind": "clause",
@@ -420,6 +467,7 @@
   },
   {
    "i": 47,
+   "canon": 343,
    "name": "go[P=tag5]",
    "rule": "go",
    "kind": "clause",
@@ -428,6 +476,7 @@
   },
   {
    "i": 48,
+   "canon": 324,
    "name": "go[P=tag3]",
    "rule": "go",
    "kind": "clause",
@@ -436,6 +485,7 @@
   },
   {
    "i": 49,
+   "canon": 362,
    "name": "go[P=tag_near]",
    "rule": "go",
    "kind": "clause",
@@ -444,6 +494,7 @@
   },
   {
    "i": 50,
+   "canon": 267,
    "name": "go[P=elsewhere]",
    "rule": "go",
    "kind": "clause",
@@ -452,6 +503,7 @@
   },
   {
    "i": 51,
+   "canon": 247,
    "name": "go_unmapped[P=door]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -460,6 +512,7 @@
   },
   {
    "i": 52,
+   "canon": 285,
    "name": "go_unmapped[P=kitchen]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -468,6 +521,7 @@
   },
   {
    "i": 53,
+   "canon": 304,
    "name": "go_unmapped[P=sofa]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -476,6 +530,7 @@
   },
   {
    "i": 54,
+   "canon": 380,
    "name": "go_unmapped[P=window_chair]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -484,6 +539,7 @@
   },
   {
    "i": 55,
+   "canon": 342,
    "name": "go_unmapped[P=tag5]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -492,6 +548,7 @@
   },
   {
    "i": 56,
+   "canon": 323,
    "name": "go_unmapped[P=tag3]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -500,6 +557,7 @@
   },
   {
    "i": 57,
+   "canon": 361,
    "name": "go_unmapped[P=tag_near]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -508,6 +566,7 @@
   },
   {
    "i": 58,
+   "canon": 266,
    "name": "go_unmapped[P=elsewhere]",
    "rule": "go_unmapped",
    "kind": "clause",
@@ -516,6 +575,7 @@
   },
   {
    "i": 59,
+   "canon": 230,
    "name": "go_closed[P=door]",
    "rule": "go_closed",
    "kind": "clause",
@@ -524,6 +584,7 @@
   },
   {
    "i": 60,
+   "canon": 268,
    "name": "go_closed[P=kitchen]",
    "rule": "go_closed",
    "kind": "clause",
@@ -532,6 +593,7 @@
   },
   {
    "i": 61,
+   "canon": 287,
    "name": "go_closed[P=sofa]",
    "rule": "go_closed",
    "kind": "clause",
@@ -540,6 +602,7 @@
   },
   {
    "i": 62,
+   "canon": 363,
    "name": "go_closed[P=window_chair]",
    "rule": "go_closed",
    "kind": "clause",
@@ -548,6 +611,7 @@
   },
   {
    "i": 63,
+   "canon": 325,
    "name": "go_closed[P=tag5]",
    "rule": "go_closed",
    "kind": "clause",
@@ -556,6 +620,7 @@
   },
   {
    "i": 64,
+   "canon": 306,
    "name": "go_closed[P=tag3]",
    "rule": "go_closed",
    "kind": "clause",
@@ -564,6 +629,7 @@
   },
   {
    "i": 65,
+   "canon": 344,
    "name": "go_closed[P=tag_near]",
    "rule": "go_closed",
    "kind": "clause",
@@ -572,6 +638,7 @@
   },
   {
    "i": 66,
+   "canon": 249,
    "name": "go_closed[P=elsewhere]",
    "rule": "go_closed",
    "kind": "clause",
@@ -580,6 +647,7 @@
   },
   {
    "i": 67,
+   "canon": 233,
    "name": "go_must_stand[P=door,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -588,6 +656,7 @@
   },
   {
    "i": 68,
+   "canon": 232,
    "name": "go_must_stand[P=door,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -596,6 +665,7 @@
   },
   {
    "i": 69,
+   "canon": 271,
    "name": "go_must_stand[P=kitchen,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -604,6 +674,7 @@
   },
   {
    "i": 70,
+   "canon": 270,
    "name": "go_must_stand[P=kitchen,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -612,6 +683,7 @@
   },
   {
    "i": 71,
+   "canon": 290,
    "name": "go_must_stand[P=sofa,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -620,6 +692,7 @@
   },
   {
    "i": 72,
+   "canon": 289,
    "name": "go_must_stand[P=sofa,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -628,6 +701,7 @@
   },
   {
    "i": 73,
+   "canon": 366,
    "name": "go_must_stand[P=window_chair,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -636,6 +710,7 @@
   },
   {
    "i": 74,
+   "canon": 365,
    "name": "go_must_stand[P=window_chair,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -644,6 +719,7 @@
   },
   {
    "i": 75,
+   "canon": 328,
    "name": "go_must_stand[P=tag5,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -652,6 +728,7 @@
   },
   {
    "i": 76,
+   "canon": 327,
    "name": "go_must_stand[P=tag5,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -660,6 +737,7 @@
   },
   {
    "i": 77,
+   "canon": 309,
    "name": "go_must_stand[P=tag3,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -668,6 +746,7 @@
   },
   {
    "i": 78,
+   "canon": 308,
    "name": "go_must_stand[P=tag3,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -676,6 +755,7 @@
   },
   {
    "i": 79,
+   "canon": 347,
    "name": "go_must_stand[P=tag_near,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -684,6 +764,7 @@
   },
   {
    "i": 80,
+   "canon": 346,
    "name": "go_must_stand[P=tag_near,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -692,6 +773,7 @@
   },
   {
    "i": 81,
+   "canon": 252,
    "name": "go_must_stand[P=elsewhere,Q=sitting]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -700,6 +782,7 @@
   },
   {
    "i": 82,
+   "canon": 251,
    "name": "go_must_stand[P=elsewhere,Q=lying]",
    "rule": "go_must_stand",
    "kind": "clause",
@@ -708,6 +791,7 @@
   },
   {
    "i": 83,
+   "canon": 234,
    "name": "go_busy[P=door,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -716,6 +800,7 @@
   },
   {
    "i": 84,
+   "canon": 236,
    "name": "go_busy[P=door,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -724,6 +809,7 @@
   },
   {
    "i": 85,
+   "canon": 237,
    "name": "go_busy[P=door,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -732,6 +818,7 @@
   },
   {
    "i": 86,
+   "canon": 241,
    "name": "go_busy[P=door,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -740,6 +827,7 @@
   },
   {
    "i": 87,
+   "canon": 239,
    "name": "go_busy[P=door,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -748,6 +836,7 @@
   },
   {
    "i": 88,
+   "canon": 238,
    "name": "go_busy[P=door,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -756,6 +845,7 @@
   },
   {
    "i": 89,
+   "canon": 240,
    "name": "go_busy[P=door,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -764,6 +854,7 @@
   },
   {
    "i": 90,
+   "canon": 235,
    "name": "go_busy[P=door,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -772,6 +863,7 @@
   },
   {
    "i": 91,
+   "canon": 272,
    "name": "go_busy[P=kitchen,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -780,6 +872,7 @@
   },
   {
    "i": 92,
+   "canon": 274,
    "name": "go_busy[P=kitchen,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -788,6 +881,7 @@
   },
   {
    "i": 93,
+   "canon": 275,
    "name": "go_busy[P=kitchen,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -796,6 +890,7 @@
   },
   {
    "i": 94,
+   "canon": 279,
    "name": "go_busy[P=kitchen,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -804,6 +899,7 @@
   },
   {
    "i": 95,
+   "canon": 277,
    "name": "go_busy[P=kitchen,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -812,6 +908,7 @@
   },
   {
    "i": 96,
+   "canon": 276,
    "name": "go_busy[P=kitchen,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -820,6 +917,7 @@
   },
   {
    "i": 97,
+   "canon": 278,
    "name": "go_busy[P=kitchen,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -828,6 +926,7 @@
   },
   {
    "i": 98,
+   "canon": 273,
    "name": "go_busy[P=kitchen,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -836,6 +935,7 @@
   },
   {
    "i": 99,
+   "canon": 291,
    "name": "go_busy[P=sofa,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -844,6 +944,7 @@
   },
   {
    "i": 100,
+   "canon": 293,
    "name": "go_busy[P=sofa,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -852,6 +953,7 @@
   },
   {
    "i": 101,
+   "canon": 294,
    "name": "go_busy[P=sofa,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -860,6 +962,7 @@
   },
   {
    "i": 102,
+   "canon": 298,
    "name": "go_busy[P=sofa,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -868,6 +971,7 @@
   },
   {
    "i": 103,
+   "canon": 296,
    "name": "go_busy[P=sofa,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -876,6 +980,7 @@
   },
   {
    "i": 104,
+   "canon": 295,
    "name": "go_busy[P=sofa,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -884,6 +989,7 @@
   },
   {
    "i": 105,
+   "canon": 297,
    "name": "go_busy[P=sofa,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -892,6 +998,7 @@
   },
   {
    "i": 106,
+   "canon": 292,
    "name": "go_busy[P=sofa,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -900,6 +1007,7 @@
   },
   {
    "i": 107,
+   "canon": 367,
    "name": "go_busy[P=window_chair,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -908,6 +1016,7 @@
   },
   {
    "i": 108,
+   "canon": 369,
    "name": "go_busy[P=window_chair,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -916,6 +1025,7 @@
   },
   {
    "i": 109,
+   "canon": 370,
    "name": "go_busy[P=window_chair,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -924,6 +1034,7 @@
   },
   {
    "i": 110,
+   "canon": 374,
    "name": "go_busy[P=window_chair,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -932,6 +1043,7 @@
   },
   {
    "i": 111,
+   "canon": 372,
    "name": "go_busy[P=window_chair,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -940,6 +1052,7 @@
   },
   {
    "i": 112,
+   "canon": 371,
    "name": "go_busy[P=window_chair,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -948,6 +1061,7 @@
   },
   {
    "i": 113,
+   "canon": 373,
    "name": "go_busy[P=window_chair,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -956,6 +1070,7 @@
   },
   {
    "i": 114,
+   "canon": 368,
    "name": "go_busy[P=window_chair,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -964,6 +1079,7 @@
   },
   {
    "i": 115,
+   "canon": 329,
    "name": "go_busy[P=tag5,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -972,6 +1088,7 @@
   },
   {
    "i": 116,
+   "canon": 331,
    "name": "go_busy[P=tag5,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -980,6 +1097,7 @@
   },
   {
    "i": 117,
+   "canon": 332,
    "name": "go_busy[P=tag5,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -988,6 +1106,7 @@
   },
   {
    "i": 118,
+   "canon": 336,
    "name": "go_busy[P=tag5,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -996,6 +1115,7 @@
   },
   {
    "i": 119,
+   "canon": 334,
    "name": "go_busy[P=tag5,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1004,6 +1124,7 @@
   },
   {
    "i": 120,
+   "canon": 333,
    "name": "go_busy[P=tag5,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1012,6 +1133,7 @@
   },
   {
    "i": 121,
+   "canon": 335,
    "name": "go_busy[P=tag5,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1020,6 +1142,7 @@
   },
   {
    "i": 122,
+   "canon": 330,
    "name": "go_busy[P=tag5,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1028,6 +1151,7 @@
   },
   {
    "i": 123,
+   "canon": 310,
    "name": "go_busy[P=tag3,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1036,6 +1160,7 @@
   },
   {
    "i": 124,
+   "canon": 312,
    "name": "go_busy[P=tag3,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1044,6 +1169,7 @@
   },
   {
    "i": 125,
+   "canon": 313,
    "name": "go_busy[P=tag3,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1052,6 +1178,7 @@
   },
   {
    "i": 126,
+   "canon": 317,
    "name": "go_busy[P=tag3,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1060,6 +1187,7 @@
   },
   {
    "i": 127,
+   "canon": 315,
    "name": "go_busy[P=tag3,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1068,6 +1196,7 @@
   },
   {
    "i": 128,
+   "canon": 314,
    "name": "go_busy[P=tag3,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1076,6 +1205,7 @@
   },
   {
    "i": 129,
+   "canon": 316,
    "name": "go_busy[P=tag3,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1084,6 +1214,7 @@
   },
   {
    "i": 130,
+   "canon": 311,
    "name": "go_busy[P=tag3,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1092,6 +1223,7 @@
   },
   {
    "i": 131,
+   "canon": 348,
    "name": "go_busy[P=tag_near,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1100,6 +1232,7 @@
   },
   {
    "i": 132,
+   "canon": 350,
    "name": "go_busy[P=tag_near,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1108,6 +1241,7 @@
   },
   {
    "i": 133,
+   "canon": 351,
    "name": "go_busy[P=tag_near,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1116,6 +1250,7 @@
   },
   {
    "i": 134,
+   "canon": 355,
    "name": "go_busy[P=tag_near,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1124,6 +1259,7 @@
   },
   {
    "i": 135,
+   "canon": 353,
    "name": "go_busy[P=tag_near,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1132,6 +1268,7 @@
   },
   {
    "i": 136,
+   "canon": 352,
    "name": "go_busy[P=tag_near,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1140,6 +1277,7 @@
   },
   {
    "i": 137,
+   "canon": 354,
    "name": "go_busy[P=tag_near,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1148,6 +1286,7 @@
   },
   {
    "i": 138,
+   "canon": 349,
    "name": "go_busy[P=tag_near,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1156,6 +1295,7 @@
   },
   {
    "i": 139,
+   "canon": 253,
    "name": "go_busy[P=elsewhere,Q=door]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1164,6 +1304,7 @@
   },
   {
    "i": 140,
+   "canon": 255,
    "name": "go_busy[P=elsewhere,Q=kitchen]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1172,6 +1313,7 @@
   },
   {
    "i": 141,
+   "canon": 256,
    "name": "go_busy[P=elsewhere,Q=sofa]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1180,6 +1322,7 @@
   },
   {
    "i": 142,
+   "canon": 260,
    "name": "go_busy[P=elsewhere,Q=window_chair]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1188,6 +1331,7 @@
   },
   {
    "i": 143,
+   "canon": 258,
    "name": "go_busy[P=elsewhere,Q=tag5]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1196,6 +1340,7 @@
   },
   {
    "i": 144,
+   "canon": 257,
    "name": "go_busy[P=elsewhere,Q=tag3]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1204,6 +1349,7 @@
   },
   {
    "i": 145,
+   "canon": 259,
    "name": "go_busy[P=elsewhere,Q=tag_near]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1212,6 +1358,7 @@
   },
   {
    "i": 146,
+   "canon": 254,
    "name": "go_busy[P=elsewhere,Q=elsewhere]",
    "rule": "go_busy",
    "kind": "clause",
@@ -1220,6 +1367,7 @@
   },
   {
    "i": 147,
+   "canon": 244,
    "name": "go_busy_find[P=door,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1228,6 +1376,7 @@
   },
   {
    "i": 148,
+   "canon": 245,
    "name": "go_busy_find[P=door,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1236,6 +1385,7 @@
   },
   {
    "i": 149,
+   "canon": 242,
    "name": "go_busy_find[P=door,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1244,6 +1394,7 @@
   },
   {
    "i": 150,
+   "canon": 243,
    "name": "go_busy_find[P=door,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1252,6 +1403,7 @@
   },
   {
    "i": 151,
+   "canon": 246,
    "name": "go_busy_find[P=door,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1260,6 +1412,7 @@
   },
   {
    "i": 152,
+   "canon": 282,
    "name": "go_busy_find[P=kitchen,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1268,6 +1421,7 @@
   },
   {
    "i": 153,
+   "canon": 283,
    "name": "go_busy_find[P=kitchen,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1276,6 +1430,7 @@
   },
   {
    "i": 154,
+   "canon": 280,
    "name": "go_busy_find[P=kitchen,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1284,6 +1439,7 @@
   },
   {
    "i": 155,
+   "canon": 281,
    "name": "go_busy_find[P=kitchen,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1292,6 +1448,7 @@
   },
   {
    "i": 156,
+   "canon": 284,
    "name": "go_busy_find[P=kitchen,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1300,6 +1457,7 @@
   },
   {
    "i": 157,
+   "canon": 301,
    "name": "go_busy_find[P=sofa,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1308,6 +1466,7 @@
   },
   {
    "i": 158,
+   "canon": 302,
    "name": "go_busy_find[P=sofa,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1316,6 +1475,7 @@
   },
   {
    "i": 159,
+   "canon": 299,
    "name": "go_busy_find[P=sofa,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1324,6 +1484,7 @@
   },
   {
    "i": 160,
+   "canon": 300,
    "name": "go_busy_find[P=sofa,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1332,6 +1493,7 @@
   },
   {
    "i": 161,
+   "canon": 303,
    "name": "go_busy_find[P=sofa,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1340,6 +1502,7 @@
   },
   {
    "i": 162,
+   "canon": 377,
    "name": "go_busy_find[P=window_chair,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1348,6 +1511,7 @@
   },
   {
    "i": 163,
+   "canon": 378,
    "name": "go_busy_find[P=window_chair,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1356,6 +1520,7 @@
   },
   {
    "i": 164,
+   "canon": 375,
    "name": "go_busy_find[P=window_chair,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1364,6 +1529,7 @@
   },
   {
    "i": 165,
+   "canon": 376,
    "name": "go_busy_find[P=window_chair,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1372,6 +1538,7 @@
   },
   {
    "i": 166,
+   "canon": 379,
    "name": "go_busy_find[P=window_chair,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1380,6 +1547,7 @@
   },
   {
    "i": 167,
+   "canon": 339,
    "name": "go_busy_find[P=tag5,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1388,6 +1556,7 @@
   },
   {
    "i": 168,
+   "canon": 340,
    "name": "go_busy_find[P=tag5,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1396,6 +1565,7 @@
   },
   {
    "i": 169,
+   "canon": 337,
    "name": "go_busy_find[P=tag5,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1404,6 +1574,7 @@
   },
   {
    "i": 170,
+   "canon": 338,
    "name": "go_busy_find[P=tag5,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1412,6 +1583,7 @@
   },
   {
    "i": 171,
+   "canon": 341,
    "name": "go_busy_find[P=tag5,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1420,6 +1592,7 @@
   },
   {
    "i": 172,
+   "canon": 320,
    "name": "go_busy_find[P=tag3,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1428,6 +1601,7 @@
   },
   {
    "i": 173,
+   "canon": 321,
    "name": "go_busy_find[P=tag3,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1436,6 +1610,7 @@
   },
   {
    "i": 174,
+   "canon": 318,
    "name": "go_busy_find[P=tag3,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1444,6 +1619,7 @@
   },
   {
    "i": 175,
+   "canon": 319,
    "name": "go_busy_find[P=tag3,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1452,6 +1628,7 @@
   },
   {
    "i": 176,
+   "canon": 322,
    "name": "go_busy_find[P=tag3,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1460,6 +1637,7 @@
   },
   {
    "i": 177,
+   "canon": 358,
    "name": "go_busy_find[P=tag_near,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1468,6 +1646,7 @@
   },
   {
    "i": 178,
+   "canon": 359,
    "name": "go_busy_find[P=tag_near,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1476,6 +1655,7 @@
   },
   {
    "i": 179,
+   "canon": 356,
    "name": "go_busy_find[P=tag_near,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1484,6 +1664,7 @@
   },
   {
    "i": 180,
+   "canon": 357,
    "name": "go_busy_find[P=tag_near,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1492,6 +1673,7 @@
   },
   {
    "i": 181,
+   "canon": 360,
    "name": "go_busy_find[P=tag_near,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1500,6 +1682,7 @@
   },
   {
    "i": 182,
+   "canon": 263,
    "name": "go_busy_find[P=elsewhere,T=extinguisher]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1508,6 +1691,7 @@
   },
   {
    "i": 183,
+   "canon": 264,
    "name": "go_busy_find[P=elsewhere,T=keys]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1516,6 +1700,7 @@
   },
   {
    "i": 184,
+   "canon": 261,
    "name": "go_busy_find[P=elsewhere,T=bottle]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1524,6 +1709,7 @@
   },
   {
    "i": 185,
+   "canon": 262,
    "name": "go_busy_find[P=elsewhere,T=chair]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1532,6 +1718,7 @@
   },
   {
    "i": 186,
+   "canon": 265,
    "name": "go_busy_find[P=elsewhere,T=table]",
    "rule": "go_busy_find",
    "kind": "clause",
@@ -1540,6 +1727,7 @@
   },
   {
    "i": 187,
+   "canon": 231,
    "name": "go_busy_follow[P=door]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1548,6 +1736,7 @@
   },
   {
    "i": 188,
+   "canon": 269,
    "name": "go_busy_follow[P=kitchen]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1556,6 +1745,7 @@
   },
   {
    "i": 189,
+   "canon": 288,
    "name": "go_busy_follow[P=sofa]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1564,6 +1754,7 @@
   },
   {
    "i": 190,
+   "canon": 364,
    "name": "go_busy_follow[P=window_chair]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1572,6 +1763,7 @@
   },
   {
    "i": 191,
+   "canon": 326,
    "name": "go_busy_follow[P=tag5]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1580,6 +1772,7 @@
   },
   {
    "i": 192,
+   "canon": 307,
    "name": "go_busy_follow[P=tag3]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1588,6 +1781,7 @@
   },
   {
    "i": 193,
+   "canon": 345,
    "name": "go_busy_follow[P=tag_near]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1596,6 +1790,7 @@
   },
   {
    "i": 194,
+   "canon": 250,
    "name": "go_busy_follow[P=elsewhere]",
    "rule": "go_busy_follow",
    "kind": "clause",
@@ -1604,6 +1799,7 @@
   },
   {
    "i": 195,
+   "canon": 0,
    "name": "arrive[P=door,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1612,6 +1808,7 @@
   },
   {
    "i": 196,
+   "canon": 2,
    "name": "arrive[P=door,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1620,6 +1817,7 @@
   },
   {
    "i": 197,
+   "canon": 3,
    "name": "arrive[P=door,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1628,6 +1826,7 @@
   },
   {
    "i": 198,
+   "canon": 7,
    "name": "arrive[P=door,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1636,6 +1835,7 @@
   },
   {
    "i": 199,
+   "canon": 5,
    "name": "arrive[P=door,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1644,6 +1844,7 @@
   },
   {
    "i": 200,
+   "canon": 4,
    "name": "arrive[P=door,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1652,6 +1853,7 @@
   },
   {
    "i": 201,
+   "canon": 6,
    "name": "arrive[P=door,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1660,6 +1862,7 @@
   },
   {
    "i": 202,
+   "canon": 1,
    "name": "arrive[P=door,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1668,6 +1871,7 @@
   },
   {
    "i": 203,
+   "canon": 16,
    "name": "arrive[P=kitchen,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1676,6 +1880,7 @@
   },
   {
    "i": 204,
+   "canon": 18,
    "name": "arrive[P=kitchen,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1684,6 +1889,7 @@
   },
   {
    "i": 205,
+   "canon": 19,
    "name": "arrive[P=kitchen,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1692,6 +1898,7 @@
   },
   {
    "i": 206,
+   "canon": 23,
    "name": "arrive[P=kitchen,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1700,6 +1907,7 @@
   },
   {
    "i": 207,
+   "canon": 21,
    "name": "arrive[P=kitchen,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1708,6 +1916,7 @@
   },
   {
    "i": 208,
+   "canon": 20,
    "name": "arrive[P=kitchen,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1716,6 +1925,7 @@
   },
   {
    "i": 209,
+   "canon": 22,
    "name": "arrive[P=kitchen,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1724,6 +1934,7 @@
   },
   {
    "i": 210,
+   "canon": 17,
    "name": "arrive[P=kitchen,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1732,6 +1943,7 @@
   },
   {
    "i": 211,
+   "canon": 24,
    "name": "arrive[P=sofa,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1740,6 +1952,7 @@
   },
   {
    "i": 212,
+   "canon": 26,
    "name": "arrive[P=sofa,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1748,6 +1961,7 @@
   },
   {
    "i": 213,
+   "canon": 27,
    "name": "arrive[P=sofa,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1756,6 +1970,7 @@
   },
   {
    "i": 214,
+   "canon": 31,
    "name": "arrive[P=sofa,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1764,6 +1979,7 @@
   },
   {
    "i": 215,
+   "canon": 29,
    "name": "arrive[P=sofa,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1772,6 +1988,7 @@
   },
   {
    "i": 216,
+   "canon": 28,
    "name": "arrive[P=sofa,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1780,6 +1997,7 @@
   },
   {
    "i": 217,
+   "canon": 30,
    "name": "arrive[P=sofa,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1788,6 +2006,7 @@
   },
   {
    "i": 218,
+   "canon": 25,
    "name": "arrive[P=sofa,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1796,6 +2015,7 @@
   },
   {
    "i": 219,
+   "canon": 56,
    "name": "arrive[P=window_chair,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1804,6 +2024,7 @@
   },
   {
    "i": 220,
+   "canon": 58,
    "name": "arrive[P=window_chair,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1812,6 +2033,7 @@
   },
   {
    "i": 221,
+   "canon": 59,
    "name": "arrive[P=window_chair,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1820,6 +2042,7 @@
   },
   {
    "i": 222,
+   "canon": 63,
    "name": "arrive[P=window_chair,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1828,6 +2051,7 @@
   },
   {
    "i": 223,
+   "canon": 61,
    "name": "arrive[P=window_chair,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1836,6 +2060,7 @@
   },
   {
    "i": 224,
+   "canon": 60,
    "name": "arrive[P=window_chair,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1844,6 +2069,7 @@
   },
   {
    "i": 225,
+   "canon": 62,
    "name": "arrive[P=window_chair,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1852,6 +2078,7 @@
   },
   {
    "i": 226,
+   "canon": 57,
    "name": "arrive[P=window_chair,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1860,6 +2087,7 @@
   },
   {
    "i": 227,
+   "canon": 40,
    "name": "arrive[P=tag5,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1868,6 +2096,7 @@
   },
   {
    "i": 228,
+   "canon": 42,
    "name": "arrive[P=tag5,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1876,6 +2105,7 @@
   },
   {
    "i": 229,
+   "canon": 43,
    "name": "arrive[P=tag5,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1884,6 +2114,7 @@
   },
   {
    "i": 230,
+   "canon": 47,
    "name": "arrive[P=tag5,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1892,6 +2123,7 @@
   },
   {
    "i": 231,
+   "canon": 45,
    "name": "arrive[P=tag5,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1900,6 +2132,7 @@
   },
   {
    "i": 232,
+   "canon": 44,
    "name": "arrive[P=tag5,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1908,6 +2141,7 @@
   },
   {
    "i": 233,
+   "canon": 46,
    "name": "arrive[P=tag5,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1916,6 +2150,7 @@
   },
   {
    "i": 234,
+   "canon": 41,
    "name": "arrive[P=tag5,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1924,6 +2159,7 @@
   },
   {
    "i": 235,
+   "canon": 32,
    "name": "arrive[P=tag3,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1932,6 +2168,7 @@
   },
   {
    "i": 236,
+   "canon": 34,
    "name": "arrive[P=tag3,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -1940,6 +2177,7 @@
   },
   {
    "i": 237,
+   "canon": 35,
    "name": "arrive[P=tag3,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -1948,6 +2186,7 @@
   },
   {
    "i": 238,
+   "canon": 39,
    "name": "arrive[P=tag3,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -1956,6 +2195,7 @@
   },
   {
    "i": 239,
+   "canon": 37,
    "name": "arrive[P=tag3,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -1964,6 +2204,7 @@
   },
   {
    "i": 240,
+   "canon": 36,
    "name": "arrive[P=tag3,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -1972,6 +2213,7 @@
   },
   {
    "i": 241,
+   "canon": 38,
    "name": "arrive[P=tag3,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -1980,6 +2222,7 @@
   },
   {
    "i": 242,
+   "canon": 33,
    "name": "arrive[P=tag3,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -1988,6 +2231,7 @@
   },
   {
    "i": 243,
+   "canon": 48,
    "name": "arrive[P=tag_near,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -1996,6 +2240,7 @@
   },
   {
    "i": 244,
+   "canon": 50,
    "name": "arrive[P=tag_near,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -2004,6 +2249,7 @@
   },
   {
    "i": 245,
+   "canon": 51,
    "name": "arrive[P=tag_near,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -2012,6 +2258,7 @@
   },
   {
    "i": 246,
+   "canon": 55,
    "name": "arrive[P=tag_near,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -2020,6 +2267,7 @@
   },
   {
    "i": 247,
+   "canon": 53,
    "name": "arrive[P=tag_near,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -2028,6 +2276,7 @@
   },
   {
    "i": 248,
+   "canon": 52,
    "name": "arrive[P=tag_near,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -2036,6 +2285,7 @@
   },
   {
    "i": 249,
+   "canon": 54,
    "name": "arrive[P=tag_near,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -2044,6 +2294,7 @@
   },
   {
    "i": 250,
+   "canon": 49,
    "name": "arrive[P=tag_near,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -2052,6 +2303,7 @@
   },
   {
    "i": 251,
+   "canon": 8,
    "name": "arrive[P=elsewhere,Q=door]",
    "rule": "arrive",
    "kind": "clause",
@@ -2060,6 +2312,7 @@
   },
   {
    "i": 252,
+   "canon": 10,
    "name": "arrive[P=elsewhere,Q=kitchen]",
    "rule": "arrive",
    "kind": "clause",
@@ -2068,6 +2321,7 @@
   },
   {
    "i": 253,
+   "canon": 11,
    "name": "arrive[P=elsewhere,Q=sofa]",
    "rule": "arrive",
    "kind": "clause",
@@ -2076,6 +2330,7 @@
   },
   {
    "i": 254,
+   "canon": 15,
    "name": "arrive[P=elsewhere,Q=window_chair]",
    "rule": "arrive",
    "kind": "clause",
@@ -2084,6 +2339,7 @@
   },
   {
    "i": 255,
+   "canon": 13,
    "name": "arrive[P=elsewhere,Q=tag5]",
    "rule": "arrive",
    "kind": "clause",
@@ -2092,6 +2348,7 @@
   },
   {
    "i": 256,
+   "canon": 12,
    "name": "arrive[P=elsewhere,Q=tag3]",
    "rule": "arrive",
    "kind": "clause",
@@ -2100,6 +2357,7 @@
   },
   {
    "i": 257,
+   "canon": 14,
    "name": "arrive[P=elsewhere,Q=tag_near]",
    "rule": "arrive",
    "kind": "clause",
@@ -2108,6 +2366,7 @@
   },
   {
    "i": 258,
+   "canon": 9,
    "name": "arrive[P=elsewhere,Q=elsewhere]",
    "rule": "arrive",
    "kind": "clause",
@@ -2116,6 +2375,7 @@
   },
   {
    "i": 259,
+   "canon": 64,
    "name": "go_blocked[P=door]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2124,6 +2384,7 @@
   },
   {
    "i": 260,
+   "canon": 66,
    "name": "go_blocked[P=kitchen]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2132,6 +2393,7 @@
   },
   {
    "i": 261,
+   "canon": 67,
    "name": "go_blocked[P=sofa]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2140,6 +2402,7 @@
   },
   {
    "i": 262,
+   "canon": 71,
    "name": "go_blocked[P=window_chair]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2148,6 +2411,7 @@
   },
   {
    "i": 263,
+   "canon": 69,
    "name": "go_blocked[P=tag5]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2156,6 +2420,7 @@
   },
   {
    "i": 264,
+   "canon": 68,
    "name": "go_blocked[P=tag3]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2164,6 +2429,7 @@
   },
   {
    "i": 265,
+   "canon": 70,
    "name": "go_blocked[P=tag_near]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2172,6 +2438,7 @@
   },
   {
    "i": 266,
+   "canon": 65,
    "name": "go_blocked[P=elsewhere]",
    "rule": "go_blocked",
    "kind": "clause",
@@ -2180,6 +2447,7 @@
   },
   {
    "i": 267,
+   "canon": 106,
    "name": "go_expire[P=door]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2188,6 +2456,7 @@
   },
   {
    "i": 268,
+   "canon": 108,
    "name": "go_expire[P=kitchen]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2196,6 +2465,7 @@
   },
   {
    "i": 269,
+   "canon": 109,
    "name": "go_expire[P=sofa]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2204,6 +2474,7 @@
   },
   {
    "i": 270,
+   "canon": 113,
    "name": "go_expire[P=window_chair]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2212,6 +2483,7 @@
   },
   {
    "i": 271,
+   "canon": 111,
    "name": "go_expire[P=tag5]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2220,6 +2492,7 @@
   },
   {
    "i": 272,
+   "canon": 110,
    "name": "go_expire[P=tag3]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2228,6 +2501,7 @@
   },
   {
    "i": 273,
+   "canon": 112,
    "name": "go_expire[P=tag_near]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2236,6 +2510,7 @@
   },
   {
    "i": 274,
+   "canon": 107,
    "name": "go_expire[P=elsewhere]",
    "rule": "go_expire",
    "kind": "clause",
@@ -2244,6 +2519,7 @@
   },
   {
    "i": 275,
+   "canon": 179,
    "name": "find[T=extinguisher]",
    "rule": "find",
    "kind": "clause",
@@ -2252,6 +2528,7 @@
   },
   {
    "i": 276,
+   "canon": 195,
    "name": "find[T=keys]",
    "rule": "find",
    "kind": "clause",
@@ -2260,6 +2537,7 @@
   },
   {
    "i": 277,
+   "canon": 147,
    "name": "find[T=bottle]",
    "rule": "find",
    "kind": "clause",
@@ -2268,6 +2546,7 @@
   },
   {
    "i": 278,
+   "canon": 163,
    "name": "find[T=chair]",
    "rule": "find",
    "kind": "clause",
@@ -2276,6 +2555,7 @@
   },
   {
    "i": 279,
+   "canon": 211,
    "name": "find[T=table]",
    "rule": "find",
    "kind": "clause",
@@ -2284,6 +2564,7 @@
   },
   {
    "i": 280,
+   "canon": 164,
    "name": "find_low[T=extinguisher]",
    "rule": "find_low",
    "kind": "clause",
@@ -2292,6 +2573,7 @@
   },
   {
    "i": 281,
+   "canon": 180,
    "name": "find_low[T=keys]",
    "rule": "find_low",
    "kind": "clause",
@@ -2300,6 +2582,7 @@
   },
   {
    "i": 282,
+   "canon": 132,
    "name": "find_low[T=bottle]",
    "rule": "find_low",
    "kind": "clause",
@@ -2308,6 +2591,7 @@
   },
   {
    "i": 283,
+   "canon": 148,
    "name": "find_low[T=chair]",
    "rule": "find_low",
    "kind": "clause",
@@ -2316,6 +2600,7 @@
   },
   {
    "i": 284,
+   "canon": 196,
    "name": "find_low[T=table]",
    "rule": "find_low",
    "kind": "clause",
@@ -2324,6 +2609,7 @@
   },
   {
    "i": 285,
+   "canon": 166,
    "name": "find_busy[T=extinguisher,P=door]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2332,6 +2618,7 @@
   },
   {
    "i": 286,
+   "canon": 168,
    "name": "find_busy[T=extinguisher,P=kitchen]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2340,6 +2627,7 @@
   },
   {
    "i": 287,
+   "canon": 169,
    "name": "find_busy[T=extinguisher,P=sofa]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2348,6 +2636,7 @@
   },
   {
    "i": 288,
+   "canon": 173,
    "name": "find_busy[T=extinguisher,P=window_chair]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2356,6 +2645,7 @@
   },
   {
    "i": 289,
+   "canon": 171,
    "name": "find_busy[T=extinguisher,P=tag5]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2364,6 +2654,7 @@
   },
   {
    "i": 290,
+   "canon": 170,
    "name": "find_busy[T=extinguisher,P=tag3]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2372,6 +2663,7 @@
   },
   {
    "i": 291,
+   "canon": 172,
    "name": "find_busy[T=extinguisher,P=tag_near]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2380,6 +2672,7 @@
   },
   {
    "i": 292,
+   "canon": 167,
    "name": "find_busy[T=extinguisher,P=elsewhere]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2388,6 +2681,7 @@
   },
   {
    "i": 293,
+   "canon": 182,
    "name": "find_busy[T=keys,P=door]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2396,6 +2690,7 @@
   },
   {
    "i": 294,
+   "canon": 184,
    "name": "find_busy[T=keys,P=kitchen]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2404,6 +2699,7 @@
   },
   {
    "i": 295,
+   "canon": 185,
    "name": "find_busy[T=keys,P=sofa]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2412,6 +2708,7 @@
   },
   {
    "i": 296,
+   "canon": 189,
    "name": "find_busy[T=keys,P=window_chair]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2420,6 +2717,7 @@
   },
   {
    "i": 297,
+   "canon": 187,
    "name": "find_busy[T=keys,P=tag5]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2428,6 +2726,7 @@
   },
   {
    "i": 298,
+   "canon": 186,
    "name": "find_busy[T=keys,P=tag3]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2436,6 +2735,7 @@
   },
   {
    "i": 299,
+   "canon": 188,
    "name": "find_busy[T=keys,P=tag_near]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2444,6 +2744,7 @@
   },
   {
    "i": 300,
+   "canon": 183,
    "name": "find_busy[T=keys,P=elsewhere]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2452,6 +2753,7 @@
   },
   {
    "i": 301,
+   "canon": 134,
    "name": "find_busy[T=bottle,P=door]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2460,6 +2762,7 @@
   },
   {
    "i": 302,
+   "canon": 136,
    "name": "find_busy[T=bottle,P=kitchen]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2468,6 +2771,7 @@
   },
   {
    "i": 303,
+   "canon": 137,
    "name": "find_busy[T=bottle,P=sofa]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2476,6 +2780,7 @@
   },
   {
    "i": 304,
+   "canon": 141,
    "name": "find_busy[T=bottle,P=window_chair]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2484,6 +2789,7 @@
   },
   {
    "i": 305,
+   "canon": 139,
    "name": "find_busy[T=bottle,P=tag5]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2492,6 +2798,7 @@
   },
   {
    "i": 306,
+   "canon": 138,
    "name": "find_busy[T=bottle,P=tag3]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2500,6 +2807,7 @@
   },
   {
    "i": 307,
+   "canon": 140,
    "name": "find_busy[T=bottle,P=tag_near]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2508,6 +2816,7 @@
   },
   {
    "i": 308,
+   "canon": 135,
    "name": "find_busy[T=bottle,P=elsewhere]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2516,6 +2825,7 @@
   },
   {
    "i": 309,
+   "canon": 150,
    "name": "find_busy[T=chair,P=door]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2524,6 +2834,7 @@
   },
   {
    "i": 310,
+   "canon": 152,
    "name": "find_busy[T=chair,P=kitchen]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2532,6 +2843,7 @@
   },
   {
    "i": 311,
+   "canon": 153,
    "name": "find_busy[T=chair,P=sofa]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2540,6 +2852,7 @@
   },
   {
    "i": 312,
+   "canon": 157,
    "name": "find_busy[T=chair,P=window_chair]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2548,6 +2861,7 @@
   },
   {
    "i": 313,
+   "canon": 155,
    "name": "find_busy[T=chair,P=tag5]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2556,6 +2870,7 @@
   },
   {
    "i": 314,
+   "canon": 154,
    "name": "find_busy[T=chair,P=tag3]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2564,6 +2879,7 @@
   },
   {
    "i": 315,
+   "canon": 156,
    "name": "find_busy[T=chair,P=tag_near]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2572,6 +2888,7 @@
   },
   {
    "i": 316,
+   "canon": 151,
    "name": "find_busy[T=chair,P=elsewhere]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2580,6 +2897,7 @@
   },
   {
    "i": 317,
+   "canon": 198,
    "name": "find_busy[T=table,P=door]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2588,6 +2906,7 @@
   },
   {
    "i": 318,
+   "canon": 200,
    "name": "find_busy[T=table,P=kitchen]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2596,6 +2915,7 @@
   },
   {
    "i": 319,
+   "canon": 201,
    "name": "find_busy[T=table,P=sofa]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2604,6 +2924,7 @@
   },
   {
    "i": 320,
+   "canon": 205,
    "name": "find_busy[T=table,P=window_chair]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2612,6 +2933,7 @@
   },
   {
    "i": 321,
+   "canon": 203,
    "name": "find_busy[T=table,P=tag5]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2620,6 +2942,7 @@
   },
   {
    "i": 322,
+   "canon": 202,
    "name": "find_busy[T=table,P=tag3]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2628,6 +2951,7 @@
   },
   {
    "i": 323,
+   "canon": 204,
    "name": "find_busy[T=table,P=tag_near]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2636,6 +2960,7 @@
   },
   {
    "i": 324,
+   "canon": 199,
    "name": "find_busy[T=table,P=elsewhere]",
    "rule": "find_busy",
    "kind": "clause",
@@ -2644,6 +2969,7 @@
   },
   {
    "i": 325,
+   "canon": 176,
    "name": "find_busy_find[T=extinguisher,U=extinguisher]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2652,6 +2978,7 @@
   },
   {
    "i": 326,
+   "canon": 177,
    "name": "find_busy_find[T=extinguisher,U=keys]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2660,6 +2987,7 @@
   },
   {
    "i": 327,
+   "canon": 174,
    "name": "find_busy_find[T=extinguisher,U=bottle]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2668,6 +2996,7 @@
   },
   {
    "i": 328,
+   "canon": 175,
    "name": "find_busy_find[T=extinguisher,U=chair]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2676,6 +3005,7 @@
   },
   {
    "i": 329,
+   "canon": 178,
    "name": "find_busy_find[T=extinguisher,U=table]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2684,6 +3014,7 @@
   },
   {
    "i": 330,
+   "canon": 192,
    "name": "find_busy_find[T=keys,U=extinguisher]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2692,6 +3023,7 @@
   },
   {
    "i": 331,
+   "canon": 193,
    "name": "find_busy_find[T=keys,U=keys]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2700,6 +3032,7 @@
   },
   {
    "i": 332,
+   "canon": 190,
    "name": "find_busy_find[T=keys,U=bottle]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2708,6 +3041,7 @@
   },
   {
    "i": 333,
+   "canon": 191,
    "name": "find_busy_find[T=keys,U=chair]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2716,6 +3050,7 @@
   },
   {
    "i": 334,
+   "canon": 194,
    "name": "find_busy_find[T=keys,U=table]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2724,6 +3059,7 @@
   },
   {
    "i": 335,
+   "canon": 144,
    "name": "find_busy_find[T=bottle,U=extinguisher]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2732,6 +3068,7 @@
   },
   {
    "i": 336,
+   "canon": 145,
    "name": "find_busy_find[T=bottle,U=keys]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2740,6 +3077,7 @@
   },
   {
    "i": 337,
+   "canon": 142,
    "name": "find_busy_find[T=bottle,U=bottle]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2748,6 +3086,7 @@
   },
   {
    "i": 338,
+   "canon": 143,
    "name": "find_busy_find[T=bottle,U=chair]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2756,6 +3095,7 @@
   },
   {
    "i": 339,
+   "canon": 146,
    "name": "find_busy_find[T=bottle,U=table]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2764,6 +3104,7 @@
   },
   {
    "i": 340,
+   "canon": 160,
    "name": "find_busy_find[T=chair,U=extinguisher]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2772,6 +3113,7 @@
   },
   {
    "i": 341,
+   "canon": 161,
    "name": "find_busy_find[T=chair,U=keys]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2780,6 +3122,7 @@
   },
   {
    "i": 342,
+   "canon": 158,
    "name": "find_busy_find[T=chair,U=bottle]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2788,6 +3131,7 @@
   },
   {
    "i": 343,
+   "canon": 159,
    "name": "find_busy_find[T=chair,U=chair]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2796,6 +3140,7 @@
   },
   {
    "i": 344,
+   "canon": 162,
    "name": "find_busy_find[T=chair,U=table]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2804,6 +3149,7 @@
   },
   {
    "i": 345,
+   "canon": 208,
    "name": "find_busy_find[T=table,U=extinguisher]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2812,6 +3158,7 @@
   },
   {
    "i": 346,
+   "canon": 209,
    "name": "find_busy_find[T=table,U=keys]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2820,6 +3167,7 @@
   },
   {
    "i": 347,
+   "canon": 206,
    "name": "find_busy_find[T=table,U=bottle]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2828,6 +3176,7 @@
   },
   {
    "i": 348,
+   "canon": 207,
    "name": "find_busy_find[T=table,U=chair]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2836,6 +3185,7 @@
   },
   {
    "i": 349,
+   "canon": 210,
    "name": "find_busy_find[T=table,U=table]",
    "rule": "find_busy_find",
    "kind": "clause",
@@ -2844,6 +3194,7 @@
   },
   {
    "i": 350,
+   "canon": 165,
    "name": "find_busy_follow[T=extinguisher]",
    "rule": "find_busy_follow",
    "kind": "clause",
@@ -2852,6 +3203,7 @@
   },
   {
    "i": 351,
+   "canon": 181,
    "name": "find_busy_follow[T=keys]",
    "rule": "find_busy_follow",
    "kind": "clause",
@@ -2860,6 +3212,7 @@
   },
   {
    "i": 352,
+   "canon": 133,
    "name": "find_busy_follow[T=bottle]",
    "rule": "find_busy_follow",
    "kind": "clause",
@@ -2868,6 +3221,7 @@
   },
   {
    "i": 353,
+   "canon": 149,
    "name": "find_busy_follow[T=chair]",
    "rule": "find_busy_follow",
    "kind": "clause",
@@ -2876,6 +3230,7 @@
   },
   {
    "i": 354,
+   "canon": 197,
    "name": "find_busy_follow[T=table]",
    "rule": "find_busy_follow",
    "kind": "clause",
@@ -2884,6 +3239,7 @@
   },
   {
    "i": 355,
+   "canon": 121,
    "name": "found[T=extinguisher]",
    "rule": "found",
    "kind": "clause",
@@ -2892,6 +3248,7 @@
   },
   {
    "i": 356,
+   "canon": 124,
    "name": "found[T=keys]",
    "rule": "found",
    "kind": "clause",
@@ -2900,6 +3257,7 @@
   },
   {
    "i": 357,
+   "canon": 115,
    "name": "found[T=bottle]",
    "rule": "found",
    "kind": "clause",
@@ -2908,6 +3266,7 @@
   },
   {
    "i": 358,
+   "canon": 118,
    "name": "found[T=chair]",
    "rule": "found",
    "kind": "clause",
@@ -2916,6 +3275,7 @@
   },
   {
    "i": 359,
+   "canon": 127,
    "name": "found[T=table]",
    "rule": "found",
    "kind": "clause",
@@ -2924,6 +3284,7 @@
   },
   {
    "i": 360,
+   "canon": 120,
    "name": "found_again[T=extinguisher]",
    "rule": "found_again",
    "kind": "clause",
@@ -2932,6 +3293,7 @@
   },
   {
    "i": 361,
+   "canon": 123,
    "name": "found_again[T=keys]",
    "rule": "found_again",
    "kind": "clause",
@@ -2940,6 +3302,7 @@
   },
   {
    "i": 362,
+   "canon": 114,
    "name": "found_again[T=bottle]",
    "rule": "found_again",
    "kind": "clause",
@@ -2948,6 +3311,7 @@
   },
   {
    "i": 363,
+   "canon": 117,
    "name": "found_again[T=chair]",
    "rule": "found_again",
    "kind": "clause",
@@ -2956,6 +3320,7 @@
   },
   {
    "i": 364,
+   "canon": 126,
    "name": "found_again[T=table]",
    "rule": "found_again",
    "kind": "clause",
@@ -2964,6 +3329,7 @@
   },
   {
    "i": 365,
+   "canon": 103,
    "name": "find_locked[T=extinguisher]",
    "rule": "find_locked",
    "kind": "clause",
@@ -2972,6 +3338,7 @@
   },
   {
    "i": 366,
+   "canon": 104,
    "name": "find_locked[T=keys]",
    "rule": "find_locked",
    "kind": "clause",
@@ -2980,6 +3347,7 @@
   },
   {
    "i": 367,
+   "canon": 101,
    "name": "find_locked[T=bottle]",
    "rule": "find_locked",
    "kind": "clause",
@@ -2988,6 +3356,7 @@
   },
   {
    "i": 368,
+   "canon": 102,
    "name": "find_locked[T=chair]",
    "rule": "find_locked",
    "kind": "clause",
@@ -2996,6 +3365,7 @@
   },
   {
    "i": 369,
+   "canon": 105,
    "name": "find_locked[T=table]",
    "rule": "find_locked",
    "kind": "clause",
@@ -3004,6 +3374,7 @@
   },
   {
    "i": 370,
+   "canon": 122,
    "name": "find_expire[T=extinguisher]",
    "rule": "find_expire",
    "kind": "clause",
@@ -3012,6 +3383,7 @@
   },
   {
    "i": 371,
+   "canon": 125,
    "name": "find_expire[T=keys]",
    "rule": "find_expire",
    "kind": "clause",
@@ -3020,6 +3392,7 @@
   },
   {
    "i": 372,
+   "canon": 116,
    "name": "find_expire[T=bottle]",
    "rule": "find_expire",
    "kind": "clause",
@@ -3028,6 +3401,7 @@
   },
   {
    "i": 373,
+   "canon": 119,
    "name": "find_expire[T=chair]",
    "rule": "find_expire",
    "kind": "clause",
@@ -3036,6 +3410,7 @@
   },
   {
    "i": 374,
+   "canon": 128,
    "name": "find_expire[T=table]",
    "rule": "find_expire",
    "kind": "clause",
@@ -3044,6 +3419,7 @@
   },
   {
    "i": 375,
+   "canon": 229,
    "name": "follow",
    "rule": "follow",
    "kind": "clause",
@@ -3052,6 +3428,7 @@
   },
   {
    "i": 376,
+   "canon": 223,
    "name": "follow_nobody",
    "rule": "follow_nobody",
    "kind": "clause",
@@ -3060,6 +3437,7 @@
   },
   {
    "i": 377,
+   "canon": 214,
    "name": "follow_must_stand[Q=sitting]",
    "rule": "follow_must_stand",
    "kind": "clause",
@@ -3068,6 +3446,7 @@
   },
   {
    "i": 378,
+   "canon": 213,
    "name": "follow_must_stand[Q=lying]",
    "rule": "follow_must_stand",
    "kind": "clause",
@@ -3076,6 +3455,7 @@
   },
   {
    "i": 379,
+   "canon": 215,
    "name": "follow_busy[P=door]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3084,6 +3464,7 @@
   },
   {
    "i": 380,
+   "canon": 217,
    "name": "follow_busy[P=kitchen]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3092,6 +3473,7 @@
   },
   {
    "i": 381,
+   "canon": 218,
    "name": "follow_busy[P=sofa]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3100,6 +3482,7 @@
   },
   {
    "i": 382,
+   "canon": 222,
    "name": "follow_busy[P=window_chair]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3108,6 +3491,7 @@
   },
   {
    "i": 383,
+   "canon": 220,
    "name": "follow_busy[P=tag5]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3116,6 +3500,7 @@
   },
   {
    "i": 384,
+   "canon": 219,
    "name": "follow_busy[P=tag3]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3124,6 +3509,7 @@
   },
   {
    "i": 385,
+   "canon": 221,
    "name": "follow_busy[P=tag_near]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3132,6 +3518,7 @@
   },
   {
    "i": 386,
+   "canon": 216,
    "name": "follow_busy[P=elsewhere]",
    "rule": "follow_busy",
    "kind": "clause",
@@ -3140,6 +3527,7 @@
   },
   {
    "i": 387,
+   "canon": 226,
    "name": "follow_busy_find[T=extinguisher]",
    "rule": "follow_busy_find",
    "kind": "clause",
@@ -3148,6 +3536,7 @@
   },
   {
    "i": 388,
+   "canon": 227,
    "name": "follow_busy_find[T=keys]",
    "rule": "follow_busy_find",
    "kind": "clause",
@@ -3156,6 +3545,7 @@
   },
   {
    "i": 389,
+   "canon": 224,
    "name": "follow_busy_find[T=bottle]",
    "rule": "follow_busy_find",
    "kind": "clause",
@@ -3164,6 +3554,7 @@
   },
   {
    "i": 390,
+   "canon": 225,
    "name": "follow_busy_find[T=chair]",
    "rule": "follow_busy_find",
    "kind": "clause",
@@ -3172,6 +3563,7 @@
   },
   {
    "i": 391,
+   "canon": 228,
    "name": "follow_busy_find[T=table]",
    "rule": "follow_busy_find",
    "kind": "clause",
@@ -3180,6 +3572,7 @@
   },
   {
    "i": 392,
+   "canon": 212,
    "name": "follow_already",
    "rule": "follow_already",
    "kind": "clause",
@@ -3188,6 +3581,7 @@
   },
   {
    "i": 393,
+   "canon": 100,
    "name": "follow_lost",
    "rule": "follow_lost",
    "kind": "clause",
@@ -3196,6 +3590,7 @@
   },
   {
    "i": 394,
+   "canon": 87,
    "name": "stop_go[P=door]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3204,6 +3599,7 @@
   },
   {
    "i": 395,
+   "canon": 89,
    "name": "stop_go[P=kitchen]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3212,6 +3608,7 @@
   },
   {
    "i": 396,
+   "canon": 90,
    "name": "stop_go[P=sofa]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3220,6 +3617,7 @@
   },
   {
    "i": 397,
+   "canon": 94,
    "name": "stop_go[P=window_chair]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3228,6 +3626,7 @@
   },
   {
    "i": 398,
+   "canon": 92,
    "name": "stop_go[P=tag5]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3236,6 +3635,7 @@
   },
   {
    "i": 399,
+   "canon": 91,
    "name": "stop_go[P=tag3]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3244,6 +3644,7 @@
   },
   {
    "i": 400,
+   "canon": 93,
    "name": "stop_go[P=tag_near]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3252,6 +3653,7 @@
   },
   {
    "i": 401,
+   "canon": 88,
    "name": "stop_go[P=elsewhere]",
    "rule": "stop_go",
    "kind": "clause",
@@ -3260,6 +3662,7 @@
   },
   {
    "i": 402,
+   "canon": 97,
    "name": "stop_find[T=extinguisher]",
    "rule": "stop_find",
    "kind": "clause",
@@ -3268,6 +3671,7 @@
   },
   {
    "i": 403,
+   "canon": 98,
    "name": "stop_find[T=keys]",
    "rule": "stop_find",
    "kind": "clause",
@@ -3276,6 +3680,7 @@
   },
   {
    "i": 404,
+   "canon": 95,
    "name": "stop_find[T=bottle]",
    "rule": "stop_find",
    "kind": "clause",
@@ -3284,6 +3689,7 @@
   },
   {
    "i": 405,
+   "canon": 96,
    "name": "stop_find[T=chair]",
    "rule": "stop_find",
    "kind": "clause",
@@ -3292,6 +3698,7 @@
   },
   {
    "i": 406,
+   "canon": 99,
    "name": "stop_find[T=table]",
    "rule": "stop_find",
    "kind": "clause",
@@ -3300,6 +3707,7 @@
   },
   {
    "i": 407,
+   "canon": 86,
    "name": "stop_follow",
    "rule": "stop_follow",
    "kind": "clause",
@@ -3308,6 +3716,7 @@
   },
   {
    "i": 408,
+   "canon": 471,
    "name": "stop_still",
    "rule": "stop_still",
    "kind": "clause",
@@ -3316,6 +3725,7 @@
   },
   {
    "i": 409,
+   "canon": 73,
    "name": "cancel_go[P=door]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3324,6 +3734,7 @@
   },
   {
    "i": 410,
+   "canon": 75,
    "name": "cancel_go[P=kitchen]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3332,6 +3743,7 @@
   },
   {
    "i": 411,
+   "canon": 76,
    "name": "cancel_go[P=sofa]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3340,6 +3752,7 @@
   },
   {
    "i": 412,
+   "canon": 80,
    "name": "cancel_go[P=window_chair]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3348,6 +3761,7 @@
   },
   {
    "i": 413,
+   "canon": 78,
    "name": "cancel_go[P=tag5]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3356,6 +3770,7 @@
   },
   {
    "i": 414,
+   "canon": 77,
    "name": "cancel_go[P=tag3]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3364,6 +3779,7 @@
   },
   {
    "i": 415,
+   "canon": 79,
    "name": "cancel_go[P=tag_near]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3372,6 +3788,7 @@
   },
   {
    "i": 416,
+   "canon": 74,
    "name": "cancel_go[P=elsewhere]",
    "rule": "cancel_go",
    "kind": "clause",
@@ -3380,6 +3797,7 @@
   },
   {
    "i": 417,
+   "canon": 83,
    "name": "cancel_find[T=extinguisher]",
    "rule": "cancel_find",
    "kind": "clause",
@@ -3388,6 +3806,7 @@
   },
   {
    "i": 418,
+   "canon": 84,
    "name": "cancel_find[T=keys]",
    "rule": "cancel_find",
    "kind": "clause",
@@ -3396,6 +3815,7 @@
   },
   {
    "i": 419,
+   "canon": 81,
    "name": "cancel_find[T=bottle]",
    "rule": "cancel_find",
    "kind": "clause",
@@ -3404,6 +3824,7 @@
   },
   {
    "i": 420,
+   "canon": 82,
    "name": "cancel_find[T=chair]",
    "rule": "cancel_find",
    "kind": "clause",
@@ -3412,6 +3833,7 @@
   },
   {
    "i": 421,
+   "canon": 85,
    "name": "cancel_find[T=table]",
    "rule": "cancel_find",
    "kind": "clause",
@@ -3420,6 +3842,7 @@
   },
   {
    "i": 422,
+   "canon": 72,
    "name": "cancel_follow",
    "rule": "cancel_follow",
    "kind": "clause",
@@ -3428,6 +3851,7 @@
   },
   {
    "i": 423,
+   "canon": 129,
    "name": "cancel_none",
    "rule": "cancel_none",
    "kind": "clause",
@@ -3436,6 +3860,7 @@
   },
   {
    "i": 424,
+   "canon": 433,
    "name": "query_seen[T=extinguisher,P=door]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3444,6 +3869,7 @@
   },
   {
    "i": 425,
+   "canon": 435,
    "name": "query_seen[T=extinguisher,P=kitchen]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3452,6 +3878,7 @@
   },
   {
    "i": 426,
+   "canon": 436,
    "name": "query_seen[T=extinguisher,P=sofa]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3460,6 +3887,7 @@
   },
   {
    "i": 427,
+   "canon": 440,
    "name": "query_seen[T=extinguisher,P=window_chair]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3468,6 +3896,7 @@
   },
   {
    "i": 428,
+   "canon": 438,
    "name": "query_seen[T=extinguisher,P=tag5]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3476,6 +3905,7 @@
   },
   {
    "i": 429,
+   "canon": 437,
    "name": "query_seen[T=extinguisher,P=tag3]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3484,6 +3914,7 @@
   },
   {
    "i": 430,
+   "canon": 439,
    "name": "query_seen[T=extinguisher,P=tag_near]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3492,6 +3923,7 @@
   },
   {
    "i": 431,
+   "canon": 434,
    "name": "query_seen[T=extinguisher,P=elsewhere]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3500,6 +3932,7 @@
   },
   {
    "i": 432,
+   "canon": 442,
    "name": "query_seen[T=keys,P=door]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3508,6 +3941,7 @@
   },
   {
    "i": 433,
+   "canon": 444,
    "name": "query_seen[T=keys,P=kitchen]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3516,6 +3950,7 @@
   },
   {
    "i": 434,
+   "canon": 445,
    "name": "query_seen[T=keys,P=sofa]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3524,6 +3959,7 @@
   },
   {
    "i": 435,
+   "canon": 449,
    "name": "query_seen[T=keys,P=window_chair]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3532,6 +3968,7 @@
   },
   {
    "i": 436,
+   "canon": 447,
    "name": "query_seen[T=keys,P=tag5]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3540,6 +3977,7 @@
   },
   {
    "i": 437,
+   "canon": 446,
    "name": "query_seen[T=keys,P=tag3]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3548,6 +3986,7 @@
   },
   {
    "i": 438,
+   "canon": 448,
    "name": "query_seen[T=keys,P=tag_near]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3556,6 +3995,7 @@
   },
   {
    "i": 439,
+   "canon": 443,
    "name": "query_seen[T=keys,P=elsewhere]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3564,6 +4004,7 @@
   },
   {
    "i": 440,
+   "canon": 415,
    "name": "query_seen[T=bottle,P=door]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3572,6 +4013,7 @@
   },
   {
    "i": 441,
+   "canon": 417,
    "name": "query_seen[T=bottle,P=kitchen]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3580,6 +4022,7 @@
   },
   {
    "i": 442,
+   "canon": 418,
    "name": "query_seen[T=bottle,P=sofa]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3588,6 +4031,7 @@
   },
   {
    "i": 443,
+   "canon": 422,
    "name": "query_seen[T=bottle,P=window_chair]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3596,6 +4040,7 @@
   },
   {
    "i": 444,
+   "canon": 420,
    "name": "query_seen[T=bottle,P=tag5]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3604,6 +4049,7 @@
   },
   {
    "i": 445,
+   "canon": 419,
    "name": "query_seen[T=bottle,P=tag3]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3612,6 +4058,7 @@
   },
   {
    "i": 446,
+   "canon": 421,
    "name": "query_seen[T=bottle,P=tag_near]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3620,6 +4067,7 @@
   },
   {
    "i": 447,
+   "canon": 416,
    "name": "query_seen[T=bottle,P=elsewhere]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3628,6 +4076,7 @@
   },
   {
    "i": 448,
+   "canon": 424,
    "name": "query_seen[T=chair,P=door]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3636,6 +4085,7 @@
   },
   {
    "i": 449,
+   "canon": 426,
    "name": "query_seen[T=chair,P=kitchen]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3644,6 +4094,7 @@
   },
   {
    "i": 450,
+   "canon": 427,
    "name": "query_seen[T=chair,P=sofa]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3652,6 +4103,7 @@
   },
   {
    "i": 451,
+   "canon": 431,
    "name": "query_seen[T=chair,P=window_chair]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3660,6 +4112,7 @@
   },
   {
    "i": 452,
+   "canon": 429,
    "name": "query_seen[T=chair,P=tag5]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3668,6 +4121,7 @@
   },
   {
    "i": 453,
+   "canon": 428,
    "name": "query_seen[T=chair,P=tag3]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3676,6 +4130,7 @@
   },
   {
    "i": 454,
+   "canon": 430,
    "name": "query_seen[T=chair,P=tag_near]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3684,6 +4139,7 @@
   },
   {
    "i": 455,
+   "canon": 425,
    "name": "query_seen[T=chair,P=elsewhere]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3692,6 +4148,7 @@
   },
   {
    "i": 456,
+   "canon": 451,
    "name": "query_seen[T=table,P=door]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3700,6 +4157,7 @@
   },
   {
    "i": 457,
+   "canon": 453,
    "name": "query_seen[T=table,P=kitchen]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3708,6 +4166,7 @@
   },
   {
    "i": 458,
+   "canon": 454,
    "name": "query_seen[T=table,P=sofa]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3716,6 +4175,7 @@
   },
   {
    "i": 459,
+   "canon": 458,
    "name": "query_seen[T=table,P=window_chair]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3724,6 +4184,7 @@
   },
   {
    "i": 460,
+   "canon": 456,
    "name": "query_seen[T=table,P=tag5]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3732,6 +4193,7 @@
   },
   {
    "i": 461,
+   "canon": 455,
    "name": "query_seen[T=table,P=tag3]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3740,6 +4202,7 @@
   },
   {
    "i": 462,
+   "canon": 457,
    "name": "query_seen[T=table,P=tag_near]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3748,6 +4211,7 @@
   },
   {
    "i": 463,
+   "canon": 452,
    "name": "query_seen[T=table,P=elsewhere]",
    "rule": "query_seen",
    "kind": "clause",
@@ -3756,6 +4220,7 @@
   },
   {
    "i": 464,
+   "canon": 441,
    "name": "query_unseen[T=extinguisher]",
    "rule": "query_unseen",
    "kind": "clause",
@@ -3764,6 +4229,7 @@
   },
   {
    "i": 465,
+   "canon": 450,
    "name": "query_unseen[T=keys]",
    "rule": "query_unseen",
    "kind": "clause",
@@ -3772,6 +4238,7 @@
   },
   {
    "i": 466,
+   "canon": 423,
    "name": "query_unseen[T=bottle]",
    "rule": "query_unseen",
    "kind": "clause",
@@ -3780,6 +4247,7 @@
   },
   {
    "i": 467,
+   "canon": 432,
    "name": "query_unseen[T=chair]",
    "rule": "query_unseen",
    "kind": "clause",
@@ -3788,6 +4256,7 @@
   },
   {
    "i": 468,
+   "canon": 459,
    "name": "query_unseen[T=table]",
    "rule": "query_unseen",
    "kind": "clause",
@@ -3796,6 +4265,7 @@
   },
   {
    "i": 469,
+   "canon": 386,
    "name": "look[P=door]",
    "rule": "look",
    "kind": "clause",
@@ -3804,6 +4274,7 @@
   },
   {
    "i": 470,
+   "canon": 390,
    "name": "look[P=kitchen]",
    "rule": "look",
    "kind": "clause",
@@ -3812,6 +4283,7 @@
   },
   {
    "i": 471,
+   "canon": 392,
    "name": "look[P=sofa]",
    "rule": "look",
    "kind": "clause",
@@ -3820,6 +4292,7 @@
   },
   {
    "i": 472,
+   "canon": 400,
    "name": "look[P=window_chair]",
    "rule": "look",
    "kind": "clause",
@@ -3828,6 +4301,7 @@
   },
   {
    "i": 473,
+   "canon": 396,
    "name": "look[P=tag5]",
    "rule": "look",
    "kind": "clause",
@@ -3836,6 +4310,7 @@
   },
   {
    "i": 474,
+   "canon": 394,
    "name": "look[P=tag3]",
    "rule": "look",
    "kind": "clause",
@@ -3844,6 +4319,7 @@
   },
   {
    "i": 475,
+   "canon": 398,
    "name": "look[P=tag_near]",
    "rule": "look",
    "kind": "clause",
@@ -3852,6 +4328,7 @@
   },
   {
    "i": 476,
+   "canon": 388,
    "name": "look[P=elsewhere]",
    "rule": "look",
    "kind": "clause",
@@ -3860,6 +4337,7 @@
   },
   {
    "i": 477,
+   "canon": 387,
    "name": "look_unmapped[P=door]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3868,6 +4346,7 @@
   },
   {
    "i": 478,
+   "canon": 391,
    "name": "look_unmapped[P=kitchen]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3876,6 +4355,7 @@
   },
   {
    "i": 479,
+   "canon": 393,
    "name": "look_unmapped[P=sofa]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3884,6 +4364,7 @@
   },
   {
    "i": 480,
+   "canon": 401,
    "name": "look_unmapped[P=window_chair]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3892,6 +4373,7 @@
   },
   {
    "i": 481,
+   "canon": 397,
    "name": "look_unmapped[P=tag5]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3900,6 +4382,7 @@
   },
   {
    "i": 482,
+   "canon": 395,
    "name": "look_unmapped[P=tag3]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3908,6 +4391,7 @@
   },
   {
    "i": 483,
+   "canon": 399,
    "name": "look_unmapped[P=tag_near]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3916,6 +4400,7 @@
   },
   {
    "i": 484,
+   "canon": 389,
    "name": "look_unmapped[P=elsewhere]",
    "rule": "look_unmapped",
    "kind": "clause",
@@ -3924,6 +4409,7 @@
   },
   {
    "i": 485,
+   "canon": 472,
    "name": "time",
    "rule": "time",
    "kind": "clause",
@@ -3932,6 +4418,7 @@
   },
   {
    "i": 486,
+   "canon": 131,
    "name": "date",
    "rule": "date",
    "kind": "clause",
@@ -3940,6 +4427,7 @@
   },
   {
    "i": 487,
+   "canon": 130,
    "name": "chat",
    "rule": "chat",
    "kind": "clause",
@@ -3948,6 +4436,7 @@
   },
   {
    "i": 488,
+   "canon": 488,
    "name": "unknown",
    "rule": "unknown",
    "kind": "clause",

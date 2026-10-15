@@ -19,4 +19,20 @@ def test_the_catalog_domain_golden(name, packs):
     files = build(program, pack_files)
     s = json.loads(files["sidecar.json"])
     assert s["packs"] == packs
+    if packs:              # the packs' clauses in the served script (F3)
+        assert [c["name"] for c in s["script"][0]["clauses"]
+                if c.get("pack")] == ["visitor_waters"]
     check_golden(name, files)
+
+
+@pytest.mark.parametrize("name, scene", [
+    ("kitchen", "kitchen_host.llp"), ("kitchen_shared", "kitchen_shared.llp")])
+def test_the_kitchen_pair_resolves_through_serves(name, scene):
+    """Q1: the manifest's `serves` names the pair scene the agent serves;
+    the emitted artifact is the kitchen pair golden's."""
+    from test_artifact import GOLDENS
+    program, packs, _ = resolve(name)
+    assert program.name == scene and packs == []
+    files = build(program, packs)
+    assert files["sidecar.json"] == \
+        (GOLDENS / f"{name}.metis" / "sidecar.json").read_text()

@@ -18,22 +18,27 @@ sidecar.json ("format": "metis-sidecar/1"):
   packs             the merged packs' file names, in order
   init, steps       the case (#init, #steps) the program is grounded on
   stages            the wire's stage indices by name
-  events            per wire event i (Program.events() order — NOT the
-                    sampler's canonical order): name, rule, kind, stage,
-                    line (the rule's %% doc in words, cards._words), and
+  events            per wire event i (Program.events() order, the
+                    wire's): canon (its index in the normative sampler's
+                    order, refsample.canonical_events — the law the live
+                    runtime samples by), name, rule, kind, stage, line
+                    (the rule's %% doc in words, cards._words), and
                     target when the doc tags one
   cards             the cards offerable at the served node (cards.cards,
                     without the file paths): what explain may adopt
   queries           the #query atoms (the mirror line)
-  script            cards.script(): the narrator's and the consult's text
+  script            cards.script(shell, packs): the narrator's and the
+                    consult's text — the packs' clauses follow the
+                    program's in the served card, each tagged "pack"
   ir                "program.ir" or null
 
     python -m metis.kernel.artifact <domain|file.llp> [-o DIR] [--pack P]... [--ir]
 
 A domain name is resolved through metis_catalog (installed, or the
 checkout at $METIS_CATALOG, else the sibling ../metis-catalog): its
-manifest's program and every packs/*.llp. A .llp path serves that file
-with the --pack files given. The directory is replaced whole (written
+manifest's served program, Domain.serves() — `serves: [files]`, else
+the program and every packs/*.llp. A .llp path serves that file with
+the --pack files given. The directory is replaced whole (written
 beside it, then swapped), so a reader never sees half an artifact."""
 
 import argparse
@@ -98,18 +103,20 @@ def sidecar(program: Path, packs: Sequence[Path], doc, case, prog,
     from metis.kernel.refsample import canonical_events
     from metis.loop.cards import cards, script
     lines = rule_lines([program, *packs])
+    canon_tbl = canonical_events(prog)
+    canon = {id(ev): j for j, (_, _, ev) in enumerate(canon_tbl)}
     events = []
     for i, (kind, stage, ev) in enumerate(prog.events()):
         rule = _RULE.split(ev.name, 1)[0]
         words, tags = lines.get(rule, ("", {}))
-        e = {"i": i, "name": ev.name, "rule": rule, "kind": kind,
-             "stage": stage, "line": words}
+        e = {"i": i, "canon": canon[id(ev)], "name": ev.name,
+             "rule": rule, "kind": kind, "stage": stage, "line": words}
         if tags.get("target"):
             e["target"] = tags["target"]
         events.append(e)
     # the harness's view of the served node (cards/script read a shell)
     shell = SimpleNamespace(path=Path(program), doc=doc, case=case,
-                            prog=prog, events_tbl=canonical_events(prog))
+                            prog=prog, events_tbl=canon_tbl)
     offered = [{k: v for k, v in c.items() if k != "file"}
                for c in cards(shell)]
     return {"format": FORMAT,
@@ -122,7 +129,7 @@ def sidecar(program: Path, packs: Sequence[Path], doc, case, prog,
             "events": events,
             "cards": offered,
             "queries": list(case["queries"]),
-            "script": script(shell),
+            "script": script(shell, packs),
             "ir": ir}
 
 
@@ -189,9 +196,10 @@ def resolve(target: str, packs: Sequence[str] = ()):
         return p.resolve(), [Path(x).resolve() for x in packs], \
             p.parent / "build" / f"{p.stem}.metis"
     d = _catalog().get(target)
-    if d.program is None:
-        raise SystemExit(f"domain {target!r} has no program")
-    return d.program, list(d.packs()) + [Path(x).resolve() for x in packs], \
+    files = d.serves()                 # the manifest's served program
+    if not files:
+        raise SystemExit(f"domain {target!r} serves no program")
+    return files[0], files[1:] + [Path(x).resolve() for x in packs], \
         d.dir / "build" / f"{d.name}.metis"
 
 

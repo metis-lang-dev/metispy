@@ -15,6 +15,7 @@
  "events": [
   {
    "i": 0,
+   "canon": 4,
    "name": "dry_out",
    "rule": "dry_out",
    "kind": "clause",
@@ -23,6 +24,7 @@
   },
   {
    "i": 1,
+   "canon": 2,
    "name": "water",
    "rule": "water",
    "kind": "clause",
@@ -31,6 +33,7 @@
   },
   {
    "i": 2,
+   "canon": 1,
    "name": "check_moist",
    "rule": "check_moist",
    "kind": "clause",
@@ -39,6 +42,7 @@
   },
   {
    "i": 3,
+   "canon": 0,
    "name": "check_dry",
    "rule": "check_dry",
    "kind": "clause",
@@ -47,6 +51,7 @@
   },
   {
    "i": 4,
+   "canon": 3,
    "name": "visitor_waters",
    "rule": "visitor_waters",
    "kind": "clause",
@@ -175,6 +180,32 @@
       }
      ],
      "target": null
+    },
+    {
+     "name": "visitor_waters",
+     "stage": "main",
+     "doc": "A visitor has watered me; my soil is moist again.",
+     "premises": [
+      {
+       "atom": "dry",
+       "n": 1,
+       "kept": false
+      },
+      {
+       "atom": "visitor",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "effects": [
+      {
+       "atom": "moist",
+       "n": 1,
+       "kept": false
+      }
+     ],
+     "target": null,
+     "pack": "visitor.llp"
     }
    ],
    "atoms": [

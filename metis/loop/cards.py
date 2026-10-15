@@ -187,9 +187,13 @@ def script_of(card: dict) -> dict:
                         "atom_doc": [d.name for d in preds if not d.doc]}}
 
 
-def script(shell) -> List[dict]:
+def script(shell, packs=()) -> List[dict]:
     """The script of every card offerable at the served node: the served
-    catalog's clauses and atoms, each sibling/pack's added clauses."""
+    catalog's clauses and atoms, each sibling/pack's added clauses.
+    `packs`: the files merged into the served program (packs/*.llp, in
+    order) — their clauses follow the program's in the served card's
+    script, each tagged "pack": <file name> (the architect's ruling F3,
+    runtime-binding step 2)."""
     out = []
     for c in cards(shell):
         try:
@@ -198,6 +202,16 @@ def script(shell) -> List[dict]:
             out.append({"name": c["name"], "relation": c["relation"],
                         "text": c["text"], "clauses": [], "atoms": [],
                         "error": f"{type(e).__name__}: {e}"})
+    if packs and out and out[0]["relation"] == "served":
+        served = out[0]
+        for p in packs:
+            s = script_of({"name": served["name"], "file": str(p),
+                           "relation": "served", "text": None})
+            served["clauses"] += [dict(c, pack=Path(p).name)
+                                  for c in s["clauses"]]
+            served.setdefault("missing", {"clause_doc": [], "atom_doc": []})
+            served["missing"]["clause_doc"] += [
+                c["name"] for c in s["clauses"] if not c["doc"]]
     return out
 
 

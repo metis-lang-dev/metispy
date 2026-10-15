@@ -13,6 +13,7 @@
  "events": [
   {
    "i": 0,
+   "canon": 2,
    "name": "fetch_onion",
    "rule": "fetch_onion",
    "kind": "clause",
@@ -21,6 +22,7 @@
   },
   {
    "i": 1,
+   "canon": 4,
    "name": "load",
    "rule": "load",
    "kind": "clause",
@@ -29,6 +31,7 @@
   },
   {
    "i": 2,
+   "canon": 6,
    "name": "cook",
    "rule": "cook",
    "kind": "clause",
@@ -37,6 +40,7 @@
   },
   {
    "i": 3,
+   "canon": 1,
    "name": "fetch_dish",
    "rule": "fetch_dish",
    "kind": "clause",
@@ -45,6 +49,7 @@
   },
   {
    "i": 4,
+   "canon": 0,
    "name": "plate",
    "rule": "plate",
    "kind": "clause",
@@ -53,6 +58,7 @@
   },
   {
    "i": 5,
+   "canon": 5,
    "name": "serve",
    "rule": "serve",
    "kind": "clause",
@@ -61,6 +67,7 @@
   },
   {
    "i": 6,
+   "canon": 3,
    "name": "partner_load",
    "rule": "partner_load",
    "kind": "clause",

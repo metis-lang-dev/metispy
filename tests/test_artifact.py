@@ -110,8 +110,27 @@ def test_the_sidecar_is_keyed_to_the_wire(lamp):
     # the served card first; no file paths travel in the artifact
     assert s["cards"][0]["relation"] == "served"
     assert "file" not in json.dumps(s["cards"])
-    assert [c["name"] for c in s["script"][0]["clauses"]] == \
-        ["switch_on", "burn_out"]
+    # the pack's clauses follow the program's, tagged (ruling F3)
+    assert [(c["name"], c.get("pack")) for c in s["script"][0]["clauses"]] \
+        == [("switch_on", None), ("burn_out", None),
+            ("flicker", "a_flicker.llp")]
+
+
+def test_canon_is_the_samplers_order(lamp):
+    """events[i].canon: wire event i's index in refsample.canonical_events
+    (the law the live runtime samples by; the wire keeps its own order)."""
+    from metis.kernel.artifact import served_doc
+    from metis.kernel.refsample import canonical_events
+    packs = [lamp / "packs" / "a_flicker.llp", lamp / "packs" / "b_surge.llp"]
+    s = _side(build(lamp / "lamp.llp", packs))
+    doc, case, _ = served_doc(lamp / "lamp.llp", packs)
+    tbl = canonical_events(doc.catalog.ground(dict(case["init"])))
+    assert sorted(e["canon"] for e in s["events"]) == \
+        list(range(len(s["events"])))
+    assert [tbl[e["canon"]][2].name for e in s["events"]] == \
+        [e["name"] for e in s["events"]]
+    # the lamp's canonical order differs from the wire's (bytewise lines)
+    assert [e["canon"] for e in s["events"]] != list(range(len(s["events"])))
 
 
 def test_a_pack_that_does_not_admit_raises(lamp):
