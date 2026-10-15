@@ -7,13 +7,15 @@ transfers by reimplementing bindings only:
         def bind(self, reg: Registry) -> None
         def tick(self, counts: dict) -> list[str] | None
         def on_event(self, name: str, args: tuple) -> None
-        def snapshot(self) -> object
+        def snapshot(self) -> object      # JSON data
         def restore(self, snap: object) -> None
 
 PURITY: a weight binding is a function of (args, declared-scope
 counts, env snapshot) — nothing else; env state mutates ONLY in tick
 and on_event; snapshot is total. That pair is the determinism
-contract deterministic replay needs.
+contract deterministic replay needs. The snapshot is JSON data (the
+neutral env both stacks read, metis.kernel.record): restore is handed
+its JSON form, so a tuple comes back as a list.
 
 tick() is the INPUT face: the env advances one world beat and returns
 do-lines ("+atom [n]" / "-atom [n]"); [] is a quiet beat (time passed,
@@ -170,5 +172,5 @@ def exo_event(lines, counts) -> Tuple[ExoEvent, Dict[str, int]]:
 
 
 # -- env snapshots in records: kernel-level (record.py), re-exported
-from metis.kernel.record import (env_blob, env_hash,  # noqa: F401,E402
-                                 env_record, env_unblob)
+from metis.kernel.record import (EnvError, env_data,  # noqa: F401,E402
+                                 env_hash, env_json, env_record)

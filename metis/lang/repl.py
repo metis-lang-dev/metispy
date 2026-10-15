@@ -571,7 +571,14 @@ class Repl(LoopVerbs, Cmd):
                                      horn=self.doc.catalog.horn_db())
 
     def _env_snap(self):
-        return self.plugin.snapshot() if self.plugin is not None else None
+        """The env as the neutral JSON env (metis.kernel.record): every
+        position's snapshot, the fork's and the record's, is JSON data,
+        and a restore is handed that form (a host that is not JSON
+        fails here, at attach)."""
+        if self.plugin is None:
+            return None
+        from metis.kernel.record import env_json
+        return env_json(self.plugin.snapshot())
 
     def _env_attach(self):
         """A (new) plugin: its env as attached is the env of every

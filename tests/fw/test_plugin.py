@@ -349,7 +349,8 @@ def test_surprise_record_env_replays_honestly(tmp_path):
     pol = r.pricer.policy(prog)
     rec = surprise_record(prog, 2, {"crash": 1}, policy=pol,
                           env=r.plugin.snapshot())
-    assert rec["likelihood"] == pytest.approx(0.3) and "blob" in rec["env"]
+    assert rec["likelihood"] == pytest.approx(0.3)
+    assert rec["env"]["format"] == "json" and rec["env"]["data"] == 0
     r.onecmd("tick")                        # the live env moves on
     assert recover(rec, prog, policy=pol)["likelihood"] == \
         pytest.approx(0.9)                  # dishonest without the env
@@ -357,7 +358,7 @@ def test_surprise_record_env_replays_honestly(tmp_path):
     assert out_["env"] == "restored"
     assert out_["likelihood"] == pytest.approx(0.3)
     assert r.plugin.beat == 1               # live env put back
-    del rec["env"]["blob"]
+    del rec["env"]["data"]
     assert recover(rec, prog, policy=pol,
                    plugin=r.plugin)["env"] == "MISMATCH"
 
@@ -498,3 +499,35 @@ def test_accept_with_unbound_ports_is_refused_atomically(tmp_path):
     # bound in-process: the same accept now goes through
     r.registry = Registry().weight("rss", 0.3)
     assert r.cmd_accept("")["ok"] and r.doc.catalog.name == "sensor"
+
+
+def test_a_pickled_record_is_legacy_until_migrated(tmp_path):
+    """The pickle goes: a record written before the JSON env is not read
+    ("legacy"); env_migrate rewrites it to the JSON env, which replays."""
+    import base64
+    import json
+    import pickle
+    from metis.kernel.env_migrate import migrate_file
+    r, out = _repl(_world(tmp_path, SENSOR, "sensor_env.py", SENSOR_ENV))
+    prog = r.doc.catalog.ground({"ck": 1, "gclose": 1})
+    pol = r.pricer.policy(prog)
+    rec = surprise_record(prog, 2, {"crash": 1}, policy=pol,
+                          env=r.plugin.snapshot())
+    rec["env"] = {"hash": "0" * 64, "blob": base64.b64encode(
+        pickle.dumps(r.plugin.snapshot(), protocol=4)).decode()}
+    r.onecmd("tick")
+    legacy = recover(rec, prog, policy=pol, plugin=r.plugin)
+    assert legacy["env"] == "legacy"
+    assert legacy["likelihood"] == pytest.approx(0.9)   # the live env's
+    f = tmp_path / "rec.jsonl"
+    f.write_text(json.dumps(rec) + "\n" + json.dumps({"no": "env"}) + "\n")
+    assert migrate_file(f, keep=True) == {"lines": 2, "migrated": 1,
+                                          "unread": 0}
+    (new, other) = [json.loads(x) for x in f.read_text().splitlines()]
+    assert new["env"]["format"] == "json" and new["env"]["data"] == 0
+    assert "blob" not in new["env"] and other == {"no": "env"}
+    assert "blob" in (tmp_path / "rec.jsonl.pickle-env").read_text()
+    out_ = recover(new, prog, policy=pol, plugin=r.plugin)
+    assert out_["env"] == "restored"
+    assert out_["likelihood"] == pytest.approx(0.3)
+    assert migrate_file(f)["migrated"] == 0              # idempotent

@@ -19,9 +19,8 @@ object). The shadow-pack mode is a usage pattern, not an API:
 condition and explain with the candidate, keep plan() on the base
 until the pack is approved."""
 
-import base64
 import hashlib
-import pickle
+import json
 from typing import Dict, Optional
 
 from .filter import ForwardProjection
@@ -46,9 +45,10 @@ def surprise_record(program, steps: int, observed: Dict[str, int],
     matching mass... below rare_ratio outright), or None.
 
     `env` (a port plugin's snapshot, taken when the policy priced
-    this record): the record carries its hash and, when it pickles
-    small, the blob — so recover() replays against the SAME env (a
-    port-priced likelihood is only honest under the env it saw)."""
+    this record): the record carries its hash and, when it is small,
+    the snapshot itself as JSON data — so recover() replays against
+    the SAME env (a port-priced likelihood is only honest under the
+    env it saw)."""
     pr = ForwardProjection(program, steps, policy=policy,
                            max_states=max_states,
                            keep_history=False)   # only .final read
@@ -69,36 +69,56 @@ def surprise_record(program, steps: int, observed: Dict[str, int],
     }
 
 
-# -- env snapshots (port plugins) -------------------------------------------
+# -- env snapshots (port plugins): the neutral JSON env ---------------------
+# A host's snapshot is JSON data (metis-agent RUNTIME-PARITY row 22, ruling
+# (d)): what py and Go write into a record and read back alike. The record's
+# env is {"format": "json", "hash", "data"}: the hash is sha256 over the
+# canonical text (keys sorted, no whitespace, ASCII), the data the snapshot
+# as JSON — a tuple is carried as an array, so a host's restore takes lists.
+# Records written before carried a pickle ("blob"): never read here;
+# `python -m metis.kernel.env_migrate` rewrites them.
 
-def env_blob(snap) -> Optional[str]:
+class EnvError(TypeError):
+    """A snapshot JSON cannot carry (a set, an object, NaN, mixed keys)."""
+
+
+def env_text(snap) -> str:
+    """The canonical JSON text of a snapshot (what env_hash hashes)."""
     try:
-        return base64.b64encode(pickle.dumps(snap, protocol=4)).decode()
-    except Exception:
-        return None
+        return json.dumps(snap, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True, allow_nan=False)
+    except (TypeError, ValueError) as e:
+        raise EnvError("a host's snapshot must be JSON data (%s): %s"
+                       % (type(snap).__name__, e)) from None
+
+
+def env_json(snap):
+    """The neutral form of a snapshot: the JSON value it reads back as
+    (tuples become lists, int keys strings). Every restore gets this
+    form, on the checkpoint and the replay alike."""
+    return json.loads(env_text(snap))
 
 
 def env_hash(snap) -> str:
-    """A stable fingerprint of an env snapshot (pickle, else repr)."""
-    try:
-        raw = pickle.dumps(snap, protocol=4)
-    except Exception:
-        raw = repr(snap).encode()
-    return hashlib.sha256(raw).hexdigest()
+    """A stable fingerprint of an env snapshot: sha256 of env_text."""
+    return hashlib.sha256(env_text(snap).encode()).hexdigest()
 
 
-def env_record(snap, blob_cap: int = 65536) -> dict:
+def env_record(snap, data_cap: int = 65536) -> dict:
     """The `env` field of a surprise record: the snapshot's hash, plus
-    the blob when it pickles and is small enough to carry."""
-    out = {"hash": env_hash(snap)}
-    b = env_blob(snap)
-    if b is not None and len(b) <= blob_cap:
-        out["blob"] = b
+    the snapshot as JSON data when its text is small enough to carry."""
+    text = env_text(snap)
+    out = {"format": "json",
+           "hash": hashlib.sha256(text.encode()).hexdigest()}
+    if len(text) <= data_cap:
+        out["data"] = json.loads(text)
     return out
 
 
-def env_unblob(env: dict):
-    return pickle.loads(base64.b64decode(env["blob"]))
+def env_data(env: dict):
+    """The snapshot a record's env carries (KeyError when only its hash
+    is, or the record is pickled: see env_migrate)."""
+    return env["data"]
 
 
 def recover(record: dict, program, steps: Optional[int] = None,
@@ -111,17 +131,18 @@ def recover(record: dict, program, steps: Optional[int] = None,
     either).
 
     A record carrying `env` and a `plugin` given: the plugin's env is
-    restored from the record's blob for the replay (the policy's
+    restored from the record's data for the replay (the policy's
     bindings read it) and put back after — out["env"] says
-    "restored", "matches" (no blob, same hash), or "MISMATCH" (no
-    blob, the live env differs: the likelihood is NOT the recorded
-    world's)."""
+    "restored", "matches" (no data, same hash), "MISMATCH" (no data,
+    the live env differs: the likelihood is NOT the recorded world's),
+    or "legacy" (a pickled env, not read: the replay runs on the live
+    env; `python -m metis.kernel.env_migrate` rewrites the record)."""
     steps = steps if steps is not None else record["steps"]
     env_rec = record.get("env")
     if env_rec and plugin is not None:
-        live = plugin.snapshot()
-        if "blob" in env_rec:
-            plugin.restore(env_unblob(env_rec))
+        live = env_json(plugin.snapshot())
+        if "data" in env_rec:
+            plugin.restore(env_json(env_rec["data"]))
             try:
                 out = recover({k: v for k, v in record.items()
                                if k != "env"}, program, steps, policy,
@@ -132,7 +153,8 @@ def recover(record: dict, program, steps: Optional[int] = None,
             return out
         out = recover({k: v for k, v in record.items() if k != "env"},
                       program, steps, policy, max_states)
-        out["env"] = ("matches" if env_hash(live) == env_rec["hash"]
+        out["env"] = ("legacy" if "blob" in env_rec else
+                      "matches" if env_hash(live) == env_rec["hash"]
                       else "MISMATCH")
         return out
     evidence = _evidence(record["observed"], steps)

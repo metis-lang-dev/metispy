@@ -86,7 +86,8 @@ def test_each_injected_surprise_is_one_unmodeled_record(factory, diff,
     assert rec["observed"] == s["observed"] and rec["steps"] == 1
     assert rec["meta"]["path"] == "kitchen"
     assert rec["meta"]["since"] == [after]
-    assert "hash" in rec["env"] and "blob" in rec["env"]
+    assert "hash" in rec["env"] and rec["env"]["format"] == "json"
+    assert len(rec["env"]["data"]) == 5     # the host's (beat, kitchen, …) as an array
     json.dumps(rec)
     # observe-only: nothing fired after the surprise but env beats
     later = [x for x in sigs if x["seq"] > s["seq"]]

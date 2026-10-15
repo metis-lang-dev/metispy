@@ -218,7 +218,7 @@ class Watch:
         steps = max(1, len(sh.fired) - n0)
         policy = (sh.pricer.policy(prog) if sh.pricer is not None
                   else None)
-        snap = sh.plugin.snapshot() if sh.plugin is not None else None
+        snap = sh._env_snap()
         return surprise_record(
             prog, steps, reading, policy=policy,
             rare_ratio=self.rare_ratio,
