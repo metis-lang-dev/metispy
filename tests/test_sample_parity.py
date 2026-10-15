@@ -46,7 +46,7 @@ def test_ocaml_sample_parity():
 def test_cpp_sample_parity(tmp_path):
     exe = tmp_path / "sample_run"
     subprocess.run(
-        [CXX, "-std=c++17", "-O2",
+        [CXX, "-std=c++17", "-O2", f"-I{LANG / 'runtime/include'}",
          str(LANG / "runtime/tools/sample_run.cpp"), "-o", str(exe)],
         check=True)
     r = subprocess.run(

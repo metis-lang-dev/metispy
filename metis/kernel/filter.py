@@ -104,6 +104,17 @@ class ForwardProjection:
                     else:
                         rest.append((i, ev))
                 self._tier_index[(stage, kind)] = (index, rest)
+        # every state's candidates in the NORMATIVE order
+        # (refsample.canonical_events): a counts dict comes from a
+        # frozenset, whose order follows python's string hashing, so the
+        # index's atom-by-atom gather — and every sum over the tier and
+        # over the paths after it — varied with PYTHONHASHSEED in the last
+        # bits (a likelihood 0.9999999999999999 or 1.0). Ranked, a
+        # projection is one number on every host.
+        from .refsample import canonical_events
+        pos = {id(ev): j for j, (_, _, ev) in
+               enumerate(canonical_events(program))}
+        self._rank = [pos[id(ev)] for _, _, ev in self.events]
 
         dist: Dict[State, float] = {program.initial_state(): 1.0}
         self.history = [dist]
@@ -130,6 +141,7 @@ class ForwardProjection:
             out = list(rest)
             for a in counts:
                 out.extend(index.get(a, ()))
+            out.sort(key=lambda ie: self._rank[ie[0]])
             return out
 
         for tierno, kind in ((0, "clause"), (1, "link")):
