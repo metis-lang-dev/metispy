@@ -45,6 +45,20 @@ class Soil:
         self.beat, self.moist = s
 
 
+class Announced(Soil):
+    """The visit comes with its input atom (+visitor) at the tick it waters."""
+    def tick(self, counts):
+        dos = super().tick(counts)
+        return dos + ["+visitor"] if dos is not None and self.beat == 6 else dos
+
+    def observe(self, counts):
+        return {"moist": int(self.moist), "dry": int(not self.moist)}
+
+
+def make_announced(case):
+    return Announced(case, True)
+
+
 class Sensing(Soil):
     def observe(self, counts):
         return {"moist": int(self.moist), "dry": int(not self.moist)}
@@ -82,3 +96,39 @@ def test_the_env_moving_on_a_quiet_beat_is_the_surprise(tmp_path, monkeypatch):
 def test_a_host_without_a_sensor_face_is_never_surprised(tmp_path, monkeypatch):
     _, sigs = _run(tmp_path, monkeypatch, "make_blind")
     assert not [s for s in sigs if s["signal"] == "surprise"]
+
+
+VISITOR_PACK = """catalog soil 1.
+layers (dyn).
+stages (main).
+namespace soil produce (dyn).
+pred moist : soil.
+pred dry : soil.
+pred sun : soil.
+pred visitor : soil.
+stage main {
+  %% The sun dries the soil out.
+  dry_out [dyn] : moist * sun -o dry.
+  %% A visitor waters the dry soil.
+  visitor_waters [dyn] : dry * visitor -o moist.
+}
+#init moist 1
+"""
+
+
+def test_input_is_answered_before_the_env_is_read(tmp_path, monkeypatch):
+    """opus's finding (the plant's visitor pack): the visit arrives as an
+    input atom at the tick the env is watered; the program answers it
+    (visitor_waters) before the reading — no surprise. A quiet tick with no
+    input is still read (the test above)."""
+    (tmp_path / "soil.llp").write_text(VISITOR_PACK)
+    (tmp_path / "soil_host.py").write_text(HOST)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("soil_host", None)
+    sh = Repl(str(tmp_path / "soil.llp"), seed=1, plugin="soil_host:make_announced", host=True, stdout=io.StringIO())
+    w = Watch(sh, beats=12)
+    sigs = []
+    while not w.done:
+        sigs += w.step()
+    assert not [s for s in sigs if s["signal"] == "surprise"]
+    assert "visitor_waters" in sh.fired
