@@ -82,9 +82,18 @@ def main() -> int:
         files = generate(Path(tmp))
     if not a.check:
         a.dir.mkdir(parents=True, exist_ok=True)
+        wrote = 0
         for name, text in files.items():
-            (a.dir / name).write_text(text)
-        print(f"wrote {len(files)} fixtures in {a.dir}")
+            path = a.dir / name
+            # a fixture whose body and generator are unchanged keeps the
+            # commit that generated it (no header churn)
+            if path.exists() and sans_commit(path.read_text()) == \
+                    sans_commit(text):
+                continue
+            path.write_text(text)
+            wrote += 1
+        print(f"wrote {wrote} of {len(files)} fixtures in {a.dir} "
+              "(the rest unchanged)")
         return 0
     drift = 0
     for name, text in files.items():
