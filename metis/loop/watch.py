@@ -133,7 +133,10 @@ class Watch:
             self.quiet = False
             out.append(self._row_signal())
         if not self.observe_only:
-            self._checkpoint()
+            # the env moved on its own: a quiet domain is read on every
+            # beat too (the plant's visitor waters it while nothing fires —
+            # e2e-workflow s-143c3088 A5); a consistent reading checkpoints
+            out += self._read()
         return out
 
     # -- the surprise test -------------------------------------------------
