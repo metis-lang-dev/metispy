@@ -192,3 +192,31 @@ def test_formalize_green_report_warns_on_unbound_ports(tmp_path):
     assert res["ok"], res
     assert any("unbound weight port(s) pgo" in w
                for w in res.get("warnings", [])), res
+
+
+def test_a_second_pack_gates_against_the_first(tmp_path):
+    """runtime-binding step 2's F1 (opus): each pack gates against the base
+    plus the packs accepted so far, so two packs accepted in a row are both
+    served — the artifact emitter's chain, the same catalog and key."""
+    import json as _json
+    from tests.test_artifact import FLICKER, LAMP, SURGE
+    from metis.kernel.artifact import build
+    (tmp_path / "packs").mkdir()
+    prog = tmp_path / "lamp.llp"
+    prog.write_text(LAMP)
+    packs = []
+    for name, src in (("a_flicker.llp", FLICKER), ("b_surge.llp", SURGE)):
+        (tmp_path / "packs" / name).write_text(src)
+        packs.append(tmp_path / "packs" / name)
+    r = Repl(str(prog), seed=1, stdout=io.StringIO())
+    for p in packs:
+        r.cmd_text("a pack")
+        r.cmd_llp(p.read_text())
+        assert r.cmd_gate("")["ok"]
+        assert r.cmd_accept("")["ok"]
+    rules = {ev.name.split("(")[0] for _, _, ev in
+             r.doc.catalog.ground(r._scene_init()).events()}
+    assert {"flicker", "surge"} <= rules
+    side = _json.loads(build(prog, packs)["sidecar.json"])
+    assert r.doc.catalog.name == side["catalog"] == "lamp+flicker+surge"
+    assert r.key == side["key"]

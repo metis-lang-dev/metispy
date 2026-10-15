@@ -58,6 +58,24 @@ class LoopVerbs:
         source if a revision was accepted, else the served file."""
         return self.loop.base_src or self.text
 
+    def _gate_base(self):
+        """The world the next pack gates against: the base source with
+        the packs accepted so far, each compiled against the world so far
+        and admitted over it, in order — the artifact emitter's chain
+        (metis.kernel.artifact.served_doc), so a second pack's merge
+        keeps the first."""
+        from dataclasses import replace
+        from metis.lang.compiler import merge_ports
+        doc = compile_catalog(resolve_includes(parse(self._base_src()),
+                                               self.path.parent))
+        for src in self.loop.accepted:
+            pack = compile_catalog(resolve_includes(parse(src),
+                                                    self.path.parent),
+                                   base=doc)
+            doc = replace(doc, catalog=doc.catalog.admit(pack.catalog),
+                          ports=merge_ports(doc.ports, pack.ports))
+        return doc
+
     # -- the candidate -------------------------------------------------
 
     def cmd_text(self, arg):
@@ -220,13 +238,12 @@ class LoopVerbs:
         return adopted
 
     def cmd_gate(self, arg):
-        """Gate the candidate as a PACK against the served world."""
+        """Gate the candidate as a PACK against the served world (the
+        base plus the packs accepted so far)."""
         if not self.loop.cand.strip():
             return {"ok": False,
                     "error": "no candidate — llp/load/formalize first"}
-        base = compile_catalog(
-            resolve_includes(parse(self._base_src()),
-                             self.path.parent))
+        base = self._gate_base()
         init = self._scene_init()
         rep = admit_text_pack(self.loop.text, self.loop.cand,
                               base=base,
