@@ -55,6 +55,9 @@ jobs:
           make -C metis-lang metisc
       - name: Install
         run: pip install -e './metispy[test]'
+      - name: Install metis-catalog (the catalog tests import it; it brings pyyaml)
+        if: env.HAVE_READ_TOKEN == 'true'
+        run: pip install -e ./metis-catalog
       - name: The review recipe (fast suite)
         # verbatim from the review cycle; kitchen/overcooked and sumo are
         # excluded exactly as locally
