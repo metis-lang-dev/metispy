@@ -3186,11 +3186,19 @@ def main(argv=None):
                          "the served world runs against, driven by the "
                          "wire's `watch` op (runtime-wire). Named on the "
                          "command line only; the wire never names one")
+    ap.add_argument("--tools-json", action="store_true",
+                    help="print the REPL API's tool declarations as data "
+                         "(metis.lang.repl_api: the verbs an orchestrator "
+                         "calls on a domain agent) and exit")
     ap.add_argument("--json", action="store_true",
                     help="the JSON-lines wrapper wire: one {op, arg} "
                          "per stdin line, one JSON result per line "
                          "(the web console's channel)")
     args = ap.parse_args(argv)
+    if args.tools_json:
+        from metis.lang.repl_api import tools_json
+        sys.stdout.write(tools_json())
+        return 0
     if args.version:
         print("\n".join(version_lines()))
         return 0
