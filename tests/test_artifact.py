@@ -148,13 +148,72 @@ def test_program_ir_on_request(lamp):
     assert _side(files)["ir"] == "program.ir"
 
 
-def test_write_replaces_the_directory_whole(tmp_path):
+def test_write_swaps_a_link_to_a_versioned_directory(tmp_path):
     out = tmp_path / "x.metis"
-    write(out, {"a.txt": "1\n", "b.txt": "2\n"})
-    write(out, {"a.txt": "3\n"})
+    v1 = write(out, {"a.txt": "1\n", "b.txt": "2\n"})
+    v2 = write(out, {"a.txt": "3\n"})
+    assert out.is_symlink() and out.resolve() == v2.resolve()
     assert sorted(p.name for p in out.iterdir()) == ["a.txt"]
     assert (out / "a.txt").read_text() == "3\n"
-    assert [p.name for p in tmp_path.iterdir()] == ["x.metis"]
+    # the replaced version stays one swap longer, then goes
+    assert v1.is_dir()
+    write(out, {"a.txt": "4\n"})
+    assert not v1.exists() and v2.is_dir()
+    assert sorted(p.name for p in tmp_path.iterdir()
+                  if not p.name.startswith("x.metis.v-")) == ["x.metis"]
+    # the same content is the same version (no rewrite)
+    assert write(out, {"a.txt": "4\n"}) == out.resolve()
+    # R2: the directory's mode is the umask's, not mkdtemp's 0700
+    m = os.umask(0o022)
+    os.umask(m)
+    assert out.resolve().stat().st_mode & 0o777 == 0o777 & ~m
+
+
+def test_write_replaces_an_older_real_directory(tmp_path):
+    out = tmp_path / "x.metis"
+    out.mkdir()
+    (out / "old.txt").write_text("old\n")
+    write(out, {"a.txt": "1\n"})
+    assert out.is_symlink() and sorted(p.name for p in out.iterdir()) == \
+        ["a.txt"]
+
+
+def test_a_reader_never_finds_no_artifact(tmp_path):
+    """R1 (nina's probe): while the artifact is rewritten, `out` always
+    resolves to a whole version, and both files come from it. A version
+    is pruned two swaps after it was replaced, so a reader that resolved
+    one and lost it to two swaps in between resolves again (counted, not
+    a miss; 400 rewrites back to back are far denser than a reload)."""
+    import threading
+    out = tmp_path / "x.metis"
+    write(out, {"ground.wire": "k 0\n", "sidecar.json": "k 0\n"})
+    misses, mixed, again, stop = [0], [0], [0], threading.Event()
+
+    def reader():
+        while not stop.is_set():
+            if not os.path.lexists(out):
+                misses[0] += 1          # no artifact at all: R1's window
+                continue
+            try:
+                d = out.resolve(strict=True)
+            except OSError:
+                again[0] += 1           # its target pruned: resolve again
+                continue
+            try:
+                a = (d / "ground.wire").read_text()
+                b = (d / "sidecar.json").read_text()
+            except OSError:
+                again[0] += 1           # pruned under the reader: resolve again
+                continue
+            if a != b:
+                mixed[0] += 1
+    t = threading.Thread(target=reader)
+    t.start()
+    for i in range(1, 400):
+        write(out, {"ground.wire": f"k {i}\n", "sidecar.json": f"k {i}\n"})
+    stop.set()
+    t.join()
+    assert misses[0] == 0 and mixed[0] == 0, (misses, mixed, again)
 
 
 def test_the_cli_writes_the_artifact(lamp, capsys):
@@ -170,8 +229,12 @@ def test_the_cli_writes_the_artifact(lamp, capsys):
 
 def check_golden(name, files):
     d = GOLDENS / f"{name}.metis"
-    if os.environ.get("METIS_BLESS"):
-        write(d, files)
+    if os.environ.get("METIS_BLESS"):           # plain files, committed
+        d.mkdir(parents=True, exist_ok=True)
+        for f in d.iterdir():
+            f.unlink()
+        for f, text in files.items():
+            (d / f).write_text(text)
     have = sorted(p.name for p in d.iterdir())
     assert have == sorted(files), f"{name}: files {have}"
     for f, text in files.items():

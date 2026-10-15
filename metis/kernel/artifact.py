@@ -38,8 +38,14 @@ A domain name is resolved through metis_catalog (installed, or the
 checkout at $METIS_CATALOG, else the sibling ../metis-catalog): its
 manifest's served program, Domain.serves() — `serves: [files]`, else
 the program and every packs/*.llp. A .llp path serves that file with
-the --pack files given. The directory is replaced whole (written
-beside it, then swapped), so a reader never sees half an artifact."""
+the --pack files given.
+
+The swap is atomic: `<dir>` is a symlink to a versioned directory
+`<dir>.v-<hash12>` (the files' content hash). A new version is written
+whole beside it, then the link is replaced (os.replace); the previous
+version stays one swap longer for a reader that resolved it. A reader
+resolves `<dir>` ONCE and reads every file under that path, so
+ground.wire and sidecar.json always come from the same version."""
 
 import argparse
 import json
@@ -161,21 +167,49 @@ def build(program: Path, packs: Sequence[Path] = (), with_ir=False) -> dict:
     return files
 
 
-def write(out: Path, files: dict) -> None:
-    """Replace `out` whole: the files go to a sibling directory first,
-    then the two are swapped (a watcher sees the old or the new)."""
+def _umask() -> int:
+    m = os.umask(0o022)
+    os.umask(m)
+    return m
+
+
+def write(out: Path, files: dict) -> Path:
+    """Publish `files` as the artifact `out`, atomically: the versioned
+    directory `<out>.v-<hash12>` (written in full under a temporary name,
+    then renamed into place, mode as the umask makes it — never mkdtemp's
+    0700), then the symlink `out` replaced to point at it. Versions other
+    than the new one and the one it replaced are removed. A real
+    directory at `out` (an older emitter's) is replaced once.
+    -> the versioned directory."""
+    import hashlib
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = Path(tempfile.mkdtemp(prefix=out.name + ".", dir=out.parent))
-    for name, text in files.items():
-        (tmp / name).write_text(text)
-    old = None
-    if out.exists():
-        old = out.with_name(f"{out.name}.old.{os.getpid()}")
-        out.rename(old)
-    tmp.rename(out)
-    if old is not None:
-        shutil.rmtree(old)
+    h = hashlib.sha256()
+    for name in sorted(files):
+        h.update(name.encode() + b"\0" + files[name].encode() + b"\0")
+    ver = out.with_name(f"{out.name}.v-{h.hexdigest()[:12]}")
+    if not ver.is_dir():
+        tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=out.parent))
+        os.chmod(tmp, 0o777 & ~_umask())
+        for name, text in files.items():
+            (tmp / name).write_text(text)
+        try:
+            tmp.rename(ver)
+        except OSError:                  # a concurrent writer made it
+            shutil.rmtree(tmp)
+    prev = os.readlink(out) if out.is_symlink() else None
+    if out.exists() and not out.is_symlink():
+        shutil.rmtree(out)               # an older emitter's real directory
+    link = out.with_name(f".{out.name}.link.{os.getpid()}")
+    if link.is_symlink():
+        link.unlink()
+    os.symlink(ver.name, link)           # relative: the build dir can move
+    os.replace(link, out)
+    keep = {ver.name, prev}
+    for old in out.parent.glob(f"{out.name}.v-*"):
+        if old.name not in keep:
+            shutil.rmtree(old, ignore_errors=True)
+    return ver
 
 
 def _catalog():
