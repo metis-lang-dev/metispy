@@ -24,7 +24,7 @@ jobs:
       CATALOG_TESTS: >-
         tests/lang/test_causality.py tests/lang/test_ctx.py
         tests/lang/test_diagnostics_runtime.py tests/test_horn_tabling.py
-        tests/test_artifact_catalog.py
+        tests/test_artifact_catalog.py tests/test_live_goldens.py
     steps:
       # the suite expects its siblings beside it (tests/langpath.py)
       - uses: actions/checkout@v4

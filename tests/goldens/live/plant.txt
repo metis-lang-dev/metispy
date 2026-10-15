@@ -1,0 +1,46 @@
+# metis live golden — tools/gen_live_goldens.py; METIS_BLESS=1 regenerates
+L plant 7 40
+G main
+O 4 2 1 0 3
+T +sun
+T +cmd_check
+T -
+T +cmd_water
+T +sun ; +cmd_check
+T +visitor
+T +sun 2 ; +cmd_check 2
+T -checked(dry) 5 ; -checked(moist) 5
+T +cmd_water ; +visitor
+T do +sun
+T +moist 0
+T +sun ; +cmd_water ; +visitor ; +cmd_check
+R exo -1 main | do +sun | moist:1 sun:1
+R clause 4 main | dry_out | dry:1
+R exo -1 main | do +cmd_check | cmd_check:1 dry:1
+R clause 0 main | check_dry | checked(dry):1 dry:1
+R exo -1 main | tick | checked(dry):1 dry:1
+R exo -1 main | do +cmd_water | checked(dry):1 cmd_water:1 dry:1
+R clause 2 main | water | checked(dry):1 done(water):1 moist:1
+R exo -1 main | do +sun +cmd_check | checked(dry):1 cmd_check:1 done(water):1 moist:1 sun:1
+R clause 4 main | dry_out | checked(dry):1 cmd_check:1 done(water):1 dry:1
+R clause 0 main | check_dry | checked(dry):2 done(water):1 dry:1
+R exo -1 main | do +visitor | checked(dry):2 done(water):1 dry:1 visitor:1
+R clause 3 main | visitor_waters | checked(dry):2 done(water):1 moist:1
+R exo -1 main | do +sun 2 +cmd_check 2 | checked(dry):2 cmd_check:2 done(water):1 moist:1 sun:2
+R clause 1 main | check_moist | checked(dry):2 checked(moist):1 cmd_check:1 done(water):1 moist:1 sun:2
+R clause 1 main | check_moist | checked(dry):2 checked(moist):2 done(water):1 moist:1 sun:2
+R clause 4 main | dry_out | checked(dry):2 checked(moist):2 done(water):1 dry:1 sun:1
+R exo -1 main | do -checked(dry) 5 -checked(moist) 5 | done(water):1 dry:1 sun:1
+R exo -1 main | do +cmd_water +visitor | cmd_water:1 done(water):1 dry:1 sun:1 visitor:1
+R clause 2 main | water | done(water):2 moist:1 sun:1 visitor:1
+R clause 4 main | dry_out | done(water):2 dry:1 visitor:1
+R clause 3 main | visitor_waters | done(water):2 moist:1
+R exo -1 main | do +sun | done(water):2 moist:1 sun:1
+R clause 4 main | dry_out | done(water):2 dry:1
+R exo -1 main | do +moist 0 | done(water):2 dry:1
+R exo -1 main | do +sun +cmd_water +visitor +cmd_check | cmd_check:1 cmd_water:1 done(water):2 dry:1 sun:1 visitor:1
+R clause 3 main | visitor_waters | cmd_check:1 cmd_water:1 done(water):2 moist:1 sun:1
+R clause 4 main | dry_out | cmd_check:1 cmd_water:1 done(water):2 dry:1
+R clause 2 main | water | cmd_check:1 done(water):3 moist:1
+R clause 1 main | check_moist | checked(moist):1 done(water):3 moist:1
+E (done)

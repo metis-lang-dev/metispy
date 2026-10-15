@@ -1,0 +1,176 @@
+# metis live golden — tools/gen_live_goldens.py; METIS_BLESS=1 regenerates
+L kitchen 13 150
+G task
+O 2 3 5 1 0 4
+B w_cook const 1.0
+B w_fetch_dish if cooking 1.0 0.0
+B w_fetch_onion if cooking 0.05 1.0
+B w_load const 1.0
+B w_plate const 1.0
+B w_serve const 1.0
+B w_partner const 0.1
+T +pot_space 9
+T -
+T +hand_free
+T +pot_space 3 ; +held_onion
+T +cooking
+T -
+T +hand_free 2
+T +pot_space 6
+T -
+T -pot_space 4 ; +held_dish
+T +hand_free
+T -
+A 0 +pot_space 9
+A 20 +pot_space 3 ; +held_dish
+A 45 +hand_free
+A 70 +pot_space 6
+A 100 -cooking ; +hand_free
+R exo -1 task | do +pot_space 9 | hand_free:1 pot_space:9
+R clause 2 task | fetch_onion | held_onion:1 pot_space:9
+R clause 3 task | load | hand_free:1 pot_onion:1 pot_space:8
+R clause 2 task | fetch_onion | held_onion:1 pot_onion:1 pot_space:8
+R clause 3 task | load | hand_free:1 pot_onion:2 pot_space:7
+R clause 2 task | fetch_onion | held_onion:1 pot_onion:2 pot_space:7
+R clause 3 task | load | hand_free:1 pot_onion:3 pot_space:6
+R clause 5 task | cook | cooking:1 hand_free:1 pot_space:6
+R clause 1 task | fetch_dish | cooking:1 held_dish:1 pot_space:6
+R clause 0 task | plate | held_soup:1 pot_space:6
+R clause 4 task | serve | hand_free:1 pot_space:6 served:1
+R clause 2 task | fetch_onion | held_onion:1 pot_space:6 served:1
+R clause 3 task | load | hand_free:1 pot_onion:1 pot_space:5 served:1
+R clause 2 task | fetch_onion | held_onion:1 pot_onion:1 pot_space:5 served:1
+R clause 3 task | load | hand_free:1 pot_onion:2 pot_space:4 served:1
+R clause 2 task | fetch_onion | held_onion:1 pot_onion:2 pot_space:4 served:1
+R clause 3 task | load | hand_free:1 pot_onion:3 pot_space:3 served:1
+R clause 5 task | cook | cooking:1 hand_free:1 pot_space:3 served:1
+R clause 1 task | fetch_dish | cooking:1 held_dish:1 pot_space:3 served:1
+R clause 0 task | plate | held_soup:1 pot_space:3 served:1
+R clause 4 task | serve | hand_free:1 pot_space:3 served:2
+R exo -1 task | do +pot_space 3 +held_dish | hand_free:1 held_dish:1 pot_space:6 served:2
+R clause 2 task | fetch_onion | held_dish:1 held_onion:1 pot_space:6 served:2
+R clause 3 task | load | hand_free:1 held_dish:1 pot_onion:1 pot_space:5 served:2
+R clause 2 task | fetch_onion | held_dish:1 held_onion:1 pot_onion:1 pot_space:5 served:2
+R clause 3 task | load | hand_free:1 held_dish:1 pot_onion:2 pot_space:4 served:2
+R clause 2 task | fetch_onion | held_dish:1 held_onion:1 pot_onion:2 pot_space:4 served:2
+R clause 3 task | load | hand_free:1 held_dish:1 pot_onion:3 pot_space:3 served:2
+R clause 5 task | cook | cooking:1 hand_free:1 held_dish:1 pot_space:3 served:2
+R clause 0 task | plate | hand_free:1 held_soup:1 pot_space:3 served:2
+R clause 2 task | fetch_onion | held_onion:1 held_soup:1 pot_space:3 served:2
+R clause 4 task | serve | hand_free:1 held_onion:1 pot_space:3 served:3
+R clause 3 task | load | hand_free:2 pot_onion:1 pot_space:2 served:3
+R clause 2 task | fetch_onion | hand_free:1 held_onion:1 pot_onion:1 pot_space:2 served:3
+R clause 2 task | fetch_onion | held_onion:2 pot_onion:1 pot_space:2 served:3
+R clause 3 task | load | hand_free:1 held_onion:1 pot_onion:2 pot_space:1 served:3
+R clause 3 task | load | hand_free:2 pot_onion:3 served:3
+R clause 2 task | fetch_onion | hand_free:1 held_onion:1 pot_onion:3 served:3
+R clause 5 task | cook | cooking:1 hand_free:1 held_onion:1 served:3
+R clause 1 task | fetch_dish | cooking:1 held_dish:1 held_onion:1 served:3
+R clause 0 task | plate | held_onion:1 held_soup:1 served:3
+R clause 4 task | serve | hand_free:1 held_onion:1 served:4
+R clause 2 task | fetch_onion | held_onion:2 served:4
+R exo -1 task | do +pot_space 9 | held_onion:2 pot_space:9 served:4
+R clause 3 task | load | hand_free:1 held_onion:1 pot_onion:1 pot_space:8 served:4
+R clause 3 task | load | hand_free:2 pot_onion:2 pot_space:7 served:4
+R clause 2 task | fetch_onion | hand_free:1 held_onion:1 pot_onion:2 pot_space:7 served:4
+R exo -1 task | do +hand_free | hand_free:2 held_onion:1 pot_onion:2 pot_space:7 served:4
+R clause 3 task | load | hand_free:3 pot_onion:3 pot_space:6 served:4
+R clause 5 task | cook | cooking:1 hand_free:3 pot_space:6 served:4
+R clause 1 task | fetch_dish | cooking:1 hand_free:2 held_dish:1 pot_space:6 served:4
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:2 pot_space:6 served:4
+R clause 0 task | plate | hand_free:1 held_dish:1 held_soup:1 pot_space:6 served:4
+R clause 4 task | serve | hand_free:2 held_dish:1 pot_space:6 served:5
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:1 pot_space:6 served:5
+R clause 3 task | load | hand_free:2 held_dish:1 pot_onion:1 pot_space:5 served:5
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:1 pot_onion:1 pot_space:5 served:5
+R clause 2 task | fetch_onion | held_dish:1 held_onion:2 pot_onion:1 pot_space:5 served:5
+R clause 3 task | load | hand_free:1 held_dish:1 held_onion:1 pot_onion:2 pot_space:4 served:5
+R clause 3 task | load | hand_free:2 held_dish:1 pot_onion:3 pot_space:3 served:5
+R clause 5 task | cook | cooking:1 hand_free:2 held_dish:1 pot_space:3 served:5
+R clause 0 task | plate | hand_free:2 held_soup:1 pot_space:3 served:5
+R clause 2 task | fetch_onion | hand_free:1 held_onion:1 held_soup:1 pot_space:3 served:5
+R clause 3 task | load | hand_free:2 held_soup:1 pot_onion:1 pot_space:2 served:5
+R clause 4 task | serve | hand_free:3 pot_onion:1 pot_space:2 served:6
+R clause 2 task | fetch_onion | hand_free:2 held_onion:1 pot_onion:1 pot_space:2 served:6
+R clause 3 task | load | hand_free:3 pot_onion:2 pot_space:1 served:6
+R clause 2 task | fetch_onion | hand_free:2 held_onion:1 pot_onion:2 pot_space:1 served:6
+R clause 2 task | fetch_onion | hand_free:1 held_onion:2 pot_onion:2 pot_space:1 served:6
+R clause 3 task | load | hand_free:2 held_onion:1 pot_onion:3 served:6
+R clause 5 task | cook | cooking:1 hand_free:2 held_onion:1 served:6
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:1 held_onion:1 served:6
+R clause 0 task | plate | hand_free:1 held_onion:1 held_soup:1 served:6
+R exo -1 task | do +pot_space 6 | hand_free:1 held_onion:1 held_soup:1 pot_space:6 served:6
+R clause 4 task | serve | hand_free:2 held_onion:1 pot_space:6 served:7
+R clause 3 task | load | hand_free:3 pot_onion:1 pot_space:5 served:7
+R clause 2 task | fetch_onion | hand_free:2 held_onion:1 pot_onion:1 pot_space:5 served:7
+R clause 3 task | load | hand_free:3 pot_onion:2 pot_space:4 served:7
+R clause 2 task | fetch_onion | hand_free:2 held_onion:1 pot_onion:2 pot_space:4 served:7
+R clause 3 task | load | hand_free:3 pot_onion:3 pot_space:3 served:7
+R clause 5 task | cook | cooking:1 hand_free:3 pot_space:3 served:7
+R clause 1 task | fetch_dish | cooking:1 hand_free:2 held_dish:1 pot_space:3 served:7
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:2 pot_space:3 served:7
+R clause 0 task | plate | hand_free:1 held_dish:1 held_soup:1 pot_space:3 served:7
+R clause 4 task | serve | hand_free:2 held_dish:1 pot_space:3 served:8
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:1 pot_space:3 served:8
+R clause 3 task | load | hand_free:2 held_dish:1 pot_onion:1 pot_space:2 served:8
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:1 pot_onion:1 pot_space:2 served:8
+R clause 3 task | load | hand_free:2 held_dish:1 pot_onion:2 pot_space:1 served:8
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:1 pot_onion:2 pot_space:1 served:8
+R clause 3 task | load | hand_free:2 held_dish:1 pot_onion:3 served:8
+R clause 5 task | cook | cooking:1 hand_free:2 held_dish:1 served:8
+R clause 0 task | plate | hand_free:2 held_soup:1 served:8
+R clause 2 task | fetch_onion | hand_free:1 held_onion:1 held_soup:1 served:8
+R clause 4 task | serve | hand_free:2 held_onion:1 served:9
+R clause 2 task | fetch_onion | hand_free:1 held_onion:2 served:9
+R clause 2 task | fetch_onion | held_onion:3 served:9
+R exo -1 task | tick | held_onion:3 served:9
+R exo -1 task | do +hand_free | hand_free:1 held_onion:3 served:9
+R clause 2 task | fetch_onion | held_onion:4 served:9
+R exo -1 task | do +pot_space 3 +held_onion | held_onion:5 pot_space:3 served:9
+R clause 3 task | load | hand_free:1 held_onion:4 pot_onion:1 pot_space:2 served:9
+R clause 3 task | load | hand_free:2 held_onion:3 pot_onion:2 pot_space:1 served:9
+R clause 3 task | load | hand_free:3 held_onion:2 pot_onion:3 served:9
+R exo -1 task | do -cooking +hand_free | hand_free:4 held_onion:2 pot_onion:3 served:9
+R clause 5 task | cook | cooking:1 hand_free:4 held_onion:2 served:9
+R clause 2 task | fetch_onion | cooking:1 hand_free:3 held_onion:3 served:9
+R clause 1 task | fetch_dish | cooking:1 hand_free:2 held_dish:1 held_onion:3 served:9
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:2 held_onion:3 served:9
+R clause 0 task | plate | hand_free:1 held_dish:1 held_onion:3 held_soup:1 served:9
+R clause 2 task | fetch_onion | held_dish:1 held_onion:4 held_soup:1 served:9
+R clause 4 task | serve | hand_free:1 held_dish:1 held_onion:4 served:10
+R clause 2 task | fetch_onion | held_dish:1 held_onion:5 served:10
+R exo -1 task | do +cooking | cooking:1 held_dish:1 held_onion:5 served:10
+R clause 0 task | plate | held_onion:5 held_soup:1 served:10
+R clause 4 task | serve | hand_free:1 held_onion:5 served:11
+R clause 2 task | fetch_onion | held_onion:6 served:11
+R exo -1 task | tick | held_onion:6 served:11
+R exo -1 task | do +hand_free 2 | hand_free:2 held_onion:6 served:11
+R clause 2 task | fetch_onion | hand_free:1 held_onion:7 served:11
+R clause 2 task | fetch_onion | held_onion:8 served:11
+R exo -1 task | do +pot_space 6 | held_onion:8 pot_space:6 served:11
+R clause 3 task | load | hand_free:1 held_onion:7 pot_onion:1 pot_space:5 served:11
+R clause 3 task | load | hand_free:2 held_onion:6 pot_onion:2 pot_space:4 served:11
+R clause 3 task | load | hand_free:3 held_onion:5 pot_onion:3 pot_space:3 served:11
+R clause 5 task | cook | cooking:1 hand_free:3 held_onion:5 pot_space:3 served:11
+R clause 1 task | fetch_dish | cooking:1 hand_free:2 held_dish:1 held_onion:5 pot_space:3 served:11
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:2 held_onion:5 pot_space:3 served:11
+R clause 3 task | load | cooking:1 hand_free:2 held_dish:2 held_onion:4 pot_onion:1 pot_space:2 served:11
+R clause 1 task | fetch_dish | cooking:1 hand_free:1 held_dish:3 held_onion:4 pot_onion:1 pot_space:2 served:11
+R clause 0 task | plate | hand_free:1 held_dish:2 held_onion:4 held_soup:1 pot_onion:1 pot_space:2 served:11
+R clause 3 task | load | hand_free:2 held_dish:2 held_onion:3 held_soup:1 pot_onion:2 pot_space:1 served:11
+R clause 3 task | load | hand_free:3 held_dish:2 held_onion:2 held_soup:1 pot_onion:3 served:11
+R clause 2 task | fetch_onion | hand_free:2 held_dish:2 held_onion:3 held_soup:1 pot_onion:3 served:11
+R clause 2 task | fetch_onion | hand_free:1 held_dish:2 held_onion:4 held_soup:1 pot_onion:3 served:11
+R clause 5 task | cook | cooking:1 hand_free:1 held_dish:2 held_onion:4 held_soup:1 served:11
+R clause 0 task | plate | hand_free:1 held_dish:1 held_onion:4 held_soup:2 served:11
+R clause 4 task | serve | hand_free:2 held_dish:1 held_onion:4 held_soup:1 served:12
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:5 held_soup:1 served:12
+R clause 4 task | serve | hand_free:2 held_dish:1 held_onion:5 served:13
+R clause 2 task | fetch_onion | hand_free:1 held_dish:1 held_onion:6 served:13
+R clause 2 task | fetch_onion | held_dish:1 held_onion:7 served:13
+R exo -1 task | tick | held_dish:1 held_onion:7 served:13
+R exo -1 task | do -pot_space 4 +held_dish | held_dish:2 held_onion:7 served:13
+R exo -1 task | do +hand_free | hand_free:1 held_dish:2 held_onion:7 served:13
+R clause 2 task | fetch_onion | held_dish:2 held_onion:8 served:13
+R exo -1 task | tick | held_dish:2 held_onion:8 served:13
+E (done)
