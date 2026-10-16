@@ -48,6 +48,16 @@ jobs:
           git -C metis-lang diff --exit-code -- src/diag.ml
       - name: Smoke fixtures drift (gen_smoke_fixtures regenerates metis-lang runtime/fixtures; diff must be clean)
         run: python metispy/tools/gen_smoke_fixtures.py --check metis-lang/runtime/fixtures
+      - name: Checkout metis-catalog@master (public sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          ref: master
+          path: metis-catalog
+      - name: Catalog wires drift (gen_catalog_wires regenerates metis-lang corpus/catalog + goldens/catalog_wires; bundle-compiler step 1)
+        run: |
+          pip install -e ./metis-catalog
+          METIS_CATALOG=$PWD/metis-catalog python metispy/tools/gen_catalog_wires.py --check metis-lang
 
   # the slow parity gates (-m slow), nightly and on demand: the fast job
   # deselects them and the job above runs only the metisc four. RDDL's
