@@ -604,3 +604,53 @@ def test_mirror_carries_progress_and_the_last_event():
     assert row["last"] == "fetch_onion"          # not the env's tick
     line = mirror_line(row)
     assert line.endswith("now served=2 cooking=0 held_soup=0  last fetch_onion")
+
+
+# -- repl-tools step 4: the orchestrator's verbs come from the REPL API
+
+def test_the_wire_dispatches_every_declared_verb():
+    """INTENT_VERBS = the loop's design verbs ∪ the REPL API's reads
+    (served_by repl) and surprise verbs (served_by watch), derived; a
+    declared verb the wire cannot dispatch fails here; help carries each
+    declared verb's description, the line the model reads."""
+    from metis.lang.repl_api import REPL_API
+    from metis.loop.wire import _WIRE_OPS, LOOP_VERBS
+    declared = {t["name"]: t["description"] for t in REPL_API
+                if t["served_by"] in ("repl", "watch")}
+    assert INTENT_VERBS == LOOP_VERBS | set(declared)
+    sh = _shell()
+    for name in declared:
+        assert name in _WIRE_OPS or callable(getattr(sh, "cmd_" + name, None)), \
+            f"the REPL API declares '{name}' and the wire has no op for it"
+    h = dispatch(sh, "help", "")
+    assert h["ops"] == sorted(INTENT_VERBS)
+    assert h["descriptions"] == dict(sorted(declared.items()))
+
+
+def test_the_surprise_verbs_are_page_intents_on_the_watch():
+    from metis.loop.wire import run_intent
+    sh = _shell("make_transient")
+    w = Watch(sh, beats=30)
+    sh.__dict__["_watch"] = w
+    sigs = []
+    while not w.done:
+        for s in w.step():
+            sigs.append(s)
+            if s["signal"] == "surprise":
+                ack = run_intent(sh, f":reset {s['record']}")
+                assert ack == {"ok": True, "intent": 1}
+                sigs += w.outbox
+                w.outbox.clear()
+    res, = _results(sigs)
+    assert res["verb"] == "reset" and res["status"] == "admitted"
+    assert sh.loop.records[0]["resolution"]["by"] == "reset"
+    # explain/escalate go down as the watch's intents
+    assert run_intent(sh, ":escalate 0 a one-off")["intent"] == 2
+    late, = w.outbox[-1:]
+    assert late["verb"] == "escalate" and late["status"] == "refused"
+    # the bare reset stays the loop's own: the session back to #init
+    r = run_intent(sh, ":reset")
+    assert r["ok"] and "intent" not in r and r["counts"] == dict(sorted(sh.counts.items()))
+    assert sh.stage == sh.prog.init_stage and sh.counts == dict(sh.case["init"])
+    # with no watch, a surprise verb says why
+    assert "no watch" in dispatch(_shell(), "explain", "0 kitchen_shared partner_load")["error"]

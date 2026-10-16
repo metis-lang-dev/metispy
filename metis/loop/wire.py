@@ -18,15 +18,26 @@ import sys
 from dataclasses import replace
 from typing import Dict
 
-INTENT_VERBS = frozenset(
+from ..lang.repl_api import REPL_API
+
+# The orchestrator's verbs, read from the REPL API (repl-tools step 4: one
+# source, declared there and never typed here): its reads (served_by repl)
+# and its surprise verbs (served_by watch). Each is a wire op below; a
+# declared verb the wire cannot dispatch is a test failure.
+DECLARED = {t["name"]: t for t in REPL_API
+            if t["served_by"] in ("repl", "watch")}
+
+# The loop's own design verbs (the orchestrator does not call them).
+LOOP_VERBS = frozenset(
     ["records", "record", "replay", "mine", "text", "init", "steps",
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
-     "formalize", "llm", "narrate", "graph", "why", "causes",
-     "ctx", "findings", "run", "step", "events", "reset", "undo",
-     "state", "log", "list", "help",
+     "formalize", "llm", "narrate", "graph", "causes",
+     "run", "step", "reset", "undo", "log", "list", "help",
      # spec 10 P5: interventions — session-local, no paths, no
      # approval; masks/the shelf are session state
      "do", "fork", "back", "whatif", "necessity", "sufficiency"])
+
+INTENT_VERBS = LOOP_VERBS | frozenset(DECLARED)
 
 
 def parse_intent(line: str):
@@ -451,7 +462,11 @@ def _op_ledger(shell, arg):
 
 
 def _op_help(shell, arg):
-    return {"ok": True, "ops": sorted(INTENT_VERBS)}
+    """The page/chat verbs, and for the declared ones the line the
+    orchestrator's model reads (a human sees the same words)."""
+    return {"ok": True, "ops": sorted(INTENT_VERBS),
+            "descriptions": {n: DECLARED[n]["description"]
+                             for n in sorted(DECLARED)}}
 
 
 _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
@@ -567,8 +582,31 @@ def _op_read(cmd):
     return op
 
 
+def _op_surprise(verb):
+    """A declared surprise verb as a wire op: `explain RECORD CARD MOVE`
+    is `intent explain RECORD CARD MOVE`, down to the running watch."""
+    def op(shell, arg):
+        return _op_intent(shell, f"{verb} {arg}".strip())
+    op.__doc__ = f"the surprise verb `{verb}`, on the running watch."
+    return op
+
+
+_reset_session = _exec("reset")
+
+
+def _op_reset(shell, arg):
+    """`reset RECORD` while a watch runs: the declared surprise verb (the
+    reading was noise). Bare: the loop's own reset, the session back to
+    the file's #init (the console's chip)."""
+    if str(arg).strip() and shell.__dict__.get("_watch") is not None:
+        return _op_intent(shell, "reset " + str(arg).strip())
+    return _reset_session(shell, arg)
+
+
 _WIRE_OPS.update({"run": _exec("run"), "step": _exec("step"),
-                  "reset": _exec("reset"), "undo": _exec("undo"),
+                  "reset": _op_reset, "undo": _exec("undo"),
+                  "explain": _op_surprise("explain"),
+                  "escalate": _op_surprise("escalate"),
                   "events": _op_events, "state": _op_read("state"),
                   "log": _op_read("log"), "list": _op_read("list"),
                   # spec 10: state/choice surgery reports what fired
