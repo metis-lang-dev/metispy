@@ -147,6 +147,56 @@ def state_table(kappa) -> List[str]:
     return out
 
 
+def atom_rows(kappa) -> List[str]:
+    """`state`'s rendering (specialist S1b, SPECIALIST §5b): every atom in
+    the form the instruments take it, pred(args) (`:n` when n > 1), one
+    row per predicate, wrapped at 78. state_table's grouped rows
+    (`on  (b,c) (c,a)`) print a form no instrument accepts."""
+    by_pred: Dict[str, List[str]] = {}
+    for atom, n in sorted(kappa):
+        if n <= 0:
+            continue
+        by_pred.setdefault(atom.partition("(")[0], []).append(
+            atom + (f":{n}" if n > 1 else ""))
+    out: List[str] = []
+    for items in by_pred.values():
+        line = " "
+        for it in items:
+            if len(line) + len(it) + 1 > 78 and line.strip():
+                out.append(line.rstrip())
+                line = " "
+            line += " " + it
+        out.append(line.rstrip())
+    return out
+
+
+def nearest_held(atom: str, kappa) -> str:
+    """The held atom nearest to ATOM, for a refusal (S1b): the same
+    predicate, the fewest differing arguments, then sort order; spaces in
+    ATOM ignored (`on (b,c)` is on(b,c)). "" when no held atom has its
+    predicate."""
+    q = "".join(atom.split())
+    pred, _, rest = q.partition("(")
+    args = rest.rstrip(")").split(",") if rest else []
+    best = None
+    for a, n in sorted(kappa):
+        p, _, r = a.partition("(")
+        if n <= 0 or p != pred:
+            continue
+        aa = r.rstrip(")").split(",") if r else []
+        d = sum(x != y for x, y in zip(args, aa)) + abs(len(args) - len(aa))
+        if best is None or d < best[0]:
+            best = (d, a)
+    return best[1] if best else ""
+
+
+def nearest_text(atom: str, kappa) -> str:
+    near = nearest_held(atom, kappa)
+    pred = "".join(atom.split()).partition("(")[0]
+    return (f"the nearest held atom: {near}" if near
+            else f"no held atom has the predicate {pred}")
+
+
 def _pretty_state(seed: int, stage: str, kappa) -> List[str]:
     return [f"F {seed} {stage}"] + state_table(kappa)
 

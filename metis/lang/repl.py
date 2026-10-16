@@ -35,7 +35,8 @@ from metis.lang.measure import (Arm, cone_names, footer, measure,
 from metis.loop.verbs import LoopState, LoopVerbs, fmt as _loop_fmt
 from metis.loop.wire import _note
 from metis.lang.directives import (DirectiveError, embedded_case,
-                                   render_run, state_table)
+                                   render_run, state_table, atom_rows,
+                                   nearest_text)
 
 _HELP = """\
 events              enabled transitions of the firing tier, numbered
@@ -845,8 +846,9 @@ class Repl(LoopVerbs, Cmd):
                   + (f"\n({self._pricing()})" if self.pricer else ""))
 
     def do_state(self, arg):
-        """current stage + multiset, tabulated by predicate"""
-        rows = state_table(self.counts.items())
+        """current stage + multiset: each atom as pred(args), the form
+        why / necessity / sufficiency take, one row per predicate"""
+        rows = atom_rows(self.counts.items())
         self._say("\n".join([f"stage {self.stage}"]
                             + (rows or ["  (empty)"])))
 
@@ -1369,10 +1371,17 @@ class Repl(LoopVerbs, Cmd):
         if rest and not (rest[0].startswith("@") or rest[0].isdigit()
                          or rest[0] in ("exact", "sampled", "full")):
             atom, rest = rest[0], rest[1:]
+        if atom is not None and rest and rest[0].startswith("("):
+            atom, rest = atom + " " + rest[0], rest[1:]    # `on (b,c)`
         try:
             ro, tier = parse_tail(rest)
         except ValueError:
             return usage
+        if atom is not None and atom.lstrip("!") not in self.atoms \
+                and self.counts.get(atom.lstrip("!"), 0) == 0:     # !a: a's absence
+            return (f"refused: {atom} is no atom of this catalog — "
+                    f"{nearest_text(atom, self.counts.items())} "
+                    "(an atom as `state` prints it)")
         if atom is None and need_atom:
             return usage
         if atom is None:
@@ -2541,7 +2550,8 @@ class Repl(LoopVerbs, Cmd):
                 roots, what = [0], f"{a} (from the base state)"
             else:
                 return (f"{a} was never produced and is not in the base "
-                        "state — 'state' lists atoms, 'log' events")
+                        f"state — {nearest_text(a, self.counts.items())}; "
+                        "'state' lists atoms, 'log' events")
         if a and not a.isdigit() and self.counts.get(a, 0) == 0:
             what += " — not present now"
         members = cone(g, roots)
