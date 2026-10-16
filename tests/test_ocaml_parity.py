@@ -145,3 +145,65 @@ def test_ocaml_pretty_roundtrip():
     assert r.returncode == 0, r.stdout + r.stderr
     lines = [l for l in r.stdout.splitlines() if l.startswith("R ")]
     assert lines and all(l.endswith(" ok") for l in lines), r.stdout
+
+
+# -- gate 4 (bundle-compiler s-3985caf6 step 2): the bundle's ground.wire ----
+
+def _packages():
+    """(name, program, extensions) of every catalog package that serves a
+    program metispy can ground (metis_catalog: installed, $METIS_CATALOG,
+    else the sibling checkout)."""
+    from metis.kernel.artifact import _catalog
+    try:
+        cat = _catalog()
+    except ImportError:
+        return []
+    out = []
+    for d in cat.domains():
+        try:
+            files = d.serves()
+        except ValueError:
+            continue
+        if files:
+            out.append((d.name, files[0], files[1:]))
+    return out
+
+
+@pytest.mark.skipif(OCAML is None, reason="no OCaml compiler")
+def test_gate4_every_package_wire_is_metiscs(monkeypatch):
+    """Every catalog package's ground.wire: `metisc --wire` (what
+    metis.kernel.artifact serves when metisc is there) == metispy's
+    emit_artifact (the cover), byte for byte; the whole bundle is the same
+    either way, and the build says who compiled it."""
+    from metis.kernel import artifact
+    pkgs = _packages()
+    if not pkgs:
+        pytest.skip("metis-catalog not available")
+    subprocess.run(["make", "-s", "-C", str(LANG / "src")], check=True)
+    mc = str(LANG / "src/metisc")
+    for name, program, exts in pkgs:
+        monkeypatch.delenv("METISC", raising=False)
+        monkeypatch.setenv("PATH", "/nonexistent")          # no metisc: the cover
+        rep_py = {}
+        py = artifact.build(program, exts, report=rep_py)
+        monkeypatch.setenv("METISC", mc)
+        rep_ml = {}
+        ml = artifact.build(program, exts, report=rep_ml)
+        assert rep_py["wire_by"].startswith("metispy") and rep_ml["wire_by"].startswith("metisc"), name
+        assert ml["ground.wire"] == py["ground.wire"], f"{name}: metisc's wire differs from emit_artifact's"
+        assert ml == py, name
+    assert {"dog", "plant", "kitchen", "kitchen_shared"} <= {n for n, _, _ in pkgs}
+
+
+def test_a_failing_metisc_is_an_error_not_a_cover(tmp_path, monkeypatch):
+    from metis.kernel import artifact
+    pkgs = [p for p in _packages() if p[0] == "plant"]
+    if not pkgs:
+        pytest.skip("metis-catalog not available")
+    bad = tmp_path / "metisc"
+    bad.write_text("#!/bin/sh\necho 'metisc: bad directive' >&2\nexit 2\n")
+    bad.chmod(0o755)
+    monkeypatch.setenv("METISC", str(bad))
+    _, program, exts = pkgs[0]
+    with pytest.raises(RuntimeError, match="metisc --wire plant.llp: exit 2: metisc: bad directive"):
+        artifact.build(program, exts)

@@ -5,7 +5,12 @@ merged in order, so the key is the union's). The module keeps its name
 (metis.kernel.artifact); the word is bundle (catalog-entry step 2).
 
     <dir>/                     default: domains/<n>/build/<n>.metis
-      ground.wire              N/E/I/S/B (wire.emit_artifact) — the runtime's load
+      ground.wire              N/E/I/S/B — the runtime's load: compiled by
+                               metisc (`metisc --wire PROGRAM --extension E...`,
+                               $METISC or on PATH; bundle-compiler s-3985caf6),
+                               OCaml-authoritative; without metisc, metispy's
+                               wire.emit_artifact covers (byte-equal, gate 4),
+                               and the log says so
       sidecar.json             what the harness needs beyond the wire, keyed
                                to it by event index (below)
       tools.json               the REPL API's tool declarations (metis.lang.repl_api,
@@ -160,13 +165,54 @@ def ir_lines(doc, case, prog) -> List[str]:
                              ports=doc.ports)
 
 
-def build(program: Path, extensions: Sequence[Path] = (), with_ir=False) -> dict:
-    """{file name: text} of the bundle."""
+def metisc() -> Optional[str]:
+    """The OCaml compiler that makes the bundle's ground.wire: $METISC, else
+    `metisc` on PATH; None when neither is there (metispy then covers)."""
+    m = os.environ.get("METISC")
+    if m:
+        return m
+    return shutil.which("metisc")
+
+
+def wire(program: Path, extensions: Sequence[Path], doc, prog, steps):
+    """(ground.wire text, who made it): `metisc --wire` when metisc is
+    there — the compiler the bundle points at (bundle-compiler s-3985caf6);
+    a metisc that fails is an error, never covered — else metispy's
+    emit_artifact, the cover (byte-equal: tests/test_ocaml_parity gate 4)."""
+    import logging
+    import subprocess
     from metis.kernel.wire import emit_artifact
+    m = metisc()
+    if m:
+        cmd = [m, "--wire", str(program)]
+        for e in extensions:
+            cmd += ["--extension", str(e)]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"metisc --wire {Path(program).name}: exit "
+                               f"{r.returncode}: {(r.stderr or r.stdout).strip()[:400]}")
+        by = f"metisc ({m})"
+        text = r.stdout
+    else:
+        by = "metispy emit_artifact (cover: no $METISC, no metisc on PATH)"
+        text = emit_artifact(doc, prog, steps)
+    logging.getLogger("metis.bundle").info("ground.wire of %s: %s",
+                                           Path(program).name, by)
+    return text, by
+
+
+def build(program: Path, extensions: Sequence[Path] = (), with_ir=False,
+          report: Optional[dict] = None) -> dict:
+    """{file name: text} of the bundle; report, when given, gets
+    report["wire_by"] = who compiled ground.wire (not a bundle file: the
+    bundle is byte-equal either way)."""
     from metis.lang.repl_api import tools_json
     doc, case, _ = served_doc(program, extensions)
     prog = doc.catalog.ground(dict(case["init"]))
-    files = {"ground.wire": emit_artifact(doc, prog, case["steps"])}
+    text, by = wire(program, extensions, doc, prog, case["steps"])
+    if report is not None:
+        report["wire_by"] = by
+    files = {"ground.wire": text}
     if with_ir:
         files["program.ir"] = "\n".join(ir_lines(doc, case, prog)) + "\n"
     side = sidecar(program, extensions, doc, case, prog,
@@ -262,12 +308,13 @@ def main(argv=None) -> int:
                     help="also write program.ir (a port-free program)")
     a = ap.parse_args(argv)
     program, extensions, out = resolve(a.target, a.extension)
-    files = build(program, extensions, with_ir=a.ir)
+    rep = {}
+    files = build(program, extensions, with_ir=a.ir, report=rep)
     write(a.out or out, files)
     side = json.loads(files["sidecar.json"])
     print(f"{a.out or out}: {side['catalog']} key {side['key'][:12]}… "
           f"{len(side['events'])} events, extensions {side['extensions'] or '-'}, "
-          f"{', '.join(sorted(files))}")
+          f"{', '.join(sorted(files))}; ground.wire by {rep['wire_by']}")
     return 0
 
 
