@@ -52,7 +52,7 @@ def start_node(name, world, d):
 
 def wait_node(driver, name, tries=50):
     for _ in range(tries):
-        r = driver.op(name, "help")
+        r = driver.op(name, "help", "ops")     # a ping that fits the bus
         if r.get("ok"):
             return r
         time.sleep(0.1)
@@ -90,6 +90,27 @@ def test_two_worlds_cooperate_through_the_blackboard(bus):
         assert driver.bb_set("wagon.state", "arrived")["ok"]
         assert driver.bb_dump()["bb"] == {
             "pass.word": "clear", "wagon.state": "arrived"}
+    finally:
+        driver.close()
+
+
+def test_a_result_over_the_envelope_cap_is_an_error_and_the_node_lives(bus):
+    """agentic-loop s-3ddb3e87 step 2 (nina's review of 44fa6be): bare
+    help grew past the bus's PIPE_BUF envelope, node.serve's post-back
+    raised in its thread and the node died silently. The asker now gets
+    an error result naming the cap, and the node answers the next op;
+    `help ops` / `help VERB` are the forms that fit."""
+    d, _ = bus
+    start_node("scout", FIX / "scout.llp", d)
+    driver = BusClient("driver", d)
+    try:
+        assert wait_node(driver, "scout")["ops"]
+        big = driver.op("scout", "help")
+        assert big["ok"] is False and "PIPE_BUF" in big["error"], big
+        one = driver.op("scout", "help", "marginals")
+        assert one["ok"] and list(one["descriptions"]) == ["marginals"]
+        m = driver.op("scout", "marginals")
+        assert m["ok"] and m["marginals"]["clear"] == 0.75
     finally:
         driver.close()
 

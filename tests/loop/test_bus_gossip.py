@@ -40,7 +40,7 @@ def start_node(name, world, d):
 
 def wait_node(driver, name, tries=50):
     for _ in range(tries):
-        r = driver.op(name, "help")
+        r = driver.op(name, "help", "ops")     # a ping that fits the bus
         if r.get("ok"):
             return
         time.sleep(0.1)

@@ -644,6 +644,9 @@ def test_help_describes_every_verb_from_what_serves_it():
     assert d["run"] == sh.do_run.__doc__.strip()                            # metis.lang.repl
     assert d["trace"] == " ".join(_WIRE_OPS["trace"].__doc__.split("\n\n")[0].split())
     assert "CONSOLE §2a" not in " ".join(d.values())     # no placeholder words
+    assert dispatch(sh, "help", "ops") == {"ok": True, "ops": h["ops"]}
+    assert dispatch(sh, "help", "run gate")["descriptions"] == {"run": d["run"], "gate": d["gate"]}
+    assert not dispatch(sh, "help", "nosuch")["ok"]
 
 
 def test_the_surprise_verbs_are_page_intents_on_the_watch():

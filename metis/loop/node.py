@@ -35,8 +35,17 @@ def serve(name, world, metis="metis", dir=None, timeout=None):
             line = child.stdout.readline()
             result = (json.loads(line) if line else
                       {"ok": False, "error": "wire closed"})
-            client.send(env.get("src", "bus"), "result", result,
-                        re=env.get("seq"))
+            try:
+                client.send(env.get("src", "bus"), "result", result,
+                            re=env.get("seq"))
+            except ValueError as e:
+                # over the bus's envelope cap: the asker hears why, and
+                # the node keeps serving
+                client.send(env.get("src", "bus"), "result",
+                            {"ok": False, "op": op,
+                             "error": f"the result of '{op}' does not "
+                                      f"fit the bus: {e}"},
+                            re=env.get("seq"))
             if not line:
                 return 1
     except (KeyboardInterrupt, TimeoutError):

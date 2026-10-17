@@ -1100,8 +1100,8 @@ class Repl(LoopVerbs, Cmd):
             self.stdout = keep
 
     def do_whatif(self, arg):
-        """whatif K do(X) [do(Y)...] query ATOM [@N|@frame|N] [exact|
-        sampled|full] | run N — fork at #K, apply the do's, snapshot,
+        """whatif K do(X) [do(Y)...] query ATOM [@N|@frame|N]
+        [exact|sampled|full] | run N — fork at #K, apply the do's, snapshot,
         back (the session is untouched), then answer and compare with
         the actual world. query reads at @N cone steps by default (N =
         the actual remainder's cone events — spec 11 D1), exact on the

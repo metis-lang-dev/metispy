@@ -506,12 +506,21 @@ def describe(shell, op: str) -> str:
 
 
 def _op_help(shell, arg):
-    """help: the wire's verbs, each with its description — for the
-    declared ones the line the orchestrator's model reads, for the rest
-    the docstring of what serves it (a human sees the same words)."""
+    """help [ops | VERB...]: the wire's verbs, each with its description
+    — for the declared ones the line the orchestrator's model reads, for
+    the rest the docstring of what serves it (a human sees the same
+    words). `help ops` is the verb list alone (a ping that fits a bus
+    envelope); `help VERB...` those verbs' words."""
     ops = sorted(INTENT_VERBS)
+    want = str(arg).split()
+    if want == ["ops"]:
+        return {"ok": True, "ops": ops}
+    unknown = [w for w in want if w not in INTENT_VERBS]
+    if unknown:
+        return {"ok": False, "error": f"no verb {' '.join(unknown)} — "
+                                      f"`help ops` lists them"}
     return {"ok": True, "ops": ops,
-            "descriptions": {n: describe(shell, n) for n in ops}}
+            "descriptions": {n: describe(shell, n) for n in want or ops}}
 
 
 _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
