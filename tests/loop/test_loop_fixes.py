@@ -243,3 +243,33 @@ def test_a_draft_naming_an_undeclared_namespace_is_a_finding_the_repair_loop_sur
     assert "dyn/dim_it: layer 'dyn' may not produce 'dim' (namespace 'glow')" in first
     assert res.ok and res.rounds == 2, res.report.findings
     assert "-> declare namespace glow, or move dim into a declared one" in res.prompts[1]   # read by round 2
+
+
+def test_what_the_gate_passes_loads_a_directive_count_that_is_no_integer_is_refused(
+        tmp_path):
+    """agentic-loop s-3ddb3e87 finding 4 (openrouter-trial run 2): a
+    candidate with `#init dark 1.` inside its stage passed revise and
+    gate, and the file written from it did not load (int('1.')). The
+    spec's directive is `init <atom> <count>`, and metisc's int_of_string
+    refuses `1.` too, so the gate refuses it with a finding that names
+    the line; the same candidate with `1` passes and its file loads."""
+    from metis.lang import load_llp
+    from metis.lang.directives import DirectiveError, embedded_case
+    import pytest
+    bad = BORN.replace("stage run {\n", "stage run {\n  #init at(r2) 1.\n")
+    r, _ = blank(tmp_path)
+    r.cmd_text("it moves between rooms")
+    for verb in (r.cmd_revise, r.cmd_gate):
+        r.cmd_llp(bad)
+        out = verb("")
+        assert not out["ok"]
+        assert any(f.startswith("directive: bad directive: #init at(r2) 1. — init <atom> <count>, '1.'")
+                   for f in out["findings"]), out["findings"]
+    with pytest.raises(DirectiveError, match="'1.' is not an integer"):
+        embedded_case(bad)
+    good = bad.replace("#init at(r2) 1.", "#init at(r2) 1")
+    r.cmd_llp(good)
+    assert r.cmd_revise("")["ok"]
+    (tmp_path / "toy.llp").write_text(good)
+    assert load_llp(tmp_path / "toy.llp").catalog.name == "toy"
+    assert embedded_case(good)["init"]["at(r2)"] == 1

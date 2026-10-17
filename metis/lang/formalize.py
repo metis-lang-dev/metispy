@@ -118,6 +118,15 @@ def admit_text_pack(text: str, llp: str,
     except Exception as e:
         r.findings.append(f"roundtrip: {e}")
         return r
+    # the candidate's own '#'-directives (00-language-spec §8): the lexer
+    # drops them, but whoever loads the written file reads them (load_llp,
+    # metisc --run) — what passes the gate must load
+    from .directives import DirectiveError, embedded_case
+    try:
+        embedded_case(llp)
+    except DirectiveError as e:
+        r.findings.append(f"directive: {e}")
+        return r
 
     # discipline warnings (not gates): provenance + doc carriage
     if cat.provenance is None or cat.provenance[0] != "text":

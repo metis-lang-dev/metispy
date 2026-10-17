@@ -18,11 +18,26 @@ class DirectiveError(ValueError):
     pass
 
 
-def _clamp(tok: str) -> Tuple[str, int]:
+_FORMS = {"init": "init <atom> <count>", "steps": "steps <n>",
+          "seeds": "seeds <n>", "lik": "lik <atom>=<v> ..."}
+
+
+def _int(tok: str, key: str, line: str) -> int:
+    """A directive's number: an integer, as metisc's int_of_string reads
+    it — `#init dark 1.` is no directive either toolchain loads."""
+    try:
+        return int(tok)
+    except ValueError:
+        raise DirectiveError(
+            f"bad directive: {line} — {_FORMS[key]}, {tok!r} is not an "
+            f"integer (00-language-spec §8)") from None
+
+
+def _clamp(tok: str, line: str = "") -> Tuple[str, int]:
     atom, eq, val = tok.partition("=")
     if not eq:
         raise DirectiveError(f"bad clamp: {tok}")
-    return (atom, int(val))
+    return (atom, _int(val, "lik", line or tok))
 
 
 def squash_atoms(line: str) -> str:
@@ -50,17 +65,17 @@ def embedded_case(text: str) -> Dict:
             continue
         key, args = parts[0], parts[1:]
         if key == "init" and len(args) == 2:
-            case["init"][args[0]] = int(args[1])
+            case["init"][args[0]] = _int(args[1], key, line)
         elif key == "steps" and len(args) == 1:
-            case["steps"] = int(args[0])
+            case["steps"] = _int(args[0], key, line)
         elif key == "seeds" and len(args) == 1:
-            case["seeds"] = int(args[0])
+            case["seeds"] = _int(args[0], key, line)
         elif key == "unknown" and len(args) == 1:
             case["unknowns"].append(args[0])
         elif key == "query" and len(args) == 1:
             case["queries"].append(args[0])
         elif key == "lik" and args:
-            case["liks"].append([_clamp(t) for t in args])
+            case["liks"].append([_clamp(t, line) for t in args])
         elif key == "interactive" and len(args) == 1:
             # the additive &: the stage's CHOICE is environment-
             # resolved under metisc --run; in this REPL the prompt
