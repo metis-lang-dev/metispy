@@ -79,6 +79,8 @@ class LoopVerbs:
     # -- the candidate -------------------------------------------------
 
     def cmd_text(self, arg):
+        """Set the approved doc text (TEXT) formalize drafts from —
+        the person's words of what the world should do."""
         self.loop.text = arg
         return {"ok": True, "chars": len(arg)}
 
@@ -394,6 +396,8 @@ class LoopVerbs:
                             for i, r in enumerate(self.loop.records)]}
 
     def cmd_records(self, arg):
+        """The loaded surprise records, one line each (`record N`
+        selects one)."""
         return {"ok": True,
                 "records": [self._rec_line(i, r)
                             for i, r in enumerate(self.loop.records)]}
@@ -464,6 +468,10 @@ class LoopVerbs:
     # -- loop views ------------------------------------------------------
 
     def cmd_show(self, arg):
+        """The loop's state: bare (or `state`) the served file, key,
+        accepted packs, whether a candidate exists and passed the gate,
+        records and the scene; `show text` the approved text; `show
+        base` the base and accepted packs; `show llp` the candidate."""
         which = arg.strip() or "state"
         if which == "text":
             return {"ok": True, "text": self.loop.text}

@@ -130,6 +130,10 @@ def _scene_policy(shell, prog, canonical=False):
 
 
 def _op_trace(shell, arg):
+    """trace [SEED]: one sampled run of the scene (#init, #steps) as
+    JSON — the events fired, the final stage and multiset; bare, also
+    the REPL's `trace` text (the file's '#'-case replayed from #init,
+    = metisc --run). The session is untouched."""
     from metis.kernel.refsample import canonical_events, run_trace
     prog = _scene_prog(shell)
     seed = int(arg) if arg.strip() else 1
@@ -154,6 +158,9 @@ def _op_trace(shell, arg):
 
 
 def _op_map(shell, arg):
+    """map [STEPS]: the modal derivation (Viterbi) of the scene from
+    #init — its probability, events and final state (exact; a blown
+    state budget is refused with a shorter horizon to try)."""
     from metis.kernel import (STATE_BUDGET, ForwardProjection,
                               StateBudgetExceeded, map_derivation)
     try:
@@ -186,6 +193,9 @@ def _op_map(shell, arg):
 
 
 def _op_marginals(shell, arg):
+    """marginals [ATOM...]: exact presence marginals at the scene's
+    horizon (#steps from #init): P(atom present) per atom, or for the
+    atoms named."""
     from metis.kernel import (STATE_BUDGET, ForwardProjection,
                               StateBudgetExceeded)
     try:
@@ -214,6 +224,9 @@ def _op_marginals(shell, arg):
 
 
 def _op_init(shell, arg):
+    """init ATOM=N, ATOM(ARGS)=N, ...: set the scene's #init (the
+    multiset the scene readouts — map, marginals, trace, narrate SEED —
+    start from); N defaults to 1. The live session is not touched."""
     from metis.loop.verbs import LoopVerbs  # noqa: F401 (doc anchor)
     init = {}
     part, depth = "", 0
@@ -232,16 +245,21 @@ def _op_init(shell, arg):
 
 
 def _op_steps(shell, arg):
+    """steps N: set the scene's horizon (#steps) for map, marginals,
+    trace and narrate SEED."""
     shell.case["steps"] = int(arg)
     return {"ok": True, "steps": shell.case["steps"]}
 
 
 def _op_seed(shell, arg):
+    """seed N: reseed the session's sampler (step, run)."""
     shell.do_seed(arg)
     return {"ok": True, "seed": int(arg)}
 
 
 def _op_llm(shell, arg):
+    """llm [SPEC]: show, or set and validate, the LLM endpoint formalize
+    and narrate use: ollama[:MODEL] | anthropic[:MODEL] | command:ARGV."""
     from .llm import DEFAULT_SPEC, resolve
     a = arg.strip()
     if not a:
@@ -253,6 +271,11 @@ def _op_llm(shell, arg):
 
 
 def _op_narrate(shell, arg):
+    """narrate [SEED] | narrate system | narrate user: this session's
+    fired events since the last reset as prose through the llm endpoint
+    (Foata beats, the final state, the catalog's %% docs); with SEED a
+    fresh trace sampled with that seed; `system` / `user` show the
+    prompt halves without a model call."""
     from metis.kernel.refsample import canonical_events, run_trace
     from . import prompts
     from .narrate import narrate, user_prompt
@@ -304,9 +327,10 @@ def _op_narrate(shell, arg):
 
 
 def _op_graph(shell, arg):
-    """Spec 09 P2: the causality graph of the session as JSON (the
-    console draws it). No file writes on the wire — paths are the
-    REPL's."""
+    """graph: the session's causality graph (spec 09 P2) as JSON — its
+    events in beats with their covering parents, the frontier marked
+    (the console draws it). No file writes on the wire — paths are
+    the REPL's."""
     from metis.lang.causality import as_obj, dot, header
     g, n = shell.causal()
     k = shell._base[0]
@@ -331,7 +355,9 @@ def _op_why(shell, arg):
 
 
 def _op_causes(shell, arg):
-    """Spec 09 P3: causes A B as JSON rows + verdict."""
+    """causes A B: for each occurrence of B, is an occurrence of A among
+    its causes (spec 09 P3) — JSON rows and the verdict yes / some /
+    no."""
     from metis.lang.causality import causes
     parts = str(arg).split()
     if len(parts) != 2:
@@ -461,12 +487,31 @@ def _op_ledger(shell, arg):
     return {"ok": True, **ledger(shell, shell.__dict__.get("_watch"))}
 
 
+def describe(shell, op: str) -> str:
+    """The words for one wire verb: the REPL API's declaration, else the
+    docstring of what serves it — the wire's own op, the loop verb
+    (metis.loop.verbs cmd_*), the REPL command (metis.lang.repl do_*),
+    the first that has one. Its first paragraph, on one line."""
+    import inspect
+    if op in DECLARED:
+        return DECLARED[op]["description"]
+    w = _WIRE_OPS.get(op)
+    cmd = getattr(w, "runs", op)
+    for fn in (w, getattr(shell, "cmd_" + op, None),
+               getattr(shell, "do_" + cmd, None)):
+        doc = inspect.cleandoc(getattr(fn, "__doc__", None) or "")
+        if doc:
+            return " ".join(doc.split("\n\n")[0].split())
+    return ""
+
+
 def _op_help(shell, arg):
-    """The page/chat verbs, and for the declared ones the line the
-    orchestrator's model reads (a human sees the same words)."""
-    return {"ok": True, "ops": sorted(INTENT_VERBS),
-            "descriptions": {n: DECLARED[n]["description"]
-                             for n in sorted(DECLARED)}}
+    """help: the wire's verbs, each with its description — for the
+    declared ones the line the orchestrator's model reads, for the rest
+    the docstring of what serves it (a human sees the same words)."""
+    ops = sorted(INTENT_VERBS)
+    return {"ok": True, "ops": ops,
+            "descriptions": {n: describe(shell, n) for n in ops}}
 
 
 _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
@@ -545,7 +590,7 @@ def _exec(cmd):
                 "fired": _fired_since(shell, k),
                 "stage": shell.stage,
                 "counts": dict(sorted(shell.counts.items()))}
-    op.__doc__ = f"CONSOLE §2a: `{cmd}` on the session, text + data."
+    op.runs = cmd       # its words are the REPL command's (describe)
     return op
 
 

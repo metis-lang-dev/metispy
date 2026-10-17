@@ -624,7 +624,26 @@ def test_the_wire_dispatches_every_declared_verb():
             f"the REPL API declares '{name}' and the wire has no op for it"
     h = dispatch(sh, "help", "")
     assert h["ops"] == sorted(INTENT_VERBS)
-    assert h["descriptions"] == dict(sorted(declared.items()))
+    assert {n: h["descriptions"][n] for n in declared} == declared
+
+
+def test_help_describes_every_verb_from_what_serves_it():
+    """agentic-loop s-3ddb3e87 finding 1: help carries words for every
+    wire verb, not only the declared ones — the docstring of what serves
+    it (the wire's op, the loop verb, the REPL command), one line, so a
+    tool host (pi's metis-repl) has a description for each."""
+    from metis.loop.wire import _WIRE_OPS
+    sh = _shell()
+    h = dispatch(sh, "help", "")
+    d = h["descriptions"]
+    assert sorted(d) == h["ops"]
+    bare = [n for n in h["ops"] if not d[n]]
+    assert not bare, f"verbs without a description on the wire: {bare}"
+    assert all("\n" not in t and "  " not in t for t in d.values())
+    assert d["formalize"].startswith("Draft the candidate from the TEXT")   # metis.loop.verbs
+    assert d["run"] == sh.do_run.__doc__.strip()                            # metis.lang.repl
+    assert d["trace"] == " ".join(_WIRE_OPS["trace"].__doc__.split("\n\n")[0].split())
+    assert "CONSOLE §2a" not in " ".join(d.values())     # no placeholder words
 
 
 def test_the_surprise_verbs_are_page_intents_on_the_watch():
