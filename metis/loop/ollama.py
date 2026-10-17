@@ -35,6 +35,16 @@ def default_model() -> str:
         or config.get("ollama", "model", "llama3.1")
 
 
+def default_think():
+    """Whether the model thinks before it answers: [ollama] think in the
+    dot file (true | false | a level the model knows, e.g. "low"),
+    false when unset. A thinking model (Gemma 4, qwen3) left to its
+    own default thinks for minutes before a draft; the gate reads only
+    the answer, so the seat asks for none."""
+    from . import config
+    return config.get("ollama", "think", False)
+
+
 def tags(host: str = None, timeout: int = 5):
     """Installed model names at the server — the validation URI
     (GET /api/tags); raises URLError when the server is down."""
@@ -55,9 +65,12 @@ def strip_fences(text: str) -> str:
 
 def generate(prompt: str, model: str = None, host: str = None,
              timeout: int = 600, options: dict = None,
-             system: str = None, meta: dict = None) -> str:
+             system: str = None, meta: dict = None,
+             think=None) -> str:
     """One completion from the local Ollama server. `options` merge
     over the temperature-0 default (the narrate seat warms it);
+    `think` (default: default_think(), false) is sent as Ollama's
+    think field, so a thinking model answers without thinking first;
     `system` goes in the model's system slot, apart from the
     material — small models keep the two straight only that way.
     `meta`, when given, is filled with cut (the server stopped at
@@ -68,6 +81,7 @@ def generate(prompt: str, model: str = None, host: str = None,
             "model": model or default_model(),
             "prompt": prompt,
             "stream": False,
+            "think": default_think() if think is None else think,
             "options": {"temperature": 0, **(options or {})},
             **({"system": system} if system else {}),
         }).encode(),

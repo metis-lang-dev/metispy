@@ -17,6 +17,8 @@ Recognized today:
   [ollama]
   host  = "http://localhost:11434"
   model = "qwen2.5-coder:7b"
+  think = false                # Ollama's think field (default false;
+                               # true, or a level: "low", ...)
   [narrate]                    # narrate seat only; formalize stays
   temperature = 0.3            # at temperature 0
   num_ctx     = 8192
