@@ -220,3 +220,26 @@ def test_a_second_extension_gates_against_the_first(tmp_path):
     side = _json.loads(build(prog, extensions)["sidecar.json"])
     assert r.doc.catalog.name == side["catalog"] == "lamp+flicker+surge"
     assert r.key == side["key"]
+
+
+def test_a_draft_naming_an_undeclared_namespace_is_a_finding_the_repair_loop_survives(
+        tmp_path):
+    """agentic-loop s-3ddb3e87 finding 2: a pack draft filing a predicate
+    under a namespace nobody declares crashed the typecheck (KeyError in
+    kernel/typing._check_patterns) and with it formalize. It is findings
+    now — the ones metisc --diagnostics lists for it (the namespace grants
+    nothing, as metis-lang reads it) — and the next round repairs."""
+    from tests.test_artifact import LAMP
+    base = tmp_path / "lamp.llp"
+    base.write_text(LAMP)
+    head = 'catalog dimmer 1.\nprovenance text "I dim" "2026-10-17".\nextends lamp.\n'
+    rule = "stage main {\n  %% I dim.\n  dim_it [dyn] : on -o dim.\n}\n"
+    drafts = iter([head + "pred dim : glow.\n" + rule,
+                   head + "namespace glow produce (dyn).\npred dim : glow.\n" + rule])
+    res = formalize_loop("I dim", LAMP, lambda prompt: next(drafts),
+                         base_path=base, max_rounds=2, mode="pack")
+    first = res.history[0][1]
+    assert "predicate 'dim': unknown namespace 'glow'" in first
+    assert "dyn/dim_it: layer 'dyn' may not produce 'dim' (namespace 'glow')" in first
+    assert res.ok and res.rounds == 2, res.report.findings
+    assert "-> declare namespace glow, or move dim into a declared one" in res.prompts[1]   # read by round 2

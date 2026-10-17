@@ -54,7 +54,10 @@ def _check_patterns(entry, schema, patterns, mode, preds, namespaces,
                   f"({mode})", entry.src,
                   (("pred", pred), ("mode", mode)))
             continue
-        space = namespaces[preds[pred]]
+        # a predicate filed under a namespace nobody declares is its own
+        # finding (pred-namespace-unknown, Catalog.typecheck); here the
+        # namespace grants nothing, as metis-lang's check_patterns reads it
+        space = namespaces.get(preds[pred]) or ns(preds[pred], ())
         for m in ("produce", "consume"):
             allowed = space.produce if m == "produce" else space.consume
             if mode == m and entry.layer not in allowed:
