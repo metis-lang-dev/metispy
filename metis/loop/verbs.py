@@ -21,6 +21,24 @@ from metis.lang.ast import pretty
 from metis.lang.formalize import admit_text_pack
 
 
+def comment_lines(src: str) -> List[str]:
+    """The `%` line comments of an LLP text (`%%` docs are not
+    comments), each from its `%` to the end of the line."""
+    out = []
+    for line in src.splitlines():
+        i = line.find("%")
+        if i >= 0 and not line.startswith("%%", i):
+            out.append(line[i:].rstrip())
+    return out
+
+
+def dropped_comments(base: str, cand: str):
+    """The base's `%` comment lines the candidate does not carry (a
+    Counter, in the base's order)."""
+    from collections import Counter
+    return Counter(comment_lines(base)) - Counter(comment_lines(cand))
+
+
 @dataclass
 class LoopState:
     text: str = ""                   # the approved unit (doc text)
@@ -205,6 +223,8 @@ class LoopVerbs:
                      "(`plugin SPEC` / `metis --plugin SPEC`)")
                 res.report.warnings.append(w)
                 out["warnings"] = [w]
+        if res.ok and res.mode == "revise":
+            out = self._text_change(out)
         return out
 
     def _cand_case_init(self) -> Dict[str, int]:
@@ -276,6 +296,33 @@ class LoopVerbs:
                 out["diff_preview"] = []
                 out["diff_note"] = (f"scene too large for the exact "
                                     f"before/after diff: {e}")
+        return self._text_change(out)
+
+    def _text_change(self, out):
+        """What the candidate's TEXT drops of the base it replaces
+        (agent-no-intent s-7fd29000 C): its `%` comment lines gone
+        (comments_dropped, and a warning naming the first), and, when
+        the measure diff is empty, that the text changed all the same —
+        an empty diff_preview never hides a text change. revise gates
+        the candidate's text as it is; a small edit that must keep the
+        comments is an edit of the file, not a formalized revision."""
+        base, cand = self._base_src(), self.loop.cand
+        dropped = dropped_comments(base, cand)
+        n = sum(dropped.values())
+        out["comments_dropped"] = n
+        out["text_changed"] = base != cand
+        if n:
+            first = next(iter(dropped))
+            w = (f"the candidate drops {n} of the base's "
+                 f"{len(comment_lines(base))} `%` comment line(s) "
+                 f"(first: {first[:80]!r}); accept serves it without them")
+            out["warnings"] = list(out.get("warnings") or []) + [w]
+        if (out["text_changed"] and "diff_preview" in out
+                and not out["diff_preview"] and "diff_note" not in out):
+            changed = len(set(base.splitlines()) ^ set(cand.splitlines()))
+            out["diff_note"] = (f"the measure is unchanged on the scene; "
+                                f"the text is not: {changed} line(s) "
+                                f"differ")
         return out
 
     def _gate_registry(self):

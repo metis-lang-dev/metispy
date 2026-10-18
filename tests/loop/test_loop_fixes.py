@@ -273,3 +273,26 @@ def test_what_the_gate_passes_loads_a_directive_count_that_is_no_integer_is_refu
     (tmp_path / "toy.llp").write_text(good)
     assert load_llp(tmp_path / "toy.llp").catalog.name == "toy"
     assert embedded_case(good)["init"]["at(r2)"] == 1
+
+
+def test_revise_says_what_comments_the_candidate_drops(tmp_path):
+    """agent-no-intent s-7fd29000 C (fiction-port finding 1): a
+    formalized revision of a commented program is its canonical print —
+    every `%` comment gone, the measure the same, and revise's empty
+    diff_preview read as "no change". revise counts the dropped comments,
+    warns, and says the text changed when the measure did not."""
+    served = BORN.replace("catalog toy 1.\n", "catalog toy 1.\n% origin: a toy, by hand\n% lesson: keep me\n") \
+                 .replace("  go [dyn]", "  % the only move\n  go [dyn]")
+    p = tmp_path / "toy.llp"
+    p.write_text(served)
+    r = Repl(p, seed=1, stdout=io.StringIO())
+    r.cmd_text("a toy")
+    r.cmd_llp(BORN)                                  # the same rules, no comments (%% doc kept)
+    out = r.cmd_revise("")
+    assert out["ok"] and out["comments_dropped"] == 3 and out["text_changed"]
+    assert any("drops 3 of the base's 3 `%` comment line(s)" in w and "% origin: a toy" in w for w in out["warnings"])
+    assert out["diff_preview"] == [] and "the text is not: 3 line(s) differ" in out["diff_note"]
+    r.cmd_llp(served)                                # verbatim: nothing dropped, nothing changed
+    out = r.cmd_revise("")
+    assert out["comments_dropped"] == 0 and not out["text_changed"] and "diff_note" not in out
+    assert not any("drops" in w for w in out.get("warnings") or [])
