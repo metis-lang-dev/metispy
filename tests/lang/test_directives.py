@@ -92,3 +92,43 @@ def test_render_run_pretty_beats_and_state():
     for pre in ("I ", "Q "):
         assert [l for l in out.splitlines() if l.startswith(pre)] == \
                [l for l in wire.splitlines() if l.startswith(pre)]
+
+
+def test_an_interactive_case_never_waits_on_stdin(tmp_path):
+    """agent-no-intent s-7fd29000 B: `#interactive go` with no input. The
+    py twin of `metisc --run` (render_run, the REPL's `trace`) never reads
+    stdin — every choice is the sampler's — and metisc with stdin closed
+    falls back to the sampler for the whole run (spec 07 P2): the same
+    I/T/F lines. Timed: a run that waits on stdin fails in 60 s, never
+    hangs the suite."""
+    import os
+    import subprocess
+    import sys
+    from metis.kernel.artifact import metisc
+    p = tmp_path / "love_triangle.llp"
+    p.write_text(CATALOG.read_text() + "#interactive go\n")
+    assert embedded_case(p.read_text())["interactive"] == ["go"]
+    code = ("import sys; from pathlib import Path; from metis.lang import compile_catalog, parse; "
+            "from metis.lang.directives import embedded_case, render_run; "
+            "t = Path(sys.argv[1]).read_text(); c = embedded_case(t); "
+            "print(render_run('love_triangle', c, compile_catalog(parse(t)).catalog.ground(c['init'])))")
+    # stdin a pipe that is never written nor closed: a read would block
+    py = subprocess.Popen([sys.executable, "-c", code, str(p)], stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE, text=True, cwd=ROOT,
+                          env=dict(os.environ, PYTHONPATH=str(ROOT)))
+    try:
+        out, _ = py.communicate(timeout=60)
+    finally:
+        py.kill()
+        py.stdin.close()
+    assert py.returncode == 0
+    wire = [l for l in out.splitlines() if l[:2] in ("I ", "T ", "F ")]
+    assert sum(l.startswith("T ") for l in wire) == 3
+    mc = metisc()
+    if not mc:
+        pytest.skip("no metisc ($METISC or PATH): the py half only")
+    r = subprocess.run([mc, "--run", str(p)], stdin=subprocess.DEVNULL, capture_output=True,
+                       text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert [l for l in r.stdout.splitlines() if l[:2] in ("I ", "T ", "F ")] == wire
+    assert r.stderr.count("choose an event") == 1                     # one menu, then the sampler
