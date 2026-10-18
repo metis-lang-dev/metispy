@@ -24,7 +24,7 @@ from metis.loop.core import formalize_loop
 
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "metis-lang/corpus"
-TRAGEDY = ROOT / "metis-catalog/domains/fiction/tragedy.llp"
+TRAGEDY = ROOT / "metis-catalog/domains/tragedy/tragedy.llp"
 
 MEADOW = (ROOT / "metispy/tests/loop/test_loop.py").read_text()
 MEADOW_SRC = MEADOW.split('MEADOW = """', 1)[1].split('"""', 1)[0]

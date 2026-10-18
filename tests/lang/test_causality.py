@@ -19,12 +19,12 @@ from metis.lang.repl import Repl
 from metis.loop.wire import dispatch
 
 ROOT = Path(__file__).resolve().parents[2]
-FICTION = ROOT.parent / "metis-catalog/domains/fiction"
+DOMAINS = ROOT.parent / "metis-catalog/domains"
 GOLDENS = Path(__file__).parent / "goldens"
 
 
 def _shell(name, seed=1):
-    return Repl(FICTION / name, seed=seed, stdout=io.StringIO())
+    return Repl(DOMAINS / name, seed=seed, stdout=io.StringIO())
 
 
 def _run(r, *cmds):
@@ -61,7 +61,7 @@ def _golden(name, text):
 def test_tragedy_graph_goldens(tmp_path):
     """The REPL's `graph F.dot` / `graph F.json` on a seeded tragedy
     session are pinned byte for byte."""
-    r = _shell("tragedy.llp")
+    r = _shell("tragedy/tragedy.llp")
     _run(r, "run 40")
     _run(r, f"graph {tmp_path}/t.dot", f"graph {tmp_path}/t.json")
     _golden("causality_tragedy.dot", (tmp_path / "t.dot").read_text())
@@ -71,7 +71,7 @@ def test_tragedy_graph_goldens(tmp_path):
 def test_herstory_graph_goldens(tmp_path):
     """The multi-stage pin (D5): herstory's four acts are four stage
     episodes; `graph F.dot` / `graph F.json` pinned byte for byte."""
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     _run(r, "run 40")
     _run(r, f"graph {tmp_path}/h.dot", f"graph {tmp_path}/h.json")
     _golden("causality_herstory.dot", (tmp_path / "h.dot").read_text())
@@ -99,7 +99,7 @@ def test_edges_are_the_hasse_diagram_of_the_dependence_order():
     """Every edge is a direct footprint conflict (D1: covering pairs
     only — no edge is implied by a longer path) and every dependent
     pair is ordered by the closure."""
-    prog, case, idx = _trace("tragedy.llp")
+    prog, case, idx = _trace("tragedy/tragedy.llp")
     tbl = canonical_events(prog)
     rows = [tbl[i] for i in idx]
     g = _graph(prog, case, idx)
@@ -116,7 +116,7 @@ def test_edges_are_the_hasse_diagram_of_the_dependence_order():
 
 
 def test_beats_are_the_narrated_foata_levels_and_frontier_maximal():
-    prog, case, idx = _trace("tragedy.llp")
+    prog, case, idx = _trace("tragedy/tragedy.llp")
     tbl = canonical_events(prog)
     g = _graph(prog, case, idx)
     levels = foata_levels([tbl[i] for i in idx])
@@ -129,7 +129,7 @@ def test_beats_are_the_narrated_foata_levels_and_frontier_maximal():
 def test_flow_edges_carry_the_spent_tokens():
     """3lp seed 1: the stick house build_stick made is the token
     blow_stick spent — a flow edge labeled stickhouse."""
-    prog, case, idx = _trace("3lp.llp")
+    prog, case, idx = _trace("three_pigs/three_pigs.llp")
     g = _graph(prog, case, idx)
     name = {nd.i: nd.name for nd in g.nodes}
     flows = {(name[e.src], name[e.dst]): e.atoms for e in g.edges
@@ -142,7 +142,7 @@ def test_adjacent_independent_swap_leaves_canonical_bytes_invariant():
     """run_key's theorem made visible: swapping adjacent independent
     events changes neither run_key nor the canonical graph's bytes —
     checked on every swappable pair, then on a seeded random walk."""
-    for name in ("tragedy.llp", "3lp.llp", "love_triangle.llp"):
+    for name in ("tragedy/tragedy.llp", "three_pigs/three_pigs.llp", "love_triangle/love_triangle.llp"):
         prog, case, idx = _trace(name)
         tbl = canonical_events(prog)
 
@@ -161,7 +161,7 @@ def test_adjacent_independent_swap_leaves_canonical_bytes_invariant():
             return run_key(prog, [pos[id(tbl[i][2])] for i in seq])
         ref, key = canon(idx), rkey(idx)
         pairs = [k for k in range(len(idx) - 1) if swappable(idx, k)]
-        assert pairs or name == "3lp.llp" and len(idx) < 3
+        assert pairs or name == "three_pigs/three_pigs.llp" and len(idx) < 3
         for k in pairs:
             seq = idx[:k] + [idx[k + 1], idx[k]] + idx[k + 2:]
             assert canon(seq) == ref and rkey(seq) == key
@@ -178,7 +178,7 @@ def test_adjacent_independent_swap_leaves_canonical_bytes_invariant():
 # -- the REPL / wire surface -------------------------------------------
 
 def test_graph_text_marks_frontier_and_parents():
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 6")
     out = _run(r, "graph")
     assert "6 fired" in out and "1<5(stickhouse)" in out
@@ -190,7 +190,7 @@ def test_graph_rebases_on_edits_and_undo_restores_the_base():
     """reset / assert / retract / #init are edits no event explains:
     the graph restarts there (node 0 = that state); undo brings the
     previous base back."""
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 3")
     assert "3 fired" in _run(r, "graph")
     _run(r, "+wolf")
@@ -205,7 +205,7 @@ def test_graph_rebases_on_edits_and_undo_restores_the_base():
 
 
 def test_wire_graph_is_the_json_mirror(tmp_path):
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 6")
     out = dispatch(r, "graph", "")
     assert out["ok"] and out["frontier"] == [6]
@@ -228,7 +228,7 @@ def test_why_cone_is_the_hand_computed_ancestry():
     4 build_brick, 5 blow_stick, 6 blow_brick. The final state is
     {brickhouse}: only build_brick wrote it; its causes are the pig
     competition 1<2<4 and the base — the three blows are pruned."""
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 6")
     out = _run(r, "why")
     assert out.splitlines()[0] == \
@@ -242,7 +242,7 @@ def test_why_cone_is_the_hand_computed_ancestry():
 
 
 def test_why_atom_and_errors():
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 6")
     assert "last produced by event 4" in _run(r, "why brickhouse")
     out = _run(r, "why wolf")
@@ -255,7 +255,7 @@ def test_why_atom_and_errors():
 def test_causes_truth_table_on_a_fork():
     """yes / no / some / none — love_triangle's jealousies fork: the
     two jealousy chains 1<2<4 and 3<5 run side by side."""
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 6")
     assert dispatch(r, "causes", "build_stick blow_stick")["verdict"] \
         == "yes"
@@ -263,7 +263,7 @@ def test_causes_truth_table_on_a_fork():
         == "no"
     assert "has not fired" in _run(r, "reset", "causes pig blow_brick")
     assert "usage" in _run(r, "causes x")
-    t = _shell("love_triangle.llp")
+    t = _shell("love_triangle/love_triangle.llp")
     _run(t, "run 6")
     res = dispatch(t, "causes", "jealousy jealousy")
     assert res["verdict"] == "some"
@@ -275,7 +275,7 @@ def test_causes_truth_table_on_a_fork():
 
 def test_alternative_branches_match_their_source_rule(tmp_path):
     """⊕ branches (blow_stick-1/-2) answer to the rule's own name."""
-    src = (FICTION / "3lp.llp").read_text()
+    src = (DOMAINS / "three_pigs/three_pigs.llp").read_text()
     old = "blow_stick [story] : $wolf * stickhouse -o ()."
     assert old in src
     alt = tmp_path / "3lp_alt.llp"
@@ -296,7 +296,7 @@ def test_dot_draws_all_three_edge_classes_with_a_legend():
     dotted gray with atoms only in a tooltip (never a label); node
     labels split action / bindings; the graph label carries a legend
     and a beat column keeps the ranks."""
-    r = _shell("tragedy.llp")
+    r = _shell("tragedy/tragedy.llp")
     _run(r, "run 40")
     g, _ = r.causal()
     text = dot(g, "t")
@@ -326,7 +326,7 @@ def test_episodes_cluster_the_dot_and_links_stand_between():
     """One cluster per stage episode (label: stage · episode), link
     diamonds outside every cluster, newrank so the beat column aligns
     across clusters; a run with no link has no cluster at all."""
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     _run(r, "run 40")
     g, _ = r.causal()
     text = dot(g, "h")
@@ -352,14 +352,14 @@ def test_episodes_cluster_the_dot_and_links_stand_between():
     # no beat spans two episodes
     for b in {nd.beat for nd in g.nodes}:
         assert len({nd.episode for nd in g.nodes if nd.beat == b}) == 1
-    t = _shell("3lp.llp")
+    t = _shell("three_pigs/three_pigs.llp")
     _run(t, "run 6")
     tg, _ = t.causal()
     assert "cluster" not in dot(tg) and "newrank" not in dot(tg)
 
 
 def test_json_mirror_carries_the_episode():
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     _run(r, "run 40")
     nodes = dispatch(r, "graph", "")["nodes"]
     assert {n["name"]: n["episode"] for n in nodes
@@ -390,7 +390,7 @@ def test_list_marks_enabled_cone_pruned_waiting_and_spent():
     blow_straw fired but no longer matters (·), build_brick and
     blow_stick are enabled (*), blow_brick waits on a brickhouse an
     enabled rule makes (?)."""
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     _run(r, "run 3")
     out, h = _list_heads(r)
     mark = {n: line.lstrip()[0] for n, line in h.items()}
@@ -407,7 +407,7 @@ def test_list_shows_other_stages_the_present_rests_on():
     """herstory in its tragedy act: the earlier acts' rules (and the
     act links) the present depends on are listed by stage; the act4
     link waits for quiescence."""
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     _run(r, "run 12")
     out = _run(r, "list")
     assert "\nrests on  (" in out
@@ -420,7 +420,7 @@ def test_list_shows_other_stages_the_present_rests_on():
 
 
 def test_list_after_the_run_is_done_still_shows_what_it_rests_on():
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     _run(r, "run 40")
     out = _run(r, "list")
     assert "none can fire" in out and "\nrests on  (" in out

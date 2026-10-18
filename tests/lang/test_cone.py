@@ -13,14 +13,14 @@ from metis.lang.cone import (check_closed, cone_readout, full_readout,
                              qkey, quotient, sweep)
 from metis.lang.repl import Repl
 
-FICTION = Path(__file__).resolve().parents[3] / \
-    "metis-catalog/domains/fiction"
-pytestmark = pytest.mark.skipif(not FICTION.exists(),
+DOMAINS = Path(__file__).resolve().parents[3] / \
+    "metis-catalog/domains"
+pytestmark = pytest.mark.skipif(not DOMAINS.exists(),
                                 reason="metis-catalog not checked out")
 
 
 def shell(name, seed, k):
-    r = Repl(FICTION / name, seed=seed, stdout=io.StringIO())
+    r = Repl(DOMAINS / name, seed=seed, stdout=io.StringIO())
     r.onecmd(f"run {k}")
     return r
 
@@ -50,7 +50,7 @@ def agree(r, outcomes, readouts, budget=200_000):
 
 @pytest.mark.parametrize("seed,k", [(1, 0), (1, 3), (3, 2), (7, 1)])
 def test_3lp_cone_equals_full_exactly(seed, k):
-    r = shell("3lp.llp", seed, k)
+    r = shell("three_pigs/three_pigs.llp", seed, k)
     atoms = sorted(r.atoms)
     n = agree(r, atoms + ["!" + a for a in atoms],
               [("cone", 1), ("cone", 3), ("frame",)])
@@ -58,13 +58,13 @@ def test_3lp_cone_equals_full_exactly(seed, k):
 
 
 def test_love_triangle_cone_equals_full_on_answerable_cases():
-    r = shell("love_triangle.llp", 1, 2)
+    r = shell("love_triangle/love_triangle.llp", 1, 2)
     assert agree(r, ["anger(lysander,helena)", "!eros(helena,hermia)"],
                  [("cone", 1), ("cone", 3)]) == 4
 
 
 def test_the_sweep_closes_and_the_quotient_has_its_own_key():
-    r = shell("3lp.llp", 1, 0)
+    r = shell("three_pigs/three_pigs.llp", 1, 0)
     c = sweep(r.prog, ["brickhouse"], r.stage)
     names = {r.prog.events()[i][2].name for i in c.events}
     # brickhouse is written by build_brick only (blow_brick only READS
@@ -74,7 +74,7 @@ def test_the_sweep_closes_and_the_quotient_has_its_own_key():
     assert c.atoms == {"brickhouse", "pig", "bricks", "sticks", "straw"}
     q = quotient(r.prog, c, r.stage, r.counts)
     assert qkey(q) != r.key and len(qkey(q)) == 64
-    assert r.key == Repl(FICTION / "3lp.llp",
+    assert r.key == Repl(DOMAINS / "three_pigs/three_pigs.llp",
                          stdout=io.StringIO()).key     # keys never move
     # a hand-broken cone is caught (the construction-bug detector)
     broken = c._replace(events=frozenset())
@@ -93,7 +93,7 @@ def test_tragedy_prospective_cone_is_the_whole_world():
     (nearly) the whole program — `at(C,L)` is persisted by nearly every
     rule and written by travelTo; despair, murder, anger and love feed
     each other — so P1/P2 alone cannot reduce the filter there."""
-    r = shell("tragedy.llp", 132, 74)
+    r = shell("tragedy/tragedy.llp", 132, 74)
     c = sweep(r.prog, ["suicidal(mercutio)"], r.stage)
     assert check_closed(r.prog, c, r.stage) == []
     assert len(c.events) == c.n_events and len(c.atoms) >= c.n_atoms - 1
@@ -151,8 +151,8 @@ def test_sampled_tier_ci_covers_the_exact_value():
     its stated rate."""
     from metis.lang.measure import Arm, measure
     cases = []
-    for name, seed, k in (("3lp.llp", 1, 2), ("3lp.llp", 3, 1),
-                          ("love_triangle.llp", 1, 2)):
+    for name, seed, k in (("three_pigs/three_pigs.llp", 1, 2), ("three_pigs/three_pigs.llp", 3, 1),
+                          ("love_triangle/love_triangle.llp", 1, 2)):
         r = shell(name, seed, k)
         for a in sorted(r.atoms)[:6]:
             cases.append((r, a))
@@ -173,7 +173,7 @@ def test_gate2_tragedy_pn_answers_in_seconds():
     exact 0.9846 (offline, 6M states) lies inside the interval."""
     import re
     import time
-    r = shell("tragedy.llp", 132, 80)
+    r = shell("tragedy/tragedy.llp", 132, 80)
     out = io.StringIO()
     r.stdout = out
     t = time.time()
@@ -192,7 +192,7 @@ def test_love_triangle_coupling_demo_names_the_inhibitor():
     the jealousy making Lysander angry at Helena reads. #1 works AGAINST
     that outcome: blocking it RAISES P, so it is not necessary, and the
     report says the PN is the outcome's own uncertainty."""
-    r = shell("love_triangle.llp", 1, 6)
+    r = shell("love_triangle/love_triangle.llp", 1, 6)
     out = io.StringIO()
     r.stdout = out
     r.onecmd("necessity 1 anger(lysander,helena)")

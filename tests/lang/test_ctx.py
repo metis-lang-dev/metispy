@@ -10,11 +10,11 @@ from metis.loop.wire import (INTENT_VERBS, dispatch, intent_posting,
                              parse_intent)
 
 ROOT = Path(__file__).resolve().parents[2]
-FICTION = ROOT.parent / "metis-catalog/domains/fiction"
+DOMAINS = ROOT.parent / "metis-catalog/domains"
 
 
 def _shell(name, *cmds):
-    r = Repl(FICTION / name, seed=1, stdout=io.StringIO())
+    r = Repl(DOMAINS / name, seed=1, stdout=io.StringIO())
     for c in cmds:
         r.onecmd(c)
     r.stdout = io.StringIO()
@@ -25,7 +25,7 @@ def test_ctx_aggregate_on_3lp():
     """3lp seed 1 after run 3: running, beat 3, two enabled events
     with normalized p, and the six rules in source order with list's
     states as data."""
-    c = dispatch(_shell("3lp.llp", "run 3"), "ctx", "")
+    c = dispatch(_shell("three_pigs/three_pigs.llp", "run 3"), "ctx", "")
     assert c["ok"] and c["catalog"] == "three-pigs"
     assert (c["stage"], c["status"], c["fired"], c["beat"],
             c["episode"]) == ("go", "running", 3, 3, 0)
@@ -47,9 +47,9 @@ def test_ctx_aggregate_on_3lp():
 
 def test_ctx_rule_states_are_lists_marks_one_to_one():
     """Every rule's state is the mark `list` prints on its head line."""
-    for name, cmds in (("3lp.llp", ["run 3"]), ("3lp.llp", ["run 6"]),
-                       ("herstory.llp", ["run 12"]),
-                       ("love_triangle.llp", ["run 4"])):
+    for name, cmds in (("three_pigs/three_pigs.llp", ["run 3"]), ("three_pigs/three_pigs.llp", ["run 6"]),
+                       ("herstory/herstory.llp", ["run 12"]),
+                       ("love_triangle/love_triangle.llp", ["run 4"])):
         r = _shell(name, *cmds)
         c = r.ctx()
         listing = r.capture("list").splitlines()
@@ -67,18 +67,18 @@ def test_ctx_status_running_quiescent_done():
     """herstory: running mid-act; after florence_dies only the act2
     link can fire (quiescent: the stage has settled); done at the
     end. Episodes count the links fired, rests_on_stages fill up."""
-    assert _shell("herstory.llp", "run 2").ctx()["status"] == "running"
-    q = _shell("herstory.llp", "run 3").ctx()
+    assert _shell("herstory/herstory.llp", "run 2").ctx()["status"] == "running"
+    q = _shell("herstory/herstory.llp", "run 3").ctx()
     assert q["status"] == "quiescent"
     assert [e["name"] for e in q["enabled"]] == ["act2"]
-    d = _shell("herstory.llp", "run 40").ctx()
+    d = _shell("herstory/herstory.llp", "run 40").ctx()
     assert d["status"] == "done" and d["episode"] == 3
     assert [s["stage"] for s in d["rests_on_stages"]][:2] == \
         ["beginning", "courtship"]
 
 
 def test_ctx_text_band_and_sections():
-    r = _shell("3lp.llp", "run 3")
+    r = _shell("three_pigs/three_pigs.llp", "run 3")
     full = r.capture("ctx")
     assert full.startswith("CATALOG three-pigs  KEY 1e3be62725e7  STAGE "
                            "go  BEAT 3  EPISODE 0  RUNNING  3 fired")
@@ -102,7 +102,7 @@ def test_whitelist_admits_read_only_ops_and_still_refuses_the_rest():
 
 
 def test_intent_posting_carries_json_beside_text():
-    r = _shell("3lp.llp", "run 3")
+    r = _shell("three_pigs/three_pigs.llp", "run 3")
     p = intent_posting(r, ":ctx rules", session="w1")
     assert p["status"] == "done" and p["session"] == "w1"
     assert p["result"].startswith("CATALOG three-pigs")
@@ -117,7 +117,7 @@ def test_intent_posting_carries_json_beside_text():
 
 
 def test_both_help_surfaces_name_ctx():
-    r = _shell("3lp.llp")
+    r = _shell("three_pigs/three_pigs.llp")
     assert "ctx [tokens|rules|trace]" in r.capture("help")
     ops = dispatch(r, "help", "")["ops"]
     assert {"ctx", "findings", "graph", "why", "causes"} <= set(ops)
@@ -130,7 +130,7 @@ def test_execution_ops_return_text_and_beats():
     """run/step carry the REPL's own text plus each fired event with
     its beat, episode and linear effect (the page's beat blocks);
     reset/undo/state/log/list/events are whitelisted and structured."""
-    r = _shell("herstory.llp")
+    r = _shell("herstory/herstory.llp")
     out = dispatch(r, "run", "5")
     assert out["text"].startswith("eve_hannah_birth hannah_eve_meet")
     f = out["fired"]
@@ -152,7 +152,7 @@ def test_execution_ops_return_text_and_beats():
 
 
 def test_ctx_carries_rule_source_and_run_key():
-    r = _shell("3lp.llp", "run 3")
+    r = _shell("three_pigs/three_pigs.llp", "run 3")
     c = r.ctx()
     brick = next(x for x in c["rules"] if x["name"] == "build_brick")
     assert brick["src"] == ("  %% a pig spends the bricks on a brick "
@@ -167,7 +167,7 @@ def test_wire_narrate_tells_the_session_run_bare_and_a_seed_on_request():
     """Console step 4: bare `narrate` narrates what the stream shows —
     the session's run since the base (REPL parity); `narrate N` a fresh
     seeded trace. `command:cat` echoes the certified material."""
-    r = _shell("3lp.llp", "run 3")
+    r = _shell("three_pigs/three_pigs.llp", "run 3")
     r.llm = "command:cat"
     s = dispatch(r, "narrate", "")
     assert (s["source"], s["events"]) == ("session", 3)
@@ -184,7 +184,7 @@ def test_wire_trace_bare_is_the_repls_case_replay_with_its_notes():
     """Console step 4: bare `trace` carries the REPL's own replay text
     and records its runtime notes (tragedy: exact out of reach), so
     `findings` sees them; `trace SEED` keeps the seeded JSON only."""
-    r = _shell("tragedy.llp")
+    r = _shell("tragedy/tragedy.llp")
     t = dispatch(r, "trace", "")
     assert t["text"].startswith("case tragedy") and "Q " in t["text"]
     codes = [d["code"] for d in dispatch(r, "findings", "")["diagnostics"]]

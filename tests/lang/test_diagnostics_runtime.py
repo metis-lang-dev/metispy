@@ -65,7 +65,7 @@ def test_state_budget_query_and_map(monkeypatch):
     monkeypatch.setattr(metis.kernel, "STATE_BUDGET", 10)
     import metis.lang.repl as repl_mod
     monkeypatch.setattr(repl_mod, "STATE_BUDGET", 10)
-    r = _repl(CATALOG / "domains/fiction/love_triangle.llp")
+    r = _repl(CATALOG / "domains/love_triangle/love_triangle.llp")
     r.onecmd("query anger(hermia,helena) 6")
     r.onecmd("map 6")
     notes = [d for d in r.notes if d.code == "state-budget"]
@@ -78,7 +78,7 @@ def test_state_budget_query_and_map(monkeypatch):
 def test_exact_unreachable_on_trace():
     """tragedy grounds to more events than the exact cap: trace says so
     on the Q lines AND as a note."""
-    r = _repl(CATALOG / "domains/fiction/tragedy.llp")
+    r = _repl(CATALOG / "domains/tragedy/tragedy.llp")
     r.onecmd("#steps 2")
     r.onecmd("trace")
     (d,) = [d for d in r.notes if d.code == "exact-unreachable"]
@@ -112,7 +112,7 @@ def test_reads_undeclared_rides_the_exception():
 
 def test_llm_endpoint_note(monkeypatch):
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")   # refused
-    r = _repl(CATALOG / "domains/fiction/3lp.llp")
+    r = _repl(CATALOG / "domains/three_pigs/three_pigs.llp")
     r.onecmd("llm ollama:no-such-model")
     (d,) = [d for d in r.notes if d.code == "llm-endpoint"]
     assert "unreachable" in dict(d.data)["problem"]
@@ -146,7 +146,7 @@ def test_notes_dedupe_and_retire_with_the_world(monkeypatch):
     monkeypatch.setattr(metis.kernel, "STATE_BUDGET", 10)
     import metis.lang.repl as repl_mod
     monkeypatch.setattr(repl_mod, "STATE_BUDGET", 10)
-    r = _repl(CATALOG / "domains/fiction/love_triangle.llp")
+    r = _repl(CATALOG / "domains/love_triangle/love_triangle.llp")
     for _ in range(3):
         r.onecmd("query anger(hermia,helena) 6")
         r.onecmd("trace")
