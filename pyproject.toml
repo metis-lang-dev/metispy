@@ -22,6 +22,13 @@ test = ["pytest", "pytest-rerunfailures", "pyRDDLGym", "rddlrepository"]
 [tool.setuptools.packages.find]
 include = ["metis*"]
 
+# the data files a package reads at run time: the domains' catalogs (the kitchen's pair
+# scenes the served bundle compiles, gol, nav, sysadmin, xtraffic, fiction, road) and
+# road's object table; without them a wheel install (non-editable) cannot build them
+# (tests/test_package_data.py)
+[tool.setuptools.package-data]
+"*" = ["catalogs/*.llp", "catalogs/*/*.llp", "data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
