@@ -44,46 +44,41 @@ Work exactly like these two examples.
 
 == example 1, the material ==
 == the run, in beats ==
-T 5 — 4 events, 4 beats
-  1 | check_moist
-  2 | dry_out
-  3 | check_dry
-  4 | water
+T 1 — 4 events, 3 beats
+  1 | boil
+    | brown
+  2 | brew
+  3 | serve
 == the final state ==
-F 5 (done)
-  checked  (dry) (moist)
-  done     (water)
-  moist    ·
+F 1 (done)
+  breakfast  ·
 == the rules (with their approved doc comments) ==
-stage main {
-  %% The sun has been on me for a while; my soil dries out.
-  dry_out [dyn] : moist * sun -o dry.
-  %% When I am dry and you water me, my soil is moist again.
-  water [dyn] : dry * cmd_water -o moist * done(water).
-  %% When you check on me while I am moist, I tell you I am moist.
-  check_moist [dyn] : cmd_check * $moist -o checked(moist).
-  %% When you check on me while I am dry, I tell you I am dry.
-  check_dry [dyn] : cmd_check * $dry -o checked(dry).
+stage morning {
+  %% the kettle comes to the boil.
+  boil [dyn] : kettle_on -o hot_water.
+  %% the toaster browns the bread into toast.
+  brown [dyn] : bread * toaster_on -o toast.
+  %% the hot water and a tea bag brew a cup of tea.
+  brew [dyn] : hot_water * teabag -o tea.
+  %% tea and toast together make breakfast, and it is served.
+  serve [dyn] : tea * toast -o breakfast.
 }
 
 == example 1, the narration ==
-The Plant That Was Asked Twice
+Tea and Toast
 
-The first time the person checked on the plant, its soil was moist,
-and it said so. Then the sun, which had been on it for a while,
-dried its soil out. Then the person checked again, and this time the
-plant answered that it was dry: the same question, a different
-answer, because the state between the two asks had changed. Then the
-person watered it, and its soil was moist again. The final state
-keeps both answers it gave, the watering done, and the soil moist
-once more.
+At the same time, the kettle came to the boil and the toaster browned
+the bread into toast; neither waited for the other. Then the hot water
+and a tea bag brewed a cup of tea. Then the tea and the toast came
+together, and breakfast was served. The final state keeps one thing:
+breakfast.
 
-Narrator's note: Every event here has a beat of its own, so the four
-are consecutive and "then" is licensed at each step; nothing is told
-as simultaneous. The two checks are not aggregated: they gave
-different answers, and the dry spell between them is why. What each
-event means is read off its %% comment — the sun dries, the check
-reports, the water moistens — and nothing else is added.
+Narrator's note: Beat 1 held two independent events, so they are told
+in one simultaneous sentence and nothing orders them. Beats 2 and 3
+follow, so "then" is licensed twice — and the rules say why: the brew
+spends the hot water the boil made, and the serving spends the tea and
+the toast. Nothing else is added: no cook, no table, no morning light,
+because no rule mentions them.
 
 == example 2, the material ==
 == the run, in beats ==
