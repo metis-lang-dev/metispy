@@ -149,10 +149,17 @@ def test_ocaml_pretty_roundtrip():
 
 # -- gate 4 (bundle-compiler s-3985caf6 step 2): the bundle's ground.wire ----
 
+# the packages metis-catalog's packages job does not build, as its ci/packages.py
+# PARKED names them: road, moved and not fixed until the SUMO subject (road-collapse
+# s-2a2cbea3)
+PARKED = ("road",)
+
+
 def _packages():
     """(name, program, extensions) of every catalog package that serves a
     program metispy can ground (metis_catalog: installed, $METIS_CATALOG,
-    else the sibling checkout)."""
+    else the sibling checkout); a package the catalog parks is not built
+    (PARKED: metis-catalog's ci/packages.py names it, with the reason)."""
     from metis.kernel.artifact import _catalog
     try:
         cat = _catalog()
@@ -160,6 +167,8 @@ def _packages():
         return []
     out = []
     for d in cat.domains():
+        if d.name in PARKED:
+            continue
         try:
             files = d.serves()
         except ValueError:
