@@ -8,7 +8,7 @@
  "init": {
   "moist": 1
  },
- "steps": 0,
+ "steps": 6,
  "stages": [
   "main"
  ],

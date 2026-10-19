@@ -6,4 +6,4 @@ E 0 -1 1 check_moist ; c cmd_check 1 ; o checked(moist) 1 ; p moist 1
 E 0 -1 1 check_dry ; c cmd_check 1 ; o checked(dry) 1 ; p dry 1
 E 0 -1 1 visitor_waters ; c dry 1 visitor 1 ; o moist 1
 I moist 1
-S 0
+S 6
