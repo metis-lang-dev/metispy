@@ -104,6 +104,112 @@ def run_trace(program: Program, steps: int, seed: int,
     return tuple(trace), (stage, pack_counts(counts))
 
 
+class TraceSampler:
+    """run_trace for many runs of one program (the watch's sampled tier,
+    rddl-watch s-cfe94dca): the same draws — each step's candidates in
+    canonical order, the same weights (an event's prior times its
+    integer transition count, as choice_weight), the same policy and
+    threshold — so `run(steps, seed)` is run_trace's final state; but
+    the event table is compiled once and a step weighs only the events
+    whose rarest premise is present (the filter's tier index), not
+    every event of the stage."""
+
+    def __init__(self, program: Program, policy=None):
+        self.program = program
+        self.events = canonical_events(program)
+        self.policy = policy
+        freq: Dict[str, int] = {}
+        for _, _, ev in self.events:
+            for a in set(ev.consume) | set(ev.persist):
+                freq[a] = freq.get(a, 0) + 1
+        # (stage, kind) -> (no premise, {rarest premise: [compiled event]});
+        # a compiled event: (index, prior, consume items, persist items)
+        index = {}
+        for i, (kind, stage, ev) in enumerate(self.events):
+            always, by = index.setdefault((stage, kind), ([], {}))
+            c = (i, ev.weight, tuple(ev.consume.items()), tuple(ev.persist.items()))
+            prem = set(ev.consume) | set(ev.persist)
+            if not prem:
+                always.append(c)
+            else:
+                by.setdefault(min(prem, key=lambda a: (freq[a], a)), []).append(c)
+        self.index = index
+
+    def _tier(self, stage, kind, counts):
+        always, by = self.index.get((stage, kind), ((), {}))
+        cand = list(always)
+        for a in counts:
+            got = by.get(a)
+            if got:
+                cand.extend(got)
+        cand.sort()
+        get = counts.get
+        ws = []
+        for i, prior, cons, pers in cand:
+            n = 1                       # weight.transition_count, inlined
+            for a, k in cons:
+                c = get(a, 0)
+                for j in range(k):
+                    n *= c - j
+                    if n <= 0:
+                        break
+                if n <= 0:
+                    break
+            if n > 0:
+                for a, k in pers:
+                    n *= get(a, 0) ** k
+                    if not n:
+                        break
+            if n > 0:
+                w = prior * n
+                if w > 0:
+                    ws.append((i, w))
+        return ws
+
+    def run(self, steps: int, seed: int) -> State:
+        rng = SplitMix64(seed)
+        stage, kappa = self.program.initial_state()
+        counts = dict(kappa)
+        events, policy = self.events, self.policy
+        for _ in range(steps):
+            if stage == DONE:
+                break
+            chosen = None
+            for kind in ("clause", "link"):
+                ws = self._tier(stage, kind, counts)
+                if ws and policy is not None and kind == "clause":
+                    ws = [(i, w) for i, w in policy(stage, counts, ws)
+                          if w > 0]
+                if ws:
+                    total = 0.0
+                    for _, w in ws:
+                        total += w
+                    threshold = rng.unit() * total
+                    acc = 0.0
+                    chosen = ws[-1][0]
+                    for i, w in ws:
+                        acc += w
+                        if threshold < acc:
+                            chosen = i
+                            break
+                    break
+            if chosen is None:
+                stage = DONE
+                continue
+            kind, _, ev = events[chosen]
+            for q, n in ev.consume.items():
+                left = counts[q] - n
+                if left > 0:
+                    counts[q] = left
+                else:
+                    del counts[q]
+            for q, n in ev.produce.items():
+                counts[q] = counts.get(q, 0) + n
+            if kind == "link":
+                stage = ev.post
+        return stage, pack_counts(counts)
+
+
 def final_line(seed: int, state: State) -> str:
     """The F-line rendering of a final state (sorted atom:count)."""
     stage, kappa = state

@@ -597,7 +597,7 @@ class Repl(LoopVerbs, Cmd):
         if self.plugin is not None:
             self._envs.append(self._env_snap())
 
-    def _tick(self, quiet_rows=True):
+    def _tick(self, quiet_rows=True, restart=False):
         """One env beat (the INPUT face): plugin.tick(counts) -> its
         do-lines applied as ONE exogenous row (kind "exo", how "exo":
         conditioning, excluded from the likelihood like a do), the env
@@ -606,7 +606,10 @@ class Repl(LoopVerbs, Cmd):
         name, or None when the env's episode is over (tick -> None).
         quiet_rows=False (the runtime's watch): a beat with no input
         adds no row — the env moves on and the head's env snapshot
-        follows it; -> "" for that quiet beat."""
+        follows it; -> "" for that quiet beat. restart=True (a lockstep
+        world's watch, rddl-watch s-cfe94dca): the input starts the next
+        step, so the stage pipeline starts again at its first stage
+        (the row is that stage's), wherever the last step left it."""
         from metis.fw.plugin import exo_event
         if self.plugin is None:
             return None
@@ -618,7 +621,9 @@ class Repl(LoopVerbs, Cmd):
                 self._envs[-1] = self._env_snap()
             return ""
         ev, after = exo_event(list(dos), self.counts)
-        if self.stage == DONE:
+        if restart:
+            self.stage = self.prog.init_stage
+        elif self.stage == DONE:
             self.stage = self.__dict__.get("_quiet_stage") \
                 or self.prog.init_stage
         self.counts = after

@@ -35,10 +35,39 @@ def _evidence(observed: Dict[str, int], steps: int):
     return {steps: pred}
 
 
+class _Certain(Exception):
+    """An empty reading: every path reaches it (no tier needed)."""
+
+
+def sampled_likelihood(program, steps: int, observed: Dict[str, int],
+                       samples: int, seed: int, policy=None):
+    """The sampled tier (rddl_recorder's Monte Carlo, for the watch):
+    `samples` reference-sampler runs of `steps` steps from the
+    program's initial state, run k seeded `seed + k`; a run reaches the
+    reading when every observed atom's count is the observation's (the
+    exact tier's evidence). -> (likelihood, its 95% Wilson half-width).
+    `policy` indexes canonical_events (PortPricer.policy(canonical=True)).
+    Deterministic per seed: the same window, seed and n give the same
+    estimate."""
+    import math
+    from .refsample import TraceSampler
+    sampler = TraceSampler(program, policy)     # run_trace's draws, indexed once
+    hits = 0
+    for k in range(samples):
+        _, kappa = sampler.run(steps, seed + k)
+        c = dict(kappa)
+        hits += all(c.get(a, 0) == n for a, n in observed.items())
+    p, z = hits / samples, 1.96
+    half = (z * math.sqrt(p * (1 - p) / samples + z * z / (4 * samples * samples))
+            / (1 + z * z / samples))
+    return p, half
+
+
 def surprise_record(program, steps: int, observed: Dict[str, int],
                     policy=None, rare_ratio: float = 0.05,
                     meta: Optional[dict] = None,
-                    max_states=None, env=None) -> dict:
+                    max_states=None, env=None,
+                    sampled: Optional[dict] = None) -> dict:
     """Log an observed (partial) outcome against the deployed
     artifact. kind: 'unmodeled' (zero likelihood — the leg-1
     trigger), 'rare' (likelihood below rare_ratio of the modal
@@ -48,14 +77,51 @@ def surprise_record(program, steps: int, observed: Dict[str, int],
     this record): the record carries its hash and, when it is small,
     the snapshot itself as JSON data — so recover() replays against
     the SAME env (a port-priced likelihood is only honest under the
-    env it saw)."""
-    pr = ForwardProjection(program, steps, policy=policy,
-                           max_states=max_states,
-                           keep_history=False)   # only .final read
-    like = sum(p for s, p in pr.final.items()
-               if _evidence(observed, steps)[steps](s))
+    env it saw).
+
+    `sampled` (rddl-watch s-cfe94dca; None: exact, as always): the tier
+    rule {max_states, samples, seed, policy}. Exact while the filter
+    stays within max_states (cumulative retained states: a bound on the
+    work, deterministic); past it, the sampled tier (sampled_likelihood,
+    `policy` canonical-indexed). The record then declares its tier:
+    `tier` "exact", or "sampled" with `n`, `seed` and `ci` (the 95%
+    half-width). A sampled zero is "no sampled run reached the
+    reading", not a proof: its kind is "rare" (the reading lies below
+    the tier's resolution, ci bounding it), never "unmodeled" — the
+    watch turns observe-only on the exact tier's zeros only (tamarisk's
+    zeros at n=500 are p ~ 1e-4..1e-2 at n=20000)."""
+    tier = None
+    if sampled is None:
+        pr = ForwardProjection(program, steps, policy=policy,
+                               max_states=max_states,
+                               keep_history=False)   # only .final read
+        like = sum(p for s, p in pr.final.items()
+                   if _evidence(observed, steps)[steps](s))
+    else:
+        from .filter import StateBudgetExceeded
+        try:
+            if not observed:                     # nothing read: certain
+                raise _Certain
+            pr = ForwardProjection(program, steps, policy=policy,
+                                   max_states=sampled["max_states"],
+                                   keep_history=False)
+            like = sum(p for s, p in pr.final.items()
+                       if _evidence(observed, steps)[steps](s))
+            tier = {"tier": "exact", "max_states": sampled["max_states"]}
+        except _Certain:
+            like = 1.0
+            tier = {"tier": "exact", "max_states": sampled["max_states"]}
+        except StateBudgetExceeded:
+            n, seed = int(sampled["samples"]), int(sampled["seed"])
+            like, half = sampled_likelihood(program, steps, observed, n,
+                                            seed, sampled.get("policy"))
+            tier = {"tier": "sampled", "max_states": sampled["max_states"],
+                    "n": n, "seed": seed, "ci": half}
     kind = "unmodeled" if like == 0.0 else \
         ("rare" if like < rare_ratio else None)
+    if tier is not None and tier["tier"] == "sampled" and like == 0.0:
+        kind = "rare"       # below the tier's resolution (ci bounds it): a
+                            # structural zero is the exact tier's claim only
     return {
         "format": "metis-surprise", "version": 1,
         "program_key": program_key(program),
@@ -66,6 +132,7 @@ def surprise_record(program, steps: int, observed: Dict[str, int],
         "kind": kind,
         "meta": dict(meta or {}),
         **({"env": env_record(env)} if env is not None else {}),
+        **(tier or {}),
     }
 
 

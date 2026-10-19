@@ -33,7 +33,39 @@ over the atoms it can read. A plugin without it is never surprised.
 The mirror (G-E): one line per domain — stage, status, surprise
 state, and the catalog's own #query marginals projected from the
 current state over the case horizon (#steps). Phase 1 serves one
-domain (the served catalog), so the mirror has one line."""
+domain (the served catalog), so the mirror has one line.
+
+Lockstep (a domain's manifest `clock: {lockstep: true}`, rddl-watch
+s-cfe94dca; off, the watch above is unchanged): the program computes one
+step of its world as a PASS of its stage pipeline, many rows long (an
+RDDL world's game-of-life or wildfire step). The watch then reads the
+world once per step, when the pass is done, never mid-pass:
+
+  done        the pass wrapped (a link back into the program's first
+              stage, from another) or nothing is left to fire
+  the beat    a wrapped pass holds (`held`) until the env's beat: its
+              next pass starts after the host's tick, as a quiet one does
+  restart     the beat's input starts the next pass at the first stage,
+              wherever the last one stopped (a pipeline with no link back
+              would otherwise sit in its last stage)
+  checkpoint  at every beat, the step's boundary: the window priced is
+              one pass, from the beat's input; a difference the program
+              explained is not priced again (the host's sync brings the
+              program to the world at the beat)
+
+`tier` prices the window (record.surprise_record's `sampled`): exact
+under a state budget, the declared sampled tier past it.
+
+Follow (`clock: {follow: true}`; row by row, off: unchanged): a reading
+that differs from the program's state but that the program explains (a
+belief change, or a rare one) is ADOPTED at once — one exo row named
+`reading`, the session's state is the world's — and the checkpoint moves
+there; a host that reads nothing (its world has not moved since its last
+step: an RDDL host's `read_steps`) leaves the window open, so it runs from
+one world step to the next. Without it the checkpoint stays put while the
+difference lasts,
+and each row prices a window one row longer (elevators: 0.1 s to 22 s a
+row by its 12th gym step, rddl-worlds finding (e))."""
 
 from typing import Dict, List, Optional
 
@@ -48,10 +80,15 @@ class Watch:
     def __init__(self, shell, beats: Optional[int] = None,
                  rare_ratio: float = 0.05, blind: bool = False,
                  operator: Optional[int] = None, scope: str = "order",
-                 explain_repeat_notice: int = 2):
+                 explain_repeat_notice: int = 2, lockstep: bool = False,
+                 tier: Optional[dict] = None, follow: bool = False):
         self.shell = shell
         self.path = shell.doc.catalog.name
         self.beats = beats              # env beats before stopping
+        self.lockstep = lockstep        # one read per pass (module doc)
+        self.held = False               # lockstep: a wrapped pass waits for the beat
+        self.tier = tier                # the pricing tier (None: exact, unbudgeted)
+        self.follow = follow            # an explained reading is adopted (module doc)
         self.rare_ratio = rare_ratio
         self.blind = blind              # arm A: no check, intents apply
         if scope not in ("order", "session"):
@@ -97,12 +134,21 @@ class Watch:
         sh = self.shell
         if self.done:
             return []
-        if not self.observe_only and sh._candidates():
+        if not self.observe_only and not self.held and sh._candidates():
             self.quiet = False
+            stage0 = sh.stage
             sh._sample()
             out = [self._row_signal()]
-            return out + self._read()
-        if not self.observe_only and not self.quiet:
+            if not self.lockstep:
+                return out + self._read()
+            first = sh.prog.init_stage
+            if sh.stage == first and stage0 != first:
+                self.held = True        # the pass wrapped: read, then the beat
+                return out + self._read()
+            if not sh._candidates():
+                return out + self._read()   # the pass ended quiet
+            return out                  # mid-pass: nothing to compare yet
+        if not self.observe_only and not self.quiet and not self.held:
             self.quiet = True
             self._task_done()
             if sh.plugin is None:
@@ -119,7 +165,8 @@ class Watch:
         out = self._read() if self.observe_only else []
         if self.observe_only:
             out += self._operator()
-        name = sh._tick(quiet_rows=False)
+        name = sh._tick(quiet_rows=False, restart=self.lockstep)
+        self.held = False
         if name is None:
             if sh.stage != DONE and not sh._candidates():
                 sh._latch_done()
@@ -133,10 +180,12 @@ class Watch:
             self.quiet = False
             out.append(self._row_signal())
         if not self.observe_only:
-            if name:
+            if name or self.lockstep:
                 # input arrived: the program answers it first (a pack's rule
                 # consuming the input atom: the plant's visitor_waters); the
-                # reading comes after its row, as for any fired row
+                # reading comes after its row, as for any fired row. Lockstep:
+                # every beat is a step's boundary, input or not (the reading
+                # comes at the pass's end)
                 self._checkpoint()
             else:
                 # nothing arrived, nothing fires: the env moved on its own
@@ -168,6 +217,8 @@ class Watch:
             return []
         reading = {a: int(n) for a, n in dict(observe(dict(sh.counts)))
                    .items()}
+        if not reading and (self.lockstep or self.follow):
+            return []                   # nothing read (the world has not moved): the window goes on
         model = {a: sh.counts.get(a, 0) for a in reading}
         diff = {a: reading[a] - model[a] for a in reading
                 if reading[a] != model[a]}
@@ -202,31 +253,78 @@ class Watch:
                                  observe_only=True)]
         if rec["kind"] == "rare":
             sh.loop.records.append(rec)
-            return [self._signal("event", kind="rare",
-                                 record=len(sh.loop.records) - 1,
-                                 likelihood=rec["likelihood"], diff=diff)]
-        # another path of the served world explains the reading: a
-        # belief change, not a surprise
-        return [self._signal("event", kind="reading", consistent=False,
-                             likelihood=rec["likelihood"], diff=diff)]
+            out = [self._signal("event", kind="rare",
+                                record=len(sh.loop.records) - 1,
+                                likelihood=rec["likelihood"], diff=diff)]
+        else:
+            # another path of the served world explains the reading: a
+            # belief change, not a surprise
+            out = [self._signal("event", kind="reading", consistent=False,
+                                likelihood=rec["likelihood"], diff=diff)]
+        if self.follow:
+            # the program follows its world: the reading it explained becomes
+            # its state (one exo row) and the next window starts there
+            out[-1]["adopted"] = self._adopt(by="reading")
+            self._checkpoint()
+        return out
 
     def _record(self, reading: Dict[str, int]) -> dict:
-        from metis.kernel.record import surprise_record
         sh = self.shell
         stage, counts, n0 = self._cp
-        prog = sh.doc.catalog.ground(dict(counts), init_stage=stage)
+        prog = self.program_at(counts, stage)
         steps = max(1, len(sh.fired) - n0)
-        policy = (sh.pricer.policy(prog) if sh.pricer is not None
-                  else None)
         snap = sh._env_snap()
-        return surprise_record(
-            prog, steps, reading, policy=policy,
-            rare_ratio=self.rare_ratio,
+        return self.price(
+            prog, steps, reading,
             meta={"path": self.path, "beat": self.beat,
                   "fired": len(sh.fired), "stage": stage,
                   "since": sh.fired[n0:],
                   "host": sh.plugin_spec or None},
             env=snap)
+
+    def program_at(self, counts, stage):
+        """The served program grounded at (counts, stage): the session's
+        own ground with that start (the events do not depend on it; a
+        ground of a big lockstep world costs a second)."""
+        from dataclasses import replace
+        return replace(self.shell.prog, init=dict(counts), init_stage=stage)
+
+    def price(self, prog, steps: int, reading: Dict[str, int],
+              meta: Optional[dict] = None, env=None) -> dict:
+        """surprise_record of `reading` over `steps` from `prog`, under
+        the session's pricer and the watch's tier: exact, or (`tier`
+        {max_states, samples, seed}) exact within the budget and the
+        declared sampled tier past it, its runs seeded from the tier's
+        seed and the session's position (reproducible per seed). The
+        domain agent's scored beat prices through here too."""
+        from metis.kernel.record import env_record, surprise_record
+        sh = self.shell
+        policy = (sh.pricer.policy(prog) if sh.pricer is not None
+                  else None)
+        sampled = None
+        if self.tier is not None:
+            # the same window priced twice (the watch's record at the pass's
+            # end, the scored beat after it): once
+            key = (prog.init_stage, tuple(sorted(prog.init.items())), steps,
+                   tuple(sorted(reading.items())), len(sh.fired))
+            memo = self.__dict__.get("_priced")
+            if memo is not None and memo[0] == key:
+                return dict(memo[1], meta=dict(meta or {}),
+                            **({"env": env_record(env)} if env is not None
+                               else {}))
+            sampled = {"max_states": int(self.tier["max_states"]),
+                       "samples": int(self.tier["samples"]),
+                       "seed": int(self.tier.get("seed", 1)) * 1_000_003
+                       + len(sh.fired),
+                       "policy": (sh.pricer.policy(prog, canonical=True)
+                                  if sh.pricer is not None else None)}
+        rec = surprise_record(prog, steps, reading, policy=policy,
+                              rare_ratio=self.rare_ratio, meta=meta,
+                              env=env, sampled=sampled)
+        if sampled is not None:
+            self._priced = (key, {k: v for k, v in rec.items()
+                                  if k not in ("meta", "env")})
+        return rec
 
     # -- signal lines --------------------------------------------------------
 
