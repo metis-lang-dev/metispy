@@ -1,5 +1,5 @@
 % Bus fixture: the single-world REFERENCE for the three-world
-% gossip wiring — same mechanism as domains/social/gossip.llp
+% gossip wiring — same mechanism as domains/gossip/gossip.llp
 % (metis-catalog), reduced to the test's ring: alice follows bob
 % follows carol follows alice; each starts knowing one message.
 % The bus run must reproduce THIS world's closure.

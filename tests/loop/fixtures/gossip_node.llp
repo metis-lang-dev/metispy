@@ -1,5 +1,5 @@
 % Bus fixture: ONE person of the gossip world (the three-world
-% wiring of domains/social/gossip.llp, metis-catalog). The social
+% wiring of domains/gossip/gossip.llp, metis-catalog). The social
 % graph is NOT here: `follows` became DRIVER wiring — who hears
 % whose posts is bus policy on the blackboard. The world only knows
 % how to hear, learn and repost; same once-token discipline as the

@@ -9,7 +9,7 @@ from metis.kernel.horn import HornDB
 from metis.lang import compile_catalog, parse
 
 PRIMES = (Path(__file__).resolve().parents[2]
-          / "metis-catalog/domains/arith/primes.llp")
+          / "metis-catalog/domains/primes/primes.llp")
 
 
 class PlainSLD(HornDB):

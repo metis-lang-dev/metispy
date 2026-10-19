@@ -124,7 +124,7 @@ def test_findings_verb_lists_and_shows(capsys, monkeypatch):
     notes; `findings N` renders one in full; the wire returns JSON."""
     from metis.loop.wire import dispatch
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
-    r = _repl(CATALOG / "domains/arith/primes.llp")   # one warning
+    r = _repl(CATALOG / "domains/primes/primes.llp")   # one warning
     r.onecmd("llm ollama:no-such-model")
     capsys.readouterr()
     r.onecmd("findings")
