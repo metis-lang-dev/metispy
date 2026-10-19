@@ -156,7 +156,7 @@ def _packages():
     from metis.kernel.artifact import _catalog
     try:
         cat = _catalog()
-    except ImportError:
+    except (ImportError, RuntimeError):          # no metis-catalog: said by _catalog
         return []
     out = []
     for d in cat.domains():

@@ -269,13 +269,24 @@ def write(out: Path, files: dict) -> Path:
 
 
 def _catalog():
+    """metis_catalog, the loader a domain NAME needs (a .llp path does not):
+    installed, else the checkout $METIS_CATALOG names, else a metis-catalog
+    checkout beside this source tree (the dev layout). Without any, a clear
+    error, not a bare ImportError (a wheel install has no sibling)."""
     try:
         import metis_catalog
+        return metis_catalog
     except ImportError:
-        root = os.environ.get("METIS_CATALOG") or str(
-            Path(__file__).resolve().parents[3] / "metis-catalog")
-        sys.path.insert(0, root)
-        import metis_catalog
+        pass
+    env = os.environ.get("METIS_CATALOG")
+    root = Path(env) if env else Path(__file__).resolve().parents[3] / "metis-catalog"
+    if not (root / "metis_catalog" / "__init__.py").is_file():
+        raise RuntimeError(
+            "a domain name needs metis-catalog: install it (pip install -e "
+            "metis-catalog), or set METIS_CATALOG to a metis-catalog checkout "
+            "(%s has none); a .llp path builds without it" % root)
+    sys.path.insert(0, str(root))
+    import metis_catalog
     return metis_catalog
 
 

@@ -1,0 +1,73 @@
+name: publish
+
+# metispy to PyPI by trusted publishing (release-check s-7dc259fc): the PyPI
+# project's pending publisher is owner metis-lang-dev, repo metispy, this
+# workflow (publish.yml), environment `pypi` (its reviewer approves each upload).
+# No secret, no token: the upload authenticates with the job's OIDC identity.
+#
+#   a push of a tag vX.Y.Z   build, check the tag against pyproject's version,
+#                            smoke-install the wheel, then upload (after the
+#                            `pypi` environment's approval)
+#   workflow_dispatch        the dry run: build, check, smoke; no upload
+#
+# A release (README "Releasing"): bump `version` in pyproject.toml, commit,
+# `git tag vX.Y.Z`, push the tag, approve the `pypi` run.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metispy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: The tag is pyproject's version
+        run: |
+          v=$(python -c "import tomllib; print(tomllib.load(open('metispy/pyproject.toml', 'rb'))['project']['version'])")
+          echo "pyproject version: $v"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            [ "$GITHUB_REF_NAME" = "v$v" ] || { echo "::error::tag $GITHUB_REF_NAME is not v$v (pyproject.toml's version): bump the version, or tag v$v"; exit 1; }
+          fi
+          echo "### metispy $v ($GITHUB_REF_TYPE $GITHUB_REF_NAME)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the sdist and the wheel
+        # from outside the source tree: a build/ directory there would shadow the `build` module
+        run: |
+          python -m pip install -q build
+          python -m build --outdir dist metispy
+          ls -l dist
+      - name: Smoke-install the wheel in a fresh venv, outside the checkout
+        run: bash metispy/tools/smoke_wheel.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  pypi:
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/metispy/
+    permissions:
+      id-token: write          # trusted publishing: the OIDC token is the credential
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

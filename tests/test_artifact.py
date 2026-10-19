@@ -282,3 +282,17 @@ def test_the_bundle_carries_the_repl_api(lamp):
     files = build(lamp / "lamp.llp")
     doc = json.loads(files["tools.json"])
     assert doc["format"] == "metis-repl-api/1" and doc["tools"] == repl_api()
+
+
+def test_a_domain_name_without_metis_catalog_says_what_to_do(tmp_path, monkeypatch):
+    """release-check s-7dc259fc: a wheel install has no sibling checkout; a
+    domain NAME then fails with what to do, never a bare ImportError."""
+    import sys
+
+    import pytest
+
+    from metis.kernel import artifact
+    monkeypatch.setitem(sys.modules, "metis_catalog", None)      # not importable
+    monkeypatch.setenv("METIS_CATALOG", str(tmp_path))           # a dir with no checkout
+    with pytest.raises(RuntimeError, match="install it .*or set METIS_CATALOG"):
+        artifact.resolve("plant")

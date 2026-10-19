@@ -1,13 +1,33 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]      # PEP 639: license as an SPDX expression
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "metispy"
 version = "0.1.0"
 description = "The metis python referee + research kit: exact semantics, learning, the formalize harness — cross-checking the metis-lang toolchain"
-requires-python = ">=3.9"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Robofortis"}]
+# the floor is what CI runs (ci.yml, publish.yml: 3.12); widen it with a CI matrix, not by hope
+requires-python = ">=3.12"
 dependencies = ["numpy"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://metis-lang-dev.github.io"
+Repository = "https://github.com/metis-lang-dev/metispy"
+Issues = "https://github.com/metis-lang-dev/metispy/issues"
+Compiler = "https://github.com/metis-lang-dev/metis-lang"
+Catalog = "https://github.com/metis-lang-dev/metis-catalog"
 
 [project.scripts]
 metis = "metis.lang.repl:main"

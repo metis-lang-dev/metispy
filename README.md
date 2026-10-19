@@ -34,6 +34,21 @@ headers; metispy referees both.
 - `tests/` — the full gate suite, including the cross-toolchain
   parity gates (OCaml compiles ≙ python referees ≙ C++ interprets).
 
+## Install
+
+```sh
+pip install metispy         # Python 3.12+; the import name is `metis`, the CLI `metis`
+```
+
+What you get: the referee and research kit above — the exact measure,
+learning, decision, records, the `metis <file.llp>` shell and the python
+front-end, with the domains' catalogs it builds from. It is not the
+compiler: `metisc` is metis-lang's (OCaml), built from that repo. A domain
+NAME (rather than a `.llp` path) needs the catalog's loader: install
+metis-catalog, or set `METIS_CATALOG` to a checkout.
+
+For development, beside its siblings:
+
 ```sh
 pip install -e .            # into the metis-lang dev env
 METIS_LANG=../metis-lang python3 -m pytest tests/ -q
@@ -43,6 +58,17 @@ python3 -m pytest tests/ -q -m 'not slow'   # the dev loop
 Optional extras: `pip install overcooked-ai scipy` (kitchen),
 `pyRDDLGym` (sysadmin), `pgmpy` (graph-evaluator comparisons).
 Oracle parity vs the wayplan ll2pg lineage: `METIS_ORACLE_PATH`.
+
+## Releasing
+
+metispy goes to PyPI from GitHub by trusted publishing
+(`.github/workflows/publish.yml`; no token anywhere): bump `version` in
+`pyproject.toml`, commit, `git tag vX.Y.Z` (the tag must be `v` + that
+version: the workflow refuses any other), push the tag, then approve the
+`pypi` environment's run on GitHub. The run builds the sdist and the wheel,
+smoke-installs the wheel in a fresh venv outside the checkout
+(`tools/smoke_wheel.sh`, which ci.yml runs on every push too) and uploads.
+`workflow_dispatch` is the dry run: everything but the upload.
 
 ## Narration (`narrate`, metis/loop/narrate.py)
 
@@ -73,3 +99,7 @@ Example, metis-catalog `domains/rddl/wildfire.llp`:
 The material asks for a length sized to what is told, and a narration
 the endpoint cut at its token cap ends on its last full sentence with
 "(narration cut at N tokens; ask fewer beats)".
+
+## License
+
+Apache License 2.0 (see `LICENSE`, `NOTICE`).
