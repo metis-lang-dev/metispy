@@ -86,7 +86,7 @@ tellable:
 | `%% phrase one \| phrase two` (⊕ rule) | branch N's event tells phrase N |
 | `% evidence: "…"` | nothing — single-`%` lines never reach the narrator |
 
-Example, metis-catalog `domains/rddl/wildfire.llp`:
+Example, metis-catalog `domains/wildfire/wildfire.llp`:
 
 ```
   % evidence: "k, the number of its neighbors burning at the start of the step"
