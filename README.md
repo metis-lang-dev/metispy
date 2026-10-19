@@ -64,8 +64,8 @@ Oracle parity vs the wayplan ll2pg lineage: `METIS_ORACLE_PATH`.
 metispy goes to PyPI from GitHub by trusted publishing
 (`.github/workflows/publish.yml`; no token anywhere): bump `version` in
 `pyproject.toml`, commit, `git tag vX.Y.Z` (the tag must be `v` + that
-version: the workflow refuses any other), push the tag, then approve the
-`pypi` environment's run on GitHub. The run builds the sdist and the wheel,
+version: the workflow refuses any other), push the tag: it publishes straight
+through (the `pypi` environment has no required reviewer). The run builds the sdist and the wheel,
 smoke-installs the wheel in a fresh venv outside the checkout
 (`tools/smoke_wheel.sh`, which ci.yml runs on every push too) and uploads.
 `workflow_dispatch` is the dry run: everything but the upload.

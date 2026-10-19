@@ -2,16 +2,16 @@ name: publish
 
 # metispy to PyPI by trusted publishing (release-check s-7dc259fc): the PyPI
 # project's pending publisher is owner metis-lang-dev, repo metispy, this
-# workflow (publish.yml), environment `pypi` (its reviewer approves each upload).
+# workflow (publish.yml), environment `pypi` (no required reviewer: the tag is the release).
 # No secret, no token: the upload authenticates with the job's OIDC identity.
 #
 #   a push of a tag vX.Y.Z   build, check the tag against pyproject's version,
-#                            smoke-install the wheel, then upload (after the
-#                            `pypi` environment's approval)
+#                            smoke-install the wheel, then upload: a tag publishes
+#                            straight through
 #   workflow_dispatch        the dry run: build, check, smoke; no upload
 #
 # A release (README "Releasing"): bump `version` in pyproject.toml, commit,
-# `git tag vX.Y.Z`, push the tag, approve the `pypi` run.
+# `git tag vX.Y.Z`, push the tag. workflow_dispatch is the only dry run.
 
 on:
   push:
