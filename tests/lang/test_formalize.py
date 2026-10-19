@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 LANG = Path(os.environ.get(
     "METIS_LANG", ROOT.parent / "metis-lang")).resolve()
 
+# Attribution: PROSE and REDUX re-express the Ceptre tutorial's love triangle
+# (interactive-lp, Chris Martens, ACSL v1.4); the port is metis-catalog's
+# domains/ceptre/love_triangle/.
 PROSE = ("Characters can become jealous: if A loves B while C "
          "(someone else) loves A, C becomes angry at A and at B. "
          "Three angers at a person you love, and the love dies.")
@@ -61,8 +64,8 @@ def test_faithful_reformalization_is_identical():
     assert r.ok and not r.findings and not r.warnings
     assert [n for n, _ in r.rules] == ["move_on", "jealousy"]
     assert all(doc.strip() for _, doc in r.rules)
-    hand = load_llp(ROOT / "metis/domains/fiction/catalogs/"
-                    "love_triangle.llp")
+    from lovetriangle import love_triangle
+    hand = love_triangle()                 # the catalog's Ceptre port, or skip
     assert r.scenarios[0].key == program_key(
         hand.catalog.ground(dict(ACT_ONE)))
     assert "counterexample" in r.classification

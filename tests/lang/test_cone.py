@@ -14,7 +14,7 @@ from metis.lang.cone import (check_closed, cone_readout, full_readout,
 from metis.lang.repl import Repl
 
 DOMAINS = Path(__file__).resolve().parents[3] / \
-    "metis-catalog/domains"
+    "metis-catalog/domains/ceptre"
 pytestmark = pytest.mark.skipif(not DOMAINS.exists(),
                                 reason="metis-catalog not checked out")
 

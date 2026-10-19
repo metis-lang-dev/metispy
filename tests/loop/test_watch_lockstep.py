@@ -206,7 +206,7 @@ def test_follow_adopts_an_explained_reading(tmp_path, monkeypatch):
 
 
 def test_the_trace_sampler_is_run_traces_draws():
-    from metis.domains.fiction import INIT, love_triangle
+    from lovetriangle import INIT, love_triangle
     prog = love_triangle().catalog.ground(INIT)
     ts = TraceSampler(prog)
     for seed in range(1, 40):

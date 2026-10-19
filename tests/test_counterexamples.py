@@ -51,7 +51,7 @@ def test_love_triangle_multiplicity_rejected_at_admission():
     idiom of our lineage is falling-factorial territory (exact
     filter/sampler, Thm 1), structurally outside the emitted class.
     The lineage and the class boundary are the same fact."""
-    from metis.domains.fiction import INIT, love_triangle
+    from lovetriangle import INIT, love_triangle
     with raises(FactorizeError, match="multiplicity"):
         FactoredProgram(love_triangle().catalog.ground(INIT), 1)
 

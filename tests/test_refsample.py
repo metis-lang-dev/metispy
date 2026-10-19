@@ -22,7 +22,7 @@ def test_traces_are_presentation_invariant():
     """Canonical event order: a shuffled catalog samples the SAME
     traces — the run identity quotient, operational."""
     from metis.kernel import Program
-    from metis.domains.fiction import INIT, love_triangle
+    from lovetriangle import INIT, love_triangle
     prog = love_triangle().catalog.ground(INIT)
     shuffled = Program(
         stages={s: list(reversed(cs))
@@ -38,7 +38,7 @@ def test_full_class_empirical_matches_exact():
     """The measure agreement on the ORIGIN program — multiplicity-3
     heartbreak and all: empirical marginals track the exact filter
     (Thm 1's distribution, drawn through the portable RNG)."""
-    from metis.domains.fiction import love_triangle
+    from lovetriangle import love_triangle
     init = {"eros(helena,hermia)": 1, "anger(helena,hermia)": 3,
             "eros(hermia,helena)": 1}
     prog = love_triangle().catalog.ground(init)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metispy"
-version = "0.1.0"
+version = "0.1.1"
 description = "The metis python referee + research kit: exact semantics, learning, the formalize harness — cross-checking the metis-lang toolchain"
 readme = "README.md"
 license = "Apache-2.0"
@@ -43,7 +43,7 @@ test = ["pytest", "pytest-rerunfailures", "pyRDDLGym", "rddlrepository"]
 include = ["metis*"]
 
 # the data files a package reads at run time: the domains' catalogs (the kitchen's pair
-# scenes the served bundle compiles, gol, nav, sysadmin, xtraffic, fiction, road) and
+# scenes the served bundle compiles, gol, nav, sysadmin, xtraffic, road) and
 # road's object table; without them a wheel install (non-editable) cannot build them
 # (tests/test_package_data.py)
 [tool.setuptools.package-data]

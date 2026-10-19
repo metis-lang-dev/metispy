@@ -9,7 +9,7 @@ from metis.lang.directives import atom_rows, nearest_held
 from metis.lang.repl import Repl
 
 CAT = Path(__file__).resolve().parents[3] / "metis-catalog"
-BLOCKS = CAT / "domains/blocks_world/blocks_world.llp"
+BLOCKS = CAT / "domains/ceptre/blocks_world/blocks_world.llp"
 pytestmark = pytest.mark.skipif(not BLOCKS.is_file(),
                                 reason="metis-catalog not checked out")
 

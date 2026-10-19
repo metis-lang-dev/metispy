@@ -12,7 +12,7 @@ from metis.lang.repl import Repl
 from metis.loop.narrate import material
 
 CAT = Path(__file__).resolve().parents[3] / "metis-catalog"
-THREE = CAT / "domains/three_pigs/three_pigs.llp"
+THREE = CAT / "domains/ceptre/three_pigs/three_pigs.llp"
 
 pytestmark = pytest.mark.skipif(not THREE.exists(),
                                 reason="metis-catalog not checked out")

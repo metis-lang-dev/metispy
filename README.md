@@ -26,9 +26,11 @@ headers; metispy referees both.
   directives).
 - `metis/fw/` — the python evaluator product loop (truth generator
   for the C++ Evaluator).
-- `metis/domains/` — the benchmark playground models (fiction/
-  Ceptre, GoL, kitchen/Overcooked, nav, sysadmin, xtraffic, road).
-  Their catalogs live in metis-catalog.
+- `metis/domains/` — the benchmark playground models (GoL,
+  kitchen/Overcooked, nav, sysadmin, xtraffic, road). Their catalogs
+  live in metis-catalog. The Ceptre love triangle the lineage tests
+  read is metis-catalog's `domains/ceptre/love_triangle/`: it is under
+  interactive-lp's license, so metispy does not ship it (since 0.1.1).
 - `tools/` — golden/artifact generators writing INTO the metis-lang
   checkout (`METIS_LANG`, default: the sibling `../metis-lang`).
 - `tests/` — the full gate suite, including the cross-toolchain

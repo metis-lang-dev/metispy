@@ -13,7 +13,9 @@ from metis.lang.directives import embedded_case
 from metis.lang.repl import Repl
 
 ROOT = Path(__file__).resolve().parents[2]
-CATALOG = ROOT / "metis/domains/fiction/catalogs/love_triangle.llp"
+from lovetriangle import CATALOG, needs  # noqa: E402  (the catalog's Ceptre port)
+
+pytestmark = needs
 
 
 def shell(path=CATALOG, seed=1):

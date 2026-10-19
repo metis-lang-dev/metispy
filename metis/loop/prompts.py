@@ -44,47 +44,46 @@ Work exactly like these two examples.
 
 == example 1, the material ==
 == the run, in beats ==
-T 1 — 4 events, 3 beats
-  1 | build_straw
-    | build_brick
-  2 | blow_straw
-  3 | blow_brick
+T 5 — 4 events, 4 beats
+  1 | check_moist
+  2 | dry_out
+  3 | check_dry
+  4 | water
 == the final state ==
-F 1 go
-  brickhouse  ·
+F 5 (done)
+  checked  (dry) (moist)
+  done     (water)
+  moist    ·
 == the rules (with their approved doc comments) ==
-stage go {
-  %% a pig spends the straw on a straw house.
-  build_straw [story] : pig * straw -o strawhouse.
-  %% a pig spends the bricks on a brick house.
-  build_brick [story] : pig * bricks -o brickhouse.
-  %% the wolf blows the straw house down: the HOUSE is consumed, the
-  %% wolf only $-read — he walks on to the next house.
-  blow_straw [story] : $wolf * strawhouse -o ().
-  %% the wolf huffs at the brick house: now the WOLF is consumed and
-  %% the house only $-read — it stands, he is spent.
-  blow_brick [story] : wolf * $brickhouse -o ().
+stage main {
+  %% The sun has been on me for a while; my soil dries out.
+  dry_out [dyn] : moist * sun -o dry.
+  %% When I am dry and you water me, my soil is moist again.
+  water [dyn] : dry * cmd_water -o moist * done(water).
+  %% When you check on me while I am moist, I tell you I am moist.
+  check_moist [dyn] : cmd_check * $moist -o checked(moist).
+  %% When you check on me while I am dry, I tell you I am dry.
+  check_dry [dyn] : cmd_check * $dry -o checked(dry).
 }
 
 == example 1, the narration ==
-The Straw and the Brick
+The Plant That Was Asked Twice
 
-At the same time, two pigs built: one spent its straw on a straw
-house, the other laid its bricks into a brick house. No order holds
-between the two — they share a beat. Then the wolf blew the straw
-house down; the house was consumed, and the wolf, in the rule's own
-words, walked on to the next house. Then he huffed at the brick
-house — and this time it was the wolf who was consumed while the
-house stood: he was spent. The final state keeps exactly one atom,
-and it is the brick house, still standing over the quiet that
-remains.
+The first time the person checked on the plant, its soil was moist,
+and it said so. Then the sun, which had been on it for a while,
+dried its soil out. Then the person checked again, and this time the
+plant answered that it was dry: the same question, a different
+answer, because the state between the two asks had changed. Then the
+person watered it, and its soil was moist again. The final state
+keeps both answers it gave, the watering done, and the soil moist
+once more.
 
-Narrator's note: Beat 1 held two independent builds, so they are
-told in one simultaneous sentence, and nothing in the telling
-orders them. Beats 2 and 3 are consecutive, so "then" is licensed
-twice. Who survives each blow is not fairy-tale memory: it is read
-off the %% comments — the straw rule consumes the house, the brick
-rule consumes the wolf.
+Narrator's note: Every event here has a beat of its own, so the four
+are consecutive and "then" is licensed at each step; nothing is told
+as simultaneous. The two checks are not aggregated: they gave
+different answers, and the dry spell between them is why. What each
+event means is read off its %% comment — the sun dries, the check
+reports, the water moistens — and nothing else is added.
 
 == example 2, the material ==
 == the run, in beats ==

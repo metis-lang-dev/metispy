@@ -19,7 +19,7 @@ from metis.lang.repl import Repl
 from metis.loop.wire import dispatch
 
 ROOT = Path(__file__).resolve().parents[2]
-DOMAINS = ROOT.parent / "metis-catalog/domains"
+DOMAINS = ROOT.parent / "metis-catalog/domains/ceptre"
 GOLDENS = Path(__file__).parent / "goldens"
 
 

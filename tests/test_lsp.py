@@ -10,8 +10,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GOOD = (ROOT / "metis/domains/fiction/catalogs/"
-        "love_triangle.llp").read_text()
+
+
+def _good():
+    """The love triangle's text (the catalog's Ceptre port), or skip."""
+    from lovetriangle import require
+    return require().read_text()
+
+
 BAD_PARSE = "catalog broken 1.\nstage go {\n  r1 [dyn] : a -o .\n}\n"
 BAD_COMPILE = """catalog badc 1.
 layers (dyn).
@@ -91,7 +97,7 @@ def test_clean_catalog_and_queries():
     c = make_client()
     try:
         uri = "file:///tmp/lt.llp"
-        assert c.open(uri, GOOD) == []          # zero diagnostics
+        assert c.open(uri, _good()) == []      # zero diagnostics
         comp = c.request("textDocument/completion",
                          {"textDocument": {"uri": uri},
                           "position": {"line": 0, "character": 0}})
@@ -99,7 +105,7 @@ def test_clean_catalog_and_queries():
         assert {"stage", "qui", "eros", "anger",
                 "helena"} <= labels
         # hover over `eros` in the jealousy rule body
-        lines = GOOD.splitlines()
+        lines = _good().splitlines()
         ln = next(i for i, l in enumerate(lines)
                   if "$eros(A,B)" in l)
         h = c.request("textDocument/hover",
@@ -154,7 +160,7 @@ def test_send_to_interpreter():
     c = make_client()
     try:
         uri = "file:///tmp/lt.llp"
-        assert c.open(uri, GOOD) == []
+        assert c.open(uri, _good()) == []
         r = c.request("workspace/executeCommand",
                       {"command": "llp.trace", "arguments": [uri]})
         assert r["ok"]
@@ -168,7 +174,7 @@ def test_send_to_interpreter():
         # a buffer with no directives says how to add them
         u2 = "file:///tmp/bare.llp"
         c.open(u2, "\n".join(
-            l for l in GOOD.splitlines() if not l.startswith("#")))
+            l for l in _good().splitlines() if not l.startswith("#")))
         r2 = c.request("workspace/executeCommand",
                        {"command": "llp.trace", "arguments": [u2]})
         assert not r2["ok"] and "#init" in r2["text"]

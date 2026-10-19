@@ -10,7 +10,7 @@ from metis.loop.wire import (INTENT_VERBS, dispatch, intent_posting,
                              parse_intent)
 
 ROOT = Path(__file__).resolve().parents[2]
-DOMAINS = ROOT.parent / "metis-catalog/domains"
+DOMAINS = ROOT.parent / "metis-catalog/domains/ceptre"
 
 
 def _shell(name, *cmds):

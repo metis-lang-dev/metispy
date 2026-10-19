@@ -13,7 +13,9 @@ from metis.lang.directives import (DirectiveError, embedded_case,
                                    render_run)
 
 ROOT = Path(__file__).resolve().parents[2]
-CATALOG = ROOT / "metis/domains/fiction/catalogs/love_triangle.llp"
+from lovetriangle import CATALOG, needs  # noqa: E402  (the catalog's Ceptre port)
+
+pytestmark = needs
 
 DIRECTIVES = """\
 #init eros(helena,hermia) 1

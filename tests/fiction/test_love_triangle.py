@@ -14,8 +14,9 @@ from metis.kernel import ForwardProjection, program_key, \
     sample_final
 from metis.kernel.posterior import map_derivation
 from metis.lang import parse, pretty
-from metis.domains.fiction import INIT, love_triangle
-from metis.domains.fiction.model import CATALOG, drama_policy
+from lovetriangle import CATALOG, INIT, drama_policy, love_triangle, needs
+
+pytestmark = needs
 
 EXACT = dict(abs=1e-9)
 

@@ -91,8 +91,9 @@ PUBLIC = {
     "weights": dict(program=ROOT / "tools/live_weights.llp", seed=23,
                     samples=120, bindings=[],
                     ticks=[["+tok"]] * 30 + [["+tok 3"]] * 10),
-    # multiplicities: a one-stage world sampled at length
-    "love_triangle": dict(program=LANG / "corpus/love_triangle.llp", seed=5,
+    # multiplicities: a one-stage world sampled at length (the Ceptre port,
+    # under interactive-lp's license in corpus/ceptre/: ceptre-carveout)
+    "love_triangle": dict(program=LANG / "corpus/ceptre/love_triangle.llp", seed=5,
                           samples=60, bindings=[],
                           ticks=[[], ["+jealous(helena)"], [], []]),
 }
