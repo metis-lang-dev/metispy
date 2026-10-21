@@ -279,6 +279,7 @@ class Repl(LoopVerbs, Cmd):
         self._plugin_pin = plugin
         self._port_warns = []
         self.path = Path(path)
+        self._seed = seed               # the wire's reload serves a new open with it
         self.rng = SplitMix64(seed)
         self.undo_stack = []
         self.fired = []

@@ -8,7 +8,11 @@ to the one kernel REPL. Two faces, one dispatcher:
     export/sink/load (file paths from page viewers), and any llm/
     formalize spec naming a command (shell execution).
   - `serve_json(shell)` — the JSON-lines wire (`metis --json FILE`):
-    one {op, arg} per line in, one JSON result per line out.
+    one {op, arg} per line in, one JSON result per line out. It alone
+    has `reload [PATH]` (`reload_shell`): another program served in
+    this process's place, and an applied program that won't load never
+    replaces the one served (loop-parity s-72d9d36b). Not a page intent:
+    it names a file.
 
 Ops map to the shell's loop verbs (metis.loop.verbs cmd_*) plus
 thin wire readouts of the runtime session (trace/map/marginals/
@@ -694,6 +698,31 @@ def intent_posting(shell, line: str, session=None) -> dict:
     return out
 
 
+def reload_shell(shell, arg=""):
+    """`reload [PATH]`: the program at PATH (default: the one served) in
+    this process's place, served fresh as a new open serves it, with the
+    host as attached (D4: a host is named on the operator's argv only,
+    never here: a program with another host is a new process). A program
+    that does not load never replaces the one served: ok:false with its
+    findings, and the program, its candidate and the session stay.
+    (result, the shell served after it)."""
+    from pathlib import Path
+    w = shell.__dict__.get("_watch")
+    if w is not None and not w.done:
+        return {"ok": False, "error": "reload: a watch runs (watch off first)"}, shell
+    path = Path(arg.strip()).expanduser() if arg.strip() else shell.path
+    try:
+        new = type(shell)(path, seed=shell._seed,
+                          plugin=shell._plugin_pin if shell._host else None,
+                          host=shell._host, stdout=shell.stdout)
+    except Exception as e:          # noqa: BLE001 — the program's own failure is the answer
+        findings = getattr(e, "findings", None) or [f"{type(e).__name__}: {e}"]
+        return {"ok": False, "findings": [str(f) for f in findings],
+                "served": str(shell.path)}, shell
+    return {"ok": True, "path": str(new.path), "key": new.key,
+            "host": new.plugin_spec or None}, new
+
+
 def serve_json(shell, stdin=None, stdout=None) -> int:
     """The JSON-lines wire: {op, arg} per line in, one JSON result
     per line out (`metis --json FILE`). While a `watch` runs, its
@@ -749,6 +778,10 @@ def serve_json(shell, stdin=None, stdout=None) -> int:
                 req = json.loads(line)
             except ValueError as e:
                 emit({"ok": False, "error": str(e)})
+                continue
+            if req.get("op") == "reload":     # the wire's own: it replaces the shell served
+                res, shell = reload_shell(shell, req.get("arg", ""))
+                emit(res)
                 continue
             emit(dispatch(shell, req.get("op", ""), req.get("arg", "")))
             flush()
