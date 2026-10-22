@@ -64,7 +64,8 @@ when it is cornered. The human gate above is the default and is unchanged.
     the CLI). They are changes, candidate minus current: likelihood, success; and
     replay_identical (bool), vector (the complexity vector's change: a number, a list or a
     dict summed, or {before, after}), fits_records (bool: the candidate fires on its record
-    and on no record it contradicts);
+    and on no record it contradicts); numbers of another type refuse in words, before any
+    verdict and with no plan left waiting (a bool is no real number: `true` is not +1);
   - the verdict per phase (POLICY.md, the experimental gate):
       explore   fits_records, and the likelihood not down
       exploit   the likelihood up, or the success up with the likelihood not down
@@ -116,12 +117,52 @@ def _vector(v):
     return v
 
 
+REALS = ("likelihood", "success")
+BOOLS = ("replay_identical", "fits_records")
+
+
+def _real(v):
+    import math
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _vector_ok(v):
+    if isinstance(v, dict) and set(v) == {"before", "after"}:
+        return _vector_ok(v["before"]) and _vector_ok(v["after"])
+    if isinstance(v, dict):
+        return bool(v) and all(_real(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return bool(v) and all(_real(x) for x in v)
+    return _real(v)
+
+
+def check_numbers(numbers):
+    """The numbers as the policy reads them, or Refused in words: likelihood and success real
+    numbers (a bool is not one: `true` must not count as +1), replay_identical and fits_records
+    bools, the vector numbers (a number, a list, a dict, {before, after}); a key the policy
+    does not read is kept, unread."""
+    if numbers is None:
+        return {}
+    if not isinstance(numbers, dict):
+        raise Refused(f"numbers: an object of the measures, not {json.dumps(numbers, default=str)}")
+    for k in REALS:
+        if numbers.get(k) is not None and not _real(numbers[k]):
+            raise Refused(f"numbers: {k} is a real number (the change on the held-out split), not {json.dumps(numbers[k], default=str)}")
+    for k in BOOLS:
+        if numbers.get(k) is not None and not isinstance(numbers[k], bool):
+            raise Refused(f"numbers: {k} is true or false, not {json.dumps(numbers[k], default=str)}")
+    if numbers.get("vector") is not None and not _vector_ok(numbers["vector"]):
+        raise Refused("numbers: vector is the complexity vector's change: a number, a list or an object of numbers, "
+                      f"or {{before, after}}; not {json.dumps(numbers['vector'], default=str)}")
+    return dict(numbers)
+
+
 def judge(phase, numbers):
     """The experimental gate's verdict on a proposal's numbers in a phase (POLICY.md):
     {verdict: accept|refuse, phase, numbers, why: [the criteria, each met or not]}."""
     if phase not in PHASES:
         raise Refused(f"phase: {' | '.join(PHASES)}, not {json.dumps(phase)}")
-    n = dict(numbers or {})
+    n = check_numbers(numbers)
     why, ok = [], True
 
     def need(key):
@@ -349,7 +390,12 @@ class Gate:
             if self.gain is None:
                 raise Refused("the experimental policy needs the numbers: a gain hook, or numbers in the proposal")
             numbers = self.gain(public(pl), phase)
-        v = judge(phase, numbers)
+        try:
+            v = judge(phase, numbers)
+        except Refused:                     # numbers the policy cannot read: no verdict, no plan left waiting
+            self.store["plans"].pop(pl["token"], None)
+            self._save(self.store)
+            raise
         entry = {"event": "proposal", "token": pl["token"], "kind": kind, "domain": domain, "root": root,
                  "phase": phase, "files": [f["path"] for f in pl["files"]], "numbers": v["numbers"],
                  "verdict": v["verdict"], "why": v["why"], "cost": cost}

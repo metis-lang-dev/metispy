@@ -202,3 +202,44 @@ def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
     cli("answer", a["token"], stdin="skip the fridge for now")
     assert cli("answers", "--token", a["token"])["instruction"]["text"] == "skip the fridge for now"
     assert [e["event"] for e in cli("journal")] == ["proposal", "ask", "answer"]
+
+
+@pytest.mark.parametrize("numbers, words", [
+    ({"likelihood": "0.2", "success": 0.1}, "likelihood is a real number"),
+    ({"likelihood": True, "success": 0.0}, "likelihood is a real number"),        # true is not +1
+    ({"likelihood": 0.2, "success": float("nan")}, "success is a real number"),
+    ({"replay_identical": 1, "success": 0.0, "vector": -1}, "replay_identical is true or false"),
+    ({"replay_identical": True, "success": 0.0, "vector": "-3"}, "vector is the complexity vector"),
+    ({"replay_identical": True, "success": 0.0, "vector": {"before": [9], "after": [True]}}, "vector is the complexity vector"),
+    ({"fits_records": "yes", "likelihood": 0.0}, "fits_records is true or false"),
+    ("good", "an object of the measures"),
+])
+def test_numbers_of_the_wrong_type_refuse_in_words(numbers, words):
+    """opus's review F1: the numbers are type-checked before any comparison."""
+    phase = "refactor" if isinstance(numbers, dict) and "replay_identical" in numbers else (
+        "explore" if isinstance(numbers, dict) and "fits_records" in numbers else "exploit")
+    with pytest.raises(gate.Refused, match=words):
+        gate.judge(phase, numbers)
+
+
+def test_a_bool_likelihood_writes_nothing_and_leaves_no_plan(root):
+    """Under the experimental policy a refusal of the numbers writes nothing and leaves no plan
+    waiting (from the hook as from the args), and the journal has no verdict."""
+    for g in (gate.Gate(policy="experimental", gain=fake({"likelihood": True, "success": True})),
+              gate.Gate(policy="experimental")):
+        args = {} if g.gain else {"numbers": {"likelihood": True, "success": 0.0}}
+        with pytest.raises(gate.Refused, match="likelihood is a real number"):
+            g.propose("extension", "plant", root, name="tired", text=EXT, phase="exploit", **args)
+        assert not (root / "domains/plant/extensions/tired.llp").exists()
+        assert g.store["plans"] == {} and g.journal() == []
+
+
+def test_the_cli_refuses_bad_numbers_as_json(root, tmp_path):
+    """The CLI answers the refusal as its JSON error (exit 1), not a traceback."""
+    r = subprocess.run([sys.executable, "-m", "metis.gate", "--state", str(tmp_path / "st"), "--policy", "experimental",
+                        "propose", "extension", "plant", "--root", str(root), "--json"],
+                       input=json.dumps({"name": "tired", "text": EXT, "phase": "exploit",
+                                         "numbers": {"likelihood": "lots", "success": 0.1}}),
+                       capture_output=True, text=True)
+    assert r.returncode == 1 and "Traceback" not in r.stderr, r.stderr
+    assert "likelihood is a real number" in json.loads(r.stdout)["error"]
