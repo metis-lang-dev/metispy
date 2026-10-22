@@ -146,6 +146,13 @@ def test_the_manifests_extensions_list_orders_them(tmp_path):
     ("program: plant.llp\nintent: {grammar: intent/plant.gbnf}\n", "intent is {spec"),
     ("program: plant.llp\nreload: sometimes\n", "reload is propose or auto"),
     ("program: plant.llp\nextensions: a.llp\n", "extensions is a list"),
+    # act without a rule (metis-agent's actor, world-minihack step 2a)
+    ("program: plant.llp\nactor: true\n", "actor is \\{max_steps"),
+    ("program: plant.llp\nactor: {max_steps: 40, model: e2b}\n", "unknown actor key model"),
+    ("program: plant.llp\nactor: {max_steps: 0}\n", "actor max_steps is a positive number"),
+    ("program: plant.llp\nactor: {max_steps: forty}\n", "actor max_steps is a positive number"),
+    ("program: plant.llp\nactor: {task: [reach, the, stairs]}\n", "actor task is a line of text"),
+    ("program: plant.llp\nactor: {acts: yes please}\n", "actor acts is true or false"),
     # every path stays inside the catalog root (nina's catalog-sdk review, note a)
     ("program: ../../../../etc/passwd\n", "program '../../../../etc/passwd' leaves the catalog root"),
     ("program: /etc/passwd\n", "program '/etc/passwd' is absolute"),
@@ -226,3 +233,12 @@ def test_a_package_is_a_manifest_anywhere_under_the_root(tmp_path):
     ceptre = ROOT / "domains" / "ceptre"
     if ceptre.is_dir():                                   # a checkout (the wheel has no ceptre/)
         assert len(mc.domains(ceptre)) == 13 and "three_pigs" in {d.name for d in mc.domains(ceptre)}
+
+
+def test_the_actor_key(tmp_path):
+    """world-minihack step 2a: a package that acts without a rule carries actor: {max_steps, task}."""
+    d = tmp_path / "domains/plant"
+    d.mkdir(parents=True)
+    (d / "plant.llp").write_text("catalog plant 1.\n")
+    (d / "domain.yaml").write_text("program: plant.llp\nactor: {max_steps: 40, task: reach the stairs}\n")
+    assert mc.get("plant", tmp_path).manifest["actor"] == {"max_steps": 40, "task": "reach the stairs"}

@@ -22,6 +22,8 @@ cwd-root s-ddac2cbf); every key is optional and the loader refuses any other
     line: "a robot dog: …"            # the one display line (consoles, the orchestrator's INSTALLED list)
     voice: own                        # own | third
     agent: agent.py[:VARIANT]         # the domain-agent module; absent with intent.spec: the generic agent
+    actor: {max_steps: 40, task: "…"} # act without a rule (metis-agent's actor): each quiet beat the model types an
+                                      #   intent from the card for the task, the host's act() runs it (acts: false: off)
     pair: [kitchen_shared]            # partners stepped inside its clock
     partner_of: kitchen               # never loaded alone
     notch: dog.notch.json             # a fitted overlay
@@ -227,8 +229,9 @@ def _served_file(base, entry):
 
 # The package's manifest: every key and its reader (CATALOG.md has the table).
 KEYS = ("program", "extensions", "serves", "host", "intent", "clock", "reload", "records",
-        "display", "line", "voice", "agent", "pair", "partner_of", "notch")
+        "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch")
 INTENT_KEYS = ("spec",)
+ACTOR_KEYS = ("acts", "max_steps", "task")
 
 
 class ManifestError(ValueError):
@@ -295,6 +298,20 @@ def check_manifest(p, root=None):
             raise ManifestError("%s: %s is a list" % (p, k))
     if m.get("reload") not in (None, "propose", "auto"):
         raise ManifestError("%s: reload is propose or auto" % p)
+    a = m.get("actor")
+    if a is not None:
+        if not isinstance(a, dict):
+            raise ManifestError("%s: actor is {max_steps, task, acts?}" % p)
+        bad = sorted(k for k in a if k not in ACTOR_KEYS)
+        if bad:
+            raise ManifestError("%s: unknown actor key%s %s (actor is {%s})" % (p, "s" if len(bad) > 1 else "", ", ".join(bad),
+                                                                            ", ".join(ACTOR_KEYS)))
+        if "max_steps" in a and not (isinstance(a["max_steps"], int) and not isinstance(a["max_steps"], bool) and a["max_steps"] > 0):
+            raise ManifestError("%s: actor max_steps is a positive number" % p)
+        if "task" in a and not isinstance(a["task"], str):
+            raise ManifestError("%s: actor task is a line of text" % p)
+        if "acts" in a and not isinstance(a["acts"], bool):
+            raise ManifestError("%s: actor acts is true or false" % p)
     r = Path(os.path.abspath(root)) if root else _catalog_root(p)
     if r is not None:
         base = Path(os.path.abspath(p)).parent
