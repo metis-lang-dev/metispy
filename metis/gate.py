@@ -76,7 +76,7 @@ when it is cornered. The human gate above is the default and is unchanged.
     three), ONE question, snapshot (what the loop re-engages from). No file is written and
     nothing confirms it: answer(token, instruction) does, with an instruction of kind note
     (text), edit (path, old, new: proposed again through the gate at re-engagement), rule
-    (text), budget (beats, proposals, spend), phase (explore|exploit|refactor|skip, text) or
+    (text), budget (beats, proposals, spend, prompt_chars), phase (explore|exploit|refactor|skip, text) or
     abandon; a plain string is a note;
   - the journal (one JSON line each): every judged proposal (kind, phase, files, numbers,
     verdict, why, cost, written), every ask and every answer.
@@ -96,6 +96,8 @@ JUDGED = ("program", "extension", "edit")
 PHASES = ("explore", "exploit", "refactor")
 REASONS = ("budget", "no_progress", "out_of_vocabulary", "contradiction", "stuck")
 ANSWERS = ("note", "edit", "rule", "budget", "phase", "abandon")
+# a budget answer raises one of these (prompt_chars: the per-request prompt cap a loop's ask can be cornered by)
+BUDGETS = ("beats", "proposals", "spend", "prompt_chars")
 NAME = __import__("re").compile(r"^[a-z][a-z0-9_]*$")
 NOTE_NO_COMMANDS = ("no intent.yaml: the world takes no commands (its program has no cmd_* atom), "
                     "so the agents open it with no verbs")
@@ -233,8 +235,9 @@ def _instruction(ins):
         raise Refused(f"answer {k}: text")
     if k == "edit" and not all(isinstance(ins.get(x), str) for x in ("path", "old", "new")):
         raise Refused("answer edit: path, old, new (proposed again through the gate)")
-    if k == "budget" and not any(isinstance(ins.get(x), (int, float)) for x in ("beats", "proposals", "spend")):
-        raise Refused("answer budget: beats, proposals or spend (a number)")
+    if k == "budget" and not any(isinstance(ins.get(x), (int, float)) and not isinstance(ins.get(x), bool)
+                                 for x in BUDGETS):
+        raise Refused("answer budget: %s (a number)" % ", ".join(BUDGETS))
     if k == "phase" and ins.get("phase") not in PHASES + ("skip",):
         raise Refused(f"answer phase: {' | '.join(PHASES + ('skip',))}")
     return dict(ins)

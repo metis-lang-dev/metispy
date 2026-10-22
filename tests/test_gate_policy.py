@@ -173,6 +173,7 @@ def test_an_ask_record_is_checked(root, bad, words):
     ({"kind": "note"}, "note: text"),
     ({"kind": "edit", "path": "plant.llp"}, "path, old, new"),
     ({"kind": "budget", "beats": "many"}, "a number"),
+    ({"kind": "budget", "proposals": True}, "a number"),
     ({"kind": "phase", "phase": "nap"}, "explore"),
 ])
 def test_an_answer_is_checked(root, ins, words):
@@ -182,6 +183,16 @@ def test_an_answer_is_checked(root, ins, words):
         g.answer(a["token"], ins)
     assert g.asks()                                                           # a bad answer leaves it waiting
     g.answer(a["token"], {"kind": "abandon"})
+
+
+@pytest.mark.parametrize("key", ["beats", "proposals", "spend", "prompt_chars"])
+def test_a_budget_answer_raises_any_one_budget(root, key):
+    """A budget answer names one number: the loop's prompt cap among them (loop-policy step 2: the
+    driver's PromptCap ask offers "budget: prompt_chars")."""
+    g = gate.Gate()
+    a = g.propose("ask", "plant", root, **ASK)
+    out = g.answer(a["token"], {"kind": "budget", key: 2})
+    assert out["instruction"] == {"kind": "budget", key: 2} and not g.asks()
 
 
 def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
