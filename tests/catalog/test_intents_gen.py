@@ -75,3 +75,26 @@ def test_an_empty_generated_file_is_not_written(tmp_path, monkeypatch):
     assert I.main(["check", "plant"]) == 0
     (d / "intent" / "plant-spoken.txt").write_text("stale\n")
     assert I.main(["check", "plant"]) == 1
+
+
+def test_a_two_argument_command_atom_has_no_space(tmp_path, monkeypatch):
+    """The skeleton's map atom of a command with two arguments is cmd_x({a:a},{b:b}): metis-agent
+    turns the mapped atom into a do-line `+atom N`, where a space is the count's separator
+    (alf-hierarchy step 2's F2: 'the count must be an integer')."""
+    d = tmp_path / "domains" / "shelf"
+    d.mkdir(parents=True)
+    (d / "shelf.llp").write_text("""catalog shelf 1.
+type obj {cup book}.
+type place {top low}.
+pred at(obj, place) : shelf.
+pred cmd_put(obj, place) : shelf.
+pred done(put) : shelf.
+stage main {
+  %% I put it there.
+  put [dyn] : cmd_put(O, P) -o at(O, P) * done(put).
+}
+""")
+    monkeypatch.setattr(I, "ROOT", tmp_path)
+    sk = yaml.safe_load(I.skeleton("shelf"))
+    atoms = [r["atom"] for r in sk["map"]]
+    assert atoms == ["cmd_put({obj:obj},{place:place})"] and not any(" " in a for a in atoms)

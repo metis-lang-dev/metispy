@@ -148,14 +148,12 @@ def check_manifest(path, root=None):
 # ── intents ───────────────────────────────────────────────────────────────────
 
 def generator(r=None):
-    """The intent generator as a module reading the root `r`: the root's own
-    tools/intents.py (a catalog checkout's), else metis.intents (the same code,
-    the runtime's). A fresh module per call, its ROOT the root."""
+    """The intent generator (metis.intents) as a module reading the root `r`: a
+    fresh module per call, its ROOT the root. A catalog's own tools/intents.py is
+    a wrapper over metis.intents now (metis-packages step 2), never loaded here."""
     r = _r(r)
-    p = r / "tools" / "intents.py"
-    if not p.is_file():
-        from metis import intents as _intents
-        p = Path(_intents.__file__)
+    from metis import intents as _intents
+    p = Path(_intents.__file__)
     spec = importlib.util.spec_from_file_location("metis_catalog_intents", p)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

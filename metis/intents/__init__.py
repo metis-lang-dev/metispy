@@ -7,10 +7,10 @@ Moved from metis-catalog's tools/intents.py (metis-packages s-65778b98): the run
 `python -m metis.intents …` is the CLI (from a catalog's directory, or with $METIS_CATALOG);
 the generated files keep the header that names tools/intents.py, byte for byte.
 
-    python3 tools/intents.py gen dog            # → domains/dog/intent/{dog.gbnf, dog-prompt.txt, dog-spoken.txt}
-    python3 tools/intents.py check dog          # the generated files are what intent.yaml makes (CI)
-    python3 tools/intents.py schema dog         # the JSON schema the grammar is made from
-    python3 tools/intents.py skeleton plant     # a first intent.yaml from plant.llp's cmd_* atoms and %% lines
+    python -m metis.intents gen dog             # → domains/dog/intent/{dog.gbnf, dog-prompt.txt, dog-spoken.txt}
+    python -m metis.intents check dog           # the generated files are what intent.yaml makes (CI)
+    python -m metis.intents schema dog          # the JSON schema the grammar is made from
+    python -m metis.intents skeleton plant      # a first intent.yaml from plant.llp's cmd_* atoms and %% lines
 
 intent.yaml (CATALOG.md "intent.yaml"): persona, verbs, slots, guidance,
 examples, spoken — the intent pass; map, values, handles, fallback,
@@ -322,7 +322,7 @@ def skeleton(name):
                 binds.append("{%s:%s}" % (t, t))
                 if vals:
                     ex[t] = vals[0].upper()
-            atom += "(%s)" % ", ".join(binds)
+            atom += "(%s)" % ",".join(binds)       # no space: the agent's do-line reads a space as the count's separator
         rows.append({"verb": verb, "atom": atom, "act": stem})
         examples.append([" ".join([stem.replace("_", " ")] + [ex[t].lower() for t in args if t in ex]), ex])
     asks = [s.upper() for s, _ in cmds if s not in ("time", "date", "chat", "chitchat", "unknown", "stop", "cancel")
@@ -346,9 +346,9 @@ def skeleton(name):
     }
     if asks:   # candidates: the commands whose rules only read the state; keep the questions
         spec["asks"] = asks
-    head = ("# %s's intents — a DRAFT from %s.llp (tools/intents.py skeleton): one verb per command\n"
+    head = ("# %s's intents — a DRAFT from %s.llp (metis.intents skeleton): one verb per command\n"
             "# atom; write the meanings, more examples, open-vocabulary slots and handles,\n"
-            "# then `python3 tools/intents.py gen %s` and the check. CATALOG.md \"intent.yaml\".\n"
+            "# then `python -m metis.intents gen %s` and the check. CATALOG.md \"intent.yaml\".\n"
             "# outcomes: what a command's rule produces that no rule reads. asks: CANDIDATES, the\n"
             "# commands whose rules only read the state — keep the ones the person asks as a question.\n") % (name, name, name)
     class Dumper(yaml.SafeDumper):
@@ -390,7 +390,7 @@ def main(argv):
             p.write_text(text)
             print("wrote", p.relative_to(_root()))
         elif not p.exists() or p.read_text() != text:
-            print("STALE", p.relative_to(_root()), "(python3 tools/intents.py gen %s)" % name)
+            print("STALE", p.relative_to(_root()), "(python -m metis.intents gen %s)" % name)
             bad += 1
     return 1 if bad else 0
 
