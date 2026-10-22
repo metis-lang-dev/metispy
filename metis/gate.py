@@ -75,7 +75,7 @@ when it is cornered. The human gate above is the default and is unchanged.
                 with `move` (split | conventions | direct | prune) each move against the base it
                 replaces, by its own gain (loop-policy step 2c, the architect's ruling):
                   split        replay_identical, the success not down, the vector down
-                  conventions  replay_identical, `ambiguous` down ({before, after}: the goal kinds
+                  conventions  replay_identical, the success not down, `ambiguous` down ({before, after}: the goal kinds
                                more than one specialist takes), the vector's after not above `flat`
                                (the flat program's vector)
                   direct       replay_identical, the success not down, `ambiguous` 0 (every port
@@ -251,7 +251,7 @@ def _move(n, need, check, why):
     r = need("replay_identical")
     if r is not None:
         check(bool(r), "the records replay the same")
-    needs = {"split": ("success", "vector"), "conventions": ("ambiguous", "vector"), "direct": ("success", "ambiguous"),
+    needs = {"split": ("success", "vector"), "conventions": ("success", "ambiguous", "vector"), "direct": ("success", "ambiguous"),
              "prune": ("success", "likelihood", "vector")}[move]
     got = {k: need(k) for k in needs}
     for k in ("success", "likelihood"):                         # named by the move, or given: not down

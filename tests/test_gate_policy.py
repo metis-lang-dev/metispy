@@ -237,6 +237,8 @@ PRUNE = {"move": "prune", "replay_identical": True, "success": 0.0, "likelihood"
     (dict(CONV, vector=-200), "refuse", "a change says no absolute"),                # opus's R1: not compared with the flat's absolute
     (dict(CONV, vector=[409, 1446]), "refuse", "a change says no absolute"),
     (dict(CONV, replay_identical=False), "refuse", "not: the records replay the same"),
+    ({k: v for k, v in CONV.items() if k != "success"}, "refuse", "success: not measured"),     # required, as for every move (the architect's N3)
+    (dict(CONV, success=-0.5), "refuse", "not: the held-out success not down"),
     (DIRECT, "accept", "the complexity vector reported, not judged (+11)"),     # the director's price
     (dict(DIRECT, ambiguous={"before": 2, "after": 1}), "refuse", "not: every port routable (ambiguous goal kinds 1)"),
     (dict(DIRECT, success=-0.1), "refuse", "not: the held-out success not down"),
