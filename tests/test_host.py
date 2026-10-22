@@ -41,6 +41,16 @@ def test_the_gym_child_answers_one_line_per_request(tmp_path):
     g.close()
 
 
+def test_the_open_args_as_a_dict_when_one_is_named_env(tmp_path):
+    """minihack's level opens with an `env` (the level's name): open_args as a dict, beside the
+    child's own `env` (its process environment)."""
+    script = tmp_path / "echo_gym.py"
+    script.write_text(ECHO)
+    g = GymChild(script, sys.executable, what="level", env=dict(os.environ), open_args={"env": "MiniHack-Room-5x5-v0", "seed": 1}, des=None)
+    assert g.info == {"horizon": 5, "opened": {"env": "MiniHack-Room-5x5-v0", "seed": 1, "des": None}}
+    g.close()
+
+
 def test_the_interpreter_is_the_env_else_this_one_with_the_module_else_a_candidate(tmp_path, monkeypatch):
     monkeypatch.setenv("METIS_TOY_PY", "/opt/toy/bin/python")
     assert find_interpreter("METIS_TOY_PY") == "/opt/toy/bin/python"

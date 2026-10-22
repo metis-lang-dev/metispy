@@ -100,9 +100,11 @@ class GymChild:
     """A world's gym as a child process: one JSON request per line in, one JSON answer per line
     out ({"ok": true, …} or {"ok": false, "error": …}). The child's stderr is kept: its last
     lines name a crash. `what` is the world's word for it in the errors (gym, game, level).
-    The constructor sends `open` with `open_args`; its answer is `info`."""
+    The constructor sends `open` with `open_args` (keywords, or a dict when one of them is named
+    like a parameter here: minihack's level has an `env`); its answer is `info`."""
 
-    def __init__(self, script, interpreter=None, what="gym", env=None, **open_args):
+    def __init__(self, script, interpreter=None, what="gym", env=None, open_args=None, **kw):
+        open_args = dict(open_args or {}, **kw)
         self.what = what
         self.err = tempfile.TemporaryFile("w+")
         self.proc = subprocess.Popen([interpreter or sys.executable, str(script)], stdin=subprocess.PIPE,
