@@ -63,13 +63,27 @@ when it is cornered. The human gate above is the default and is unchanged.
     held-out split), or as `numbers` in propose's args (a driver that measured them itself:
     the CLI). They are changes, candidate minus current: likelihood, success; and
     replay_identical (bool), vector (the complexity vector's change: a number, a list or a
-    dict summed, or {before, after}), fits_records (bool: the candidate fires on its record
-    and on no record it contradicts); numbers of another type refuse in words, before any
+    dict summed, or {before, after}; `flat` the flat program's, for the conventions move), fits_records (bool:
+    the candidate fires on its record and on no record it contradicts); for a refactoring move,
+    `move` (split | conventions | direct | prune) and `ambiguous` (the goal kinds more than one
+    specialist takes: a count, or {before, after}); numbers of another type refuse in words, before any
     verdict and with no plan left waiting (a bool is no real number: `true` is not +1);
   - the verdict per phase (POLICY.md, the experimental gate):
       explore   fits_records, and the likelihood not down
       exploit   the likelihood up, or the success up with the likelihood not down
-      refactor  replay_identical, the success (and a given likelihood) not down, the vector down
+      refactor  replay_identical, the success (and a given likelihood) not down, the vector down;
+                with `move` (split | conventions | direct | prune) each move against the base it
+                replaces, by its own gain (loop-policy step 2c, the architect's ruling):
+                  split        replay_identical, the success not down, the vector down
+                  conventions  replay_identical, `ambiguous` down ({before, after}: the goal kinds
+                               more than one specialist takes), the vector's after not above `flat`
+                               (the flat program's vector)
+                  direct       replay_identical, the success not down, `ambiguous` 0 (every port
+                               routable); the vector reported, not judged (the director's facts are
+                               the price of automatic activation)
+                  prune        replay_identical, the success and the likelihood (required: what the
+                               rules explain) not down, the vector down
+                a given likelihood or success a move does not name is still not down
     a number the phase needs and the plan lacks refuses ("not measured");
   - kind ask, the disengagement record: phase (explore|exploit|refactor), reason (budget,
     no_progress, out_of_vocabulary, contradiction, stuck), tried, believes, options (at most
@@ -107,6 +121,9 @@ class Refused(ValueError):
     """A rule of the gate said no: its words are the message."""
 
 
+MOVES = ("split", "conventions", "direct", "prune")
+
+
 def _vector(v):
     """The complexity vector's change as one number: a number as it is, a list or a dict
     summed, {before, after} as after minus before."""
@@ -117,6 +134,18 @@ def _vector(v):
     if isinstance(v, (list, tuple)):
         return sum(v)
     return v
+
+
+def _count(v):
+    return _real(v) and v >= 0
+
+
+def _ambiguous_ok(v):
+    """ambiguous: a count (the goal kinds more than one specialist takes, after the move), or
+    {before, after} of counts."""
+    if isinstance(v, dict):
+        return set(v) == {"before", "after"} and _count(v["before"]) and _count(v["after"])
+    return _count(v)
 
 
 REALS = ("likelihood", "success")
@@ -156,6 +185,13 @@ def check_numbers(numbers):
     if numbers.get("vector") is not None and not _vector_ok(numbers["vector"]):
         raise Refused("numbers: vector is the complexity vector's change: a number, a list or an object of numbers, "
                       f"or {{before, after}}; not {json.dumps(numbers['vector'], default=str)}")
+    if numbers.get("flat") is not None and (not _vector_ok(numbers["flat"]) or isinstance(numbers["flat"], dict) and "before" in numbers["flat"]):
+        raise Refused(f"numbers: flat is the flat program's vector (a number, a list or an object of numbers); not {json.dumps(numbers['flat'], default=str)}")
+    if numbers.get("move") is not None and numbers["move"] not in MOVES:
+        raise Refused(f"numbers: move is {' | '.join(MOVES)}, not {json.dumps(numbers['move'], default=str)}")
+    if numbers.get("ambiguous") is not None and not _ambiguous_ok(numbers["ambiguous"]):
+        raise Refused("numbers: ambiguous is a count of goal kinds (a number not below 0), or {before, after} of counts; "
+                      f"not {json.dumps(numbers['ambiguous'], default=str)}")
     return dict(numbers)
 
 
@@ -192,7 +228,7 @@ def judge(phase, numbers):
             check(lk > 0 or (s > 0 and lk >= 0),
                   f"a generalization gain: the likelihood up, or the success up with the likelihood not down "
                   f"(likelihood {lk:+g}, success {s:+g})")
-    else:
+    elif n.get("move") is None:
         r, s, v = need("replay_identical"), need("success"), need("vector")
         if r is not None:
             check(bool(r), "the records replay the same")
@@ -203,7 +239,48 @@ def judge(phase, numbers):
         if v is not None:
             dv = _vector(v)
             check(dv < 0, f"the complexity vector down ({dv:+g})")
+    else:
+        _move(n, need, check, why)
     return {"verdict": "accept" if ok else "refuse", "phase": phase, "numbers": n, "why": why}
+
+
+def _move(n, need, check, why):
+    """A refactoring move against the base it replaces, by its own gain (the module's docstring)."""
+    move = n["move"]
+    why.append(f"move: {move}")
+    r = need("replay_identical")
+    if r is not None:
+        check(bool(r), "the records replay the same")
+    needs = {"split": ("success", "vector"), "conventions": ("ambiguous", "vector"), "direct": ("success", "ambiguous"),
+             "prune": ("success", "likelihood", "vector")}[move]
+    got = {k: need(k) for k in needs}
+    for k in ("success", "likelihood"):                         # named by the move, or given: not down
+        x = got.get(k, n.get(k))
+        if x is not None:
+            check(x >= 0, f"the held-out {k} not down ({x:+g})")
+    a = got.get("ambiguous")
+    if a is not None:
+        after = a["after"] if isinstance(a, dict) else a
+        if move == "conventions":
+            if isinstance(a, dict):
+                check(a["after"] < a["before"], f"the ambiguous goal kinds down ({a['before']:g} → {a['after']:g})")
+            else:
+                check(False, "the ambiguous goal kinds down: ambiguous {before, after} (one count says no change)")
+        else:
+            check(after == 0, f"every port routable (ambiguous goal kinds {after:g})")
+    v = got.get("vector", n.get("vector"))
+    if v is None:
+        return
+    if move in ("split", "prune"):
+        dv = _vector(v)
+        check(dv < 0, f"the complexity vector down against the base it replaces ({dv:+g})")
+    elif move == "conventions":
+        flat = need("flat")
+        if flat is not None:
+            after, flat = _vector(v["after"]) if isinstance(v, dict) and "after" in v else _vector(v), _vector(flat)
+            check(after <= flat, f"the complexity vector not above the flat program's ({after:g} ≤ {flat:g})")
+    else:
+        why.append(f"the complexity vector reported, not judged ({_vector(v):+g})")
 
 
 def _ask_record(a):

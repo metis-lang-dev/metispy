@@ -215,6 +215,48 @@ def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
     assert [e["event"] for e in cli("journal")] == ["proposal", "ask", "answer"]
 
 
+# loop-policy step 2c (the architect's ruling): each refactoring move against the base it replaces, by its own gain.
+# The numbers of loop-policy 2b's dry run: the split 9855 → 409, the conventions 409 → 1446 (the flat 9855),
+# the director 1446 → 1457, the prune 9855 → 9645 with the likelihood −0.62
+SPLIT = {"move": "split", "replay_identical": True, "success": 0.0, "likelihood": 0.0, "vector": {"before": 9855, "after": 409}}
+CONV = {"move": "conventions", "replay_identical": True, "success": 0.0, "ambiguous": {"before": 2, "after": 0},
+        "vector": {"before": 409, "after": 1446}, "flat": 9855}
+DIRECT = {"move": "direct", "replay_identical": True, "success": 0.0, "ambiguous": 0, "vector": {"before": 1446, "after": 1457}}
+PRUNE = {"move": "prune", "replay_identical": True, "success": 0.0, "likelihood": -0.62, "vector": {"before": 9855, "after": 9645}}
+
+
+@pytest.mark.parametrize("numbers, verdict, says", [
+    (SPLIT, "accept", "the complexity vector down against the base it replaces (-9446)"),
+    (dict(SPLIT, vector={"before": 409, "after": 1446}), "refuse", "not: the complexity vector down"),
+    (dict(SPLIT, success=-0.5), "refuse", "not: the held-out success not down"),
+    (CONV, "accept", "the ambiguous goal kinds down (2 → 0)"),                 # the vector rose, under the flat's
+    (dict(CONV, ambiguous={"before": 2, "after": 2}), "refuse", "not: the ambiguous goal kinds down"),
+    (dict(CONV, ambiguous=0), "refuse", "one count says no change"),
+    (dict(CONV, vector={"before": 409, "after": 12000}), "refuse", "not: the complexity vector not above the flat"),
+    ({k: v for k, v in CONV.items() if k != "flat"}, "refuse", "flat: not measured"),
+    (dict(CONV, replay_identical=False), "refuse", "not: the records replay the same"),
+    (DIRECT, "accept", "the complexity vector reported, not judged (+11)"),     # the director's price
+    (dict(DIRECT, ambiguous={"before": 2, "after": 1}), "refuse", "not: every port routable (ambiguous goal kinds 1)"),
+    (dict(DIRECT, success=-0.1), "refuse", "not: the held-out success not down"),
+    ({k: v for k, v in DIRECT.items() if k != "ambiguous"}, "refuse", "ambiguous: not measured"),
+    (PRUNE, "refuse", "not: the held-out likelihood not down (-0.62)"),        # G1: they carry the world model
+    (dict(PRUNE, likelihood=0.0), "accept", "the complexity vector down"),
+    ({k: v for k, v in PRUNE.items() if k != "likelihood"}, "refuse", "likelihood: not measured"),
+])
+def test_a_refactoring_move_by_its_own_gain(numbers, verdict, says):
+    v = gate.judge("refactor", numbers)
+    assert v["verdict"] == verdict and any(says in w for w in v["why"]), v["why"]
+    assert v["why"][0] == "move: %s" % numbers["move"]
+
+
+def test_without_a_move_the_refactor_judge_is_as_before():
+    """The old shape (no move) keeps today's criterion: the conventions' numbers without `move` are
+    refused by their vector, as loop-policy 2b's flat baseline could not see."""
+    old = {k: v for k, v in CONV.items() if k not in ("move", "ambiguous", "flat")}
+    v = gate.judge("refactor", old)
+    assert v["verdict"] == "refuse" and "not: the complexity vector down (+1037)" in v["why"] and not any(w.startswith("move") for w in v["why"])
+
+
 @pytest.mark.parametrize("numbers, words", [
     ({"likelihood": "0.2", "success": 0.1}, "likelihood is a real number"),
     ({"likelihood": True, "success": 0.0}, "likelihood is a real number"),        # true is not +1
@@ -224,6 +266,12 @@ def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
     ({"replay_identical": True, "success": 0.0, "vector": {"before": [9], "after": [True]}}, "vector is the complexity vector"),
     ({"fits_records": "yes", "likelihood": 0.0}, "fits_records is true or false"),
     ("good", "an object of the measures"),
+    (dict(SPLIT, move="lift"), "move is split | conventions | direct | prune"),
+    (dict(DIRECT, ambiguous=-1), "ambiguous is a count"),
+    (dict(DIRECT, ambiguous=True), "ambiguous is a count"),
+    (dict(CONV, ambiguous={"before": 2}), "ambiguous is a count"),
+    (dict(CONV, flat="9855"), "flat is the flat program's vector"),
+    (dict(CONV, flat={"before": 1, "after": 2}), "flat is the flat program's vector"),
 ])
 def test_numbers_of_the_wrong_type_refuse_in_words(numbers, words):
     """opus's review F1: the numbers are type-checked before any comparison."""
