@@ -153,7 +153,8 @@ def world_host(here, module, env=None, world=None, up=6):
         cands.append(os.path.join(d, "world"))
     for c in cands:
         if c and os.path.exists(os.path.join(c, module + ".py")):
-            if c not in sys.path:
-                sys.path.insert(0, c)
+            if c in sys.path:                      # already there but behind the package's own directory: a shim
+                sys.path.remove(c)                 # named like the world module would import itself (opus, N2)
+            sys.path.insert(0, c)
             break
     return importlib.import_module(module)
