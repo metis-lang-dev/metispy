@@ -269,25 +269,24 @@ def write(out: Path, files: dict) -> Path:
 
 
 def _catalog():
-    """metis_catalog, the loader a domain NAME needs (a .llp path does not):
-    installed, else the checkout $METIS_CATALOG names, else a metis-catalog
-    checkout beside this source tree (the dev layout). Without any, a clear
-    error, not a bare ImportError (a wheel install has no sibling)."""
-    try:
-        import metis_catalog
-        return metis_catalog
-    except ImportError:
-        pass
+    """The loader a domain NAME needs (a .llp path does not), metis.catalog.manifests
+    (was metis_catalog; metis-packages s-65778b98) over the installed metis-catalog's
+    domains, else the checkout $METIS_CATALOG names, else a metis-catalog checkout
+    beside this source tree (the dev layout): its get(name) and domains(). Without
+    any, a clear error, not a bare ImportError (a wheel install has no sibling)."""
+    from metis.catalog import manifests
     env = os.environ.get("METIS_CATALOG")
-    root = Path(env) if env else Path(__file__).resolve().parents[3] / "metis-catalog"
-    if not (root / "metis_catalog" / "__init__.py").is_file():
+    if manifests.data_dir() is not None and not env:
+        root = manifests.root()
+    else:
+        root = Path(env) if env else Path(__file__).resolve().parents[3] / "metis-catalog"
+    if not (root / "domains").is_dir():
         raise RuntimeError(
             "a domain name needs metis-catalog: install it (pip install -e "
             "metis-catalog), or set METIS_CATALOG to a metis-catalog checkout "
             "(%s has none); a .llp path builds without it" % root)
-    sys.path.insert(0, str(root))
-    import metis_catalog
-    return metis_catalog
+    return SimpleNamespace(get=lambda name: manifests.get(name, root),
+                           domains=lambda: manifests.domains(root))
 
 
 def resolve(target: str, extensions: Sequence[str] = ()):
