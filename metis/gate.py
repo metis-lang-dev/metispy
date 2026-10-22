@@ -276,8 +276,10 @@ def _move(n, need, check, why):
         check(dv < 0, f"the complexity vector down against the base it replaces ({dv:+g})")
     elif move == "conventions":
         flat = need("flat")
-        if flat is not None:
-            after, flat = _vector(v["after"]) if isinstance(v, dict) and "after" in v else _vector(v), _vector(flat)
+        if not (isinstance(v, dict) and set(v) == {"before", "after"}):        # a bare vector is a CHANGE, never an absolute (opus's R1)
+            check(False, "the complexity vector not above the flat program's: vector {before, after} (a change says no absolute)")
+        elif flat is not None:
+            after, flat = _vector(v["after"]), _vector(flat)
             check(after <= flat, f"the complexity vector not above the flat program's ({after:g} ≤ {flat:g})")
     else:
         why.append(f"the complexity vector reported, not judged ({_vector(v):+g})")
