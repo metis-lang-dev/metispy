@@ -833,13 +833,11 @@ class Repl(LoopVerbs, Cmd):
             return
         self._say(f"fired: {self._fire(pick, 'forced', ws)}")
 
-    def do_run(self, arg):
-        """sample N steps (stops at quiescence)"""
-        try:
-            n = int(arg.strip() or "1")
-        except ValueError:
-            self._say("usage: run N")
-            return
+    def run_steps(self, n):
+        """Sample up to n steps (stops at quiescence): {stage, done,
+        counts, fired} — what `run N` prints, as data (metis.repl's run;
+        metis-packages s-65778b98: one API, the CLI prints what it
+        returns)."""
         self._mark()
         names = []
         for _ in range(n):
@@ -847,8 +845,19 @@ class Repl(LoopVerbs, Cmd):
             if name is None:
                 break
             names.append(name)
-        self._say(" ".join(names) if names else "(quiescent)")
-        self._say(f"stage {self.stage} | {_fmt_counts(self.counts)}"
+        return {"stage": self.stage, "done": self.stage == DONE,
+                "counts": dict(self.counts), "fired": names}
+
+    def do_run(self, arg):
+        """sample N steps (stops at quiescence)"""
+        try:
+            n = int(arg.strip() or "1")
+        except ValueError:
+            self._say("usage: run N")
+            return
+        out = self.run_steps(n)
+        self._say(" ".join(out["fired"]) if out["fired"] else "(quiescent)")
+        self._say(f"stage {out['stage']} | {_fmt_counts(out['counts'])}"
                   + (f"\n({self._pricing()})" if self.pricer else ""))
 
     def do_state(self, arg):
