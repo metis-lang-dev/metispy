@@ -98,3 +98,22 @@ def test_the_candidate_index_is_the_full_scan(tmp_path):
         if not full:
             break
         r._fire(rng.choices([i for i, _ in full], weights=[w for _, w in full])[0], ws=full)
+
+
+def test_the_candidate_index_follows_a_new_table(tmp_path):
+    """The index is keyed on the events table (its identity and its length): a reload's new table, or
+    a table that grew, is indexed again — the tier is the full scan's after each."""
+    from metis.lang.repl import Repl
+    src = tmp_path / "prune.llp"
+    src.write_text(SRC + "#init go(a, q) 1\n#steps 6\n#seeds 1\n")
+    r = Repl(str(src), seed=1)
+    r._candidates()
+    old = r.events_tbl
+    src.write_text(SRC + "#init go(a, q) 1\n#init go(c, p) 1\n#steps 6\n#seeds 1\n")
+    r._load()
+    tbl = r.events_tbl
+    full = [(i, w) for i, w in ((i, choice_weight(ev, r.counts)) for i, (k, s, ev) in enumerate(tbl)
+                                if k == "clause" and s == r.stage) if w > 0]
+    assert tbl is not old and r._candidates() == full and r.__dict__["_cidx"][0] is tbl   # the reload's table, indexed
+    tbl.append(("clause", r.stage, tbl[full[0][0]][2]))          # grown in place: indexed again
+    assert r._candidates()[-1][0] == len(tbl) - 1

@@ -727,7 +727,7 @@ class Repl(LoopVerbs, Cmd):
         every event of the table (a planner's 28k each beat)."""
         tbl = self.events_tbl
         cidx = self.__dict__.get("_cidx")
-        if cidx is None or cidx[0] is not tbl:
+        if cidx is None or cidx[0] is not tbl or cidx[2] != len(tbl):    # a new table (load, reload, revise) or a longer one
             freq = {}
             for _, _, ev in tbl:
                 for a in set(ev.consume) | set(ev.persist):
@@ -740,7 +740,7 @@ class Repl(LoopVerbs, Cmd):
                     by.setdefault(min(needs, key=lambda a: (freq[a], a)), []).append(i)
                 else:
                     free.append(i)
-            cidx = self.__dict__["_cidx"] = (tbl, index)
+            cidx = self.__dict__["_cidx"] = (tbl, index, len(tbl))
         free, by = cidx[1].get((kind, stage), ((), {}))
         out = list(free)
         for a, n in self.counts.items():
