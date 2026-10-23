@@ -490,6 +490,22 @@ def compile_catalog(cat: ast.Catalog,
                             emit("var-untypable",
                                  f"{r.name}: var {t.value} untypable",
                                  (("var", t.value),))
+                # range restriction: a right-side variable no left-side atom
+                # binds would be drawn over its whole type by the grounder
+                # (policy-tuning step 1: a brain's rule OOM-killed at 6G)
+                bound = {t.value for a in r.body if isinstance(a, ast.Atom)
+                         for t in a.terms if t.kind == "var"}
+                free = []
+                for a in r.head:
+                    for t in a.terms:
+                        if (t.kind == "var" and t.value not in bound
+                                and t.value not in free):
+                            free.append(t.value)
+                for v in free:
+                    emit("rhs-var-unbound",
+                         f"{r.name}: variable {v} on the right side is "
+                         f"bound nowhere on the left",
+                         (("var", v),))
                 consume, persist, guards = [], [], []
                 for a in r.body:
                     if isinstance(a, ast.Distinct):

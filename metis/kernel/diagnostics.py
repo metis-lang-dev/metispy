@@ -48,6 +48,7 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "fact-var-conflict": ("error", "compile"),
     "var-type-conflict": ("error", "compile"),
     "var-untypable": ("error", "compile"),
+    "rhs-var-unbound": ("error", "compile"),
     "arity-mismatch": ("error", "compile"),
     "fact-not-bwd": ("error", "compile"),
     "link-post-bwd": ("error", "compile"),
@@ -122,6 +123,9 @@ HINTS: Dict[str, str] = {
     "var-untypable":
         "{var} occurs in no typed position: use it in an atom whose "
         "signature types it, or drop it",
+    "rhs-var-unbound":
+        "a rule produces only what it read or consumed: bind {var} in an "
+        "atom on the left; a fresh value needs a bwd table or a constant",
     "arity-mismatch":
         "{pred} takes {expected} argument(s), got {got}: match the "
         "declared signature",

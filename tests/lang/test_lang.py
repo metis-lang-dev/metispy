@@ -305,3 +305,39 @@ def test_type_range_rejects_mismatched():
     for rng in ("c0 .. d4", "c4 .. c0", "a .. c3"):
         with pytest.raises(ParseError, match="bad range|bad type"):
             parse(f"catalog r 1.\ntype t {{{rng}}}.\n")
+
+
+# ---- range restriction (rhs-var-unbound) --------------------------------
+
+def test_a_right_side_variable_bound_nowhere_on_the_left_is_an_error():
+    """policy-tuning step 1: a brain's rule with right-side variables bound
+    by no left-side atom was accepted and drawn over the whole type by the
+    grounder (OOM-killed at 6G); now a compile error, once per variable."""
+    src = """catalog oom 1.
+layers (dyn).
+stages (act).
+type term {t1 t2 t3}.
+type room {r1}.
+namespace w produce (dyn).
+bwd in(term, term).
+bwd here(room).
+pred connected(term, term) : w.
+pred at(term) : w.
+in(t1, t2).
+here(r1).
+stage act {
+  %% the brain's rule
+  connect [dyn] : $in(Drawer, Desk) * $here(Room) -o connected(Drawer_terminal_1, Desk_terminal_1).
+  %% a <> binds nothing
+  hop [dyn] : at(A) * A <> B -o at(B).
+}
+"""
+    with pytest.raises(LangError) as e:
+        compile_catalog(parse(src))
+    text = "\n".join(e.value.args[0]) if isinstance(e.value.args[0], list) else str(e.value)
+    assert "connect: variable Drawer_terminal_1 on the right side is bound nowhere on the left" in text
+    assert "connect: variable Desk_terminal_1 on the right side" in text
+    assert "hop: variable B on the right side is bound nowhere on the left" in text
+    ok = src.replace("connected(Drawer_terminal_1, Desk_terminal_1)", "connected(Drawer, Desk)").replace(
+        "at(A) * A <> B -o at(B)", "at(A) * $in(A, B) * A <> B -o at(B)")
+    compile_catalog(parse(ok))
