@@ -412,12 +412,18 @@ def _parse(text: str) -> ast.Catalog:
             while p.peek() != ("punct", "}"):
                 k2, v2 = p.next()
                 if k2 not in ("ident", "num"):
-                    self.err(f"bad type constant {v2!r}")
+                    p.err(f"bad type constant {v2!r}: a type is its finite set "
+                          f"of constants, `type {tname} {{a b c}}` or a range "
+                          f"`{{k0..k9}}`; a constructor with arguments has no "
+                          f"Metis form (Ceptre's `succ nat : nat` becomes a "
+                          f"range and a bwd table over it)")
                 if p.peek()[0] == "range":
                     p.next()
                     k3, v3 = p.next()
                     if k3 not in ("ident", "num"):
-                        self.err(f"bad range end {v3!r}")
+                        p.err(f"bad range end {v3!r}: a range is `lo..hi`, "
+                              f"one alpha prefix with integer suffixes, "
+                              f"`{{k0..k9}}`")
                     consts.extend(_expand_range(v2, v3))
                 else:
                     consts.append(v2)

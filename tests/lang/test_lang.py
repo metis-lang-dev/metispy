@@ -288,6 +288,18 @@ def test_type_range_sugar_expands():
     assert parse(pretty(a)) == a
 
 
+def test_type_constructor_is_a_parse_error_with_its_place():
+    """A Ceptre-style constructor in a type, `type nat {zero succ(nat)}.`, is a ParseError that
+    names the line, the token, and what a type constant is — not a NameError (the parser once
+    called self.err in a plain function: `metis FILE` printed "name 'self' is not defined")."""
+    from metis.lang.parser import ParseError
+    with pytest.raises(ParseError, match=r"^2:\d+: bad type constant '\(': a type is its finite set") as e:
+        parse("catalog r 1.\ntype nat {zero succ(nat)}.\n")
+    assert "NameError" not in str(e.value)
+    with pytest.raises(ParseError, match=r"bad range end"):
+        parse("catalog r 1.\ntype t {c0 .. (}.\n")
+
+
 def test_type_range_rejects_mismatched():
     from metis.lang.parser import ParseError
     for rng in ("c0 .. d4", "c4 .. c0", "a .. c3"):
