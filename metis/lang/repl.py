@@ -707,10 +707,9 @@ class Repl(LoopVerbs, Cmd):
         if self.stage == DONE:
             return []
         for kind in ("clause", "link"):
-            ws = [(i, choice_weight(ev, self.counts))
-                  for i, (k, s, ev) in enumerate(self.events_tbl)
-                  if k == kind and s == self.stage
-                  and not self._masked(ev.name)]
+            ws = [(i, choice_weight(self.events_tbl[i][2], self.counts))
+                  for i in self._maybe_enabled(kind, self.stage)
+                  if not self._masked(self.events_tbl[i][2].name)]
             ws = [(i, w) for i, w in ws if w > 0]
             if ws and self.pricer is not None and kind == "clause":
                 from metis.lang.cone import priced
@@ -719,6 +718,35 @@ class Repl(LoopVerbs, Cmd):
             if ws:
                 return ws
         return []
+
+    def _maybe_enabled(self, kind, stage):
+        """The events of (kind, stage) that MAY be enabled now, in table
+        order: those that need nothing, and those whose one indexed atom
+        (the rarest they consume or read) is held — an event missing any
+        atom it needs has weight 0, so the tier is the same as weighing
+        every event of the table (a planner's 28k each beat)."""
+        tbl = self.events_tbl
+        cidx = self.__dict__.get("_cidx")
+        if cidx is None or cidx[0] is not tbl:
+            freq = {}
+            for _, _, ev in tbl:
+                for a in set(ev.consume) | set(ev.persist):
+                    freq[a] = freq.get(a, 0) + 1
+            index = {}
+            for i, (k, s, ev) in enumerate(tbl):
+                free, by = index.setdefault((k, s), ([], {}))
+                needs = set(ev.consume) | set(ev.persist)
+                if needs:
+                    by.setdefault(min(needs, key=lambda a: (freq[a], a)), []).append(i)
+                else:
+                    free.append(i)
+            cidx = self.__dict__["_cidx"] = (tbl, index)
+        free, by = cidx[1].get((kind, stage), ((), {}))
+        out = list(free)
+        for a, n in self.counts.items():
+            if n > 0 and a in by:
+                out.extend(by[a])
+        return sorted(out)
 
     def _fire(self, i, how="sampled", ws=None):
         """Fire event i; `ws` = the tier it was chosen from (computed
