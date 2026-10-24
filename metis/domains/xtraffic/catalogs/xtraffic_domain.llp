@@ -8,6 +8,7 @@ catalog xtraffic-domain 1.
 provenance hand "IPPC 2011 CrossingTraffic, lifted domain" "2026-07-19".
 layers (dyn).
 stages (move mark update sweep).
+types (cell idx).   % completed by the instance that includes this file (spec 12)
 
 namespace state produce (dyn).
 

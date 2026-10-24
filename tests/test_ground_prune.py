@@ -73,9 +73,11 @@ def test_the_pruned_grounding_is_the_full_products():
     cats = [compile_catalog(parse(SRC)).catalog]
     for p in sorted(CATALOG.glob("*/*.llp"))[:40]:
         try:
-            cats.append(compile_catalog(parse(p.read_text(), file=str(p))).catalog)
+            cat = compile_catalog(parse(p.read_text(), file=str(p))).catalog
         except Exception:  # noqa: BLE001 — includes, packs, ports: not a standalone program
             continue
+        if not cat.abstract:            # a lifted file (spec 12) grounds through its instance
+            cats.append(cat)
     assert len(cats) > 5
     for cat in cats:
         assert _clauses(cat, ground._substitutions) == _clauses(cat, _reference)
