@@ -590,6 +590,7 @@ def _fired_since(shell, k):
     g, _ = shell.causal()
     by = {nd.i: nd for nd in g.nodes}
     out = []
+    k = max(k, getattr(shell.fired_rows, "off", 0))     # a bounded history: from the window kept
     for j, (kind, stage, ev) in enumerate(shell.fired_rows[k:], k + 1):
         nd = by.get(j)
         out.append({"i": j, "name": ev.name, "kind": kind,

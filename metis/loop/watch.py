@@ -633,6 +633,7 @@ class Watch:
         sh.fired.append(ev.name)
         sh.fired_rows.append(("exo", sh.stage, ev))
         sh._env_push()
+        sh._keep()                      # the bounded history (watch-history)
         self.quiet = False
         return diff
 

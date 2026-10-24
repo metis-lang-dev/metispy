@@ -21,6 +21,7 @@ import re
 import sys
 from cmd import Cmd
 from dataclasses import replace
+from itertools import takewhile as _takewhile
 from pathlib import Path
 
 from metis.kernel import (STATE_BUDGET, ForwardProjection,
@@ -29,6 +30,7 @@ from metis.kernel.refsample import (DONE, SplitMix64, canonical_events,
                                     choice_weight, run_trace)
 from metis.lang import compile_catalog, parse, resolve_includes
 from metis.lang.cone import NotSettled
+from metis.lang.window import Trimmed, Window
 from metis.lang.measure import (Arm, cone_names, footer, measure,
                                 parse_tail, pval, readout_text,
                                 structural)
@@ -287,8 +289,17 @@ class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
     def __init__(self, path, seed=1, terminal=False, plugin=None,
-                 registry=None, host=False, **kw):
+                 registry=None, host=False, history=None, **kw):
         super().__init__(**kw)
+        # history=N (watch-history s-e061fad2): a long-running watch keeps
+        # the last N fired rows (fired, fired_rows, fired_how, the env
+        # snapshots, the ledger and undo marks within them) as a Window
+        # over the absolute history — len() and every position stay
+        # absolute, so a checkpoint taken as len(self.fired) keeps its
+        # meaning; the causal base rolls forward to the window's start.
+        # Beyond it, undo/fork/whatif answer "history kept: last N".
+        # None (the dev REPL's default): unbounded, as before.
+        self.history = int(history) if history else None
         # the interactive TERMINAL shell (main() passes True): the only
         # session that writes the operator's disk (transcript) or
         # imports operator code (plugin) — D4
@@ -309,7 +320,7 @@ class Repl(LoopVerbs, Cmd):
         # when one attaches, replaces it
         self.plugin, self.plugin_spec = None, ""
         self.registry, self.pricer = registry, None
-        self._envs, self._env0 = [], None
+        self._envs, self._env0 = Window(), None
         self._notch = None              # a fitted, not yet shipped fit
         self._overlays = []             # shipped notch overlays (names)
         self._overlay_names = []        # per overlay: "notch fit" or its file
@@ -321,10 +332,10 @@ class Repl(LoopVerbs, Cmd):
         self.path = Path(path)
         self._seed = seed               # the wire's reload serves a new open with it
         self.rng = SplitMix64(seed)
-        self.undo_stack = []
-        self.fired = []
+        self.undo_stack = Window()
+        self.fired = Window()
         self.loop = LoopState()
-        self.fired_rows = []   # (kind, stage, ev) per fired event
+        self.fired_rows = Window()   # (kind, stage, ev) per fired event
         # the causality graph's base (spec 09): (log length, stage,
         # counts) at the last edit no event explains — start, reset,
         # assert/retract, #init; the graph covers fired_rows after it
@@ -336,9 +347,9 @@ class Repl(LoopVerbs, Cmd):
         # out of the tier (`do ~EVENT`); the ledger records the do's;
         # _base_do names the state do's the current base is made of;
         # shelf = the one shelved world while forked (D1).
-        self.fired_how = []
+        self.fired_how = Window()
         self.masks = set()
-        self.ledger = []
+        self.ledger = Window()
         self._base_do = []
         self.shelf = None
         self.fork_at = None
@@ -658,8 +669,9 @@ class Repl(LoopVerbs, Cmd):
         position so far (the honest best: it was not there before)."""
         snap = self._env_snap()
         self._env0 = snap
-        self._envs = ([snap] * (len(self.fired) + 1)
-                      if self.plugin is not None else [])
+        self._envs = (Window([snap] * (len(self.fired) - self.fired.off + 1),
+                             self.fired.off)
+                      if self.plugin is not None else Window())
 
     def _env_to(self, snap):
         if self.plugin is not None and snap is not None:
@@ -668,6 +680,60 @@ class Repl(LoopVerbs, Cmd):
     def _env_push(self):
         if self.plugin is not None:
             self._envs.append(self._env_snap())
+
+    # -- the bounded history (watch-history s-e061fad2) -------------------
+    def _rows_applied(self, k0, stage, counts, k):
+        """(stage, counts) after the rows #k0..#k on (stage, counts): the
+        prefix replay _fork_to makes, as a pure function."""
+        counts = dict(counts)
+        for kind, _, ev in self.fired_rows[k0:k]:
+            for q, m in ev.consume.items():
+                counts[q] = counts.get(q, 0) - m
+            for q, m in ev.produce.items():
+                counts[q] = counts.get(q, 0) + m
+            if kind == "link":
+                stage = ev.post
+        return stage, {q: m for q, m in counts.items() if m > 0}
+
+    def _keep(self):
+        """Keep the last `history` rows: the older go from every per-row
+        list at once; the causal base (and each undo mark's) rolls forward
+        over them, so base + the rows since stays exact inside the window;
+        the ledger's and the undo stack's entries before it go too. Never
+        inside a fork (the shelf holds the actual world)."""
+        n_keep = self.history
+        if not n_keep or self.shelf is not None or "_ishelf" in self.__dict__:
+            return
+        cut = len(self.fired) - self.fired.off - n_keep
+        if cut <= 0:
+            return
+        new_off = self.fired.off + cut
+        rolled = {}
+
+        def roll(base):
+            k0, stage, counts = base
+            if k0 >= new_off:
+                return base
+            key = (k0, id(counts))
+            if key not in rolled:
+                rolled[key] = (new_off,) + self._rows_applied(k0, stage, counts, new_off)
+            return rolled[key]
+        self._base = roll(self._base)
+        self.undo_stack.trim(sum(1 for _ in _takewhile(lambda m: m[2] < new_off, self.undo_stack)))
+        self.undo_stack.items = [m[:3] + (roll(m[3]),) + m[4:] for m in self.undo_stack.items]
+        self.fired.trim(cut)
+        self.fired_rows.trim(cut)
+        self.fired_how.trim(cut)
+        if self._envs.items:
+            self._envs.trim(new_off - self._envs.off)
+        self.ledger.trim(sum(1 for _ in _takewhile(lambda d: d["k"] < new_off, self.ledger)))
+        if self.fork_at is not None and self.fork_at < new_off:
+            self.fork_at = None
+
+    def _kept_note(self):
+        """The answer for a position before the window."""
+        return (f"history kept: last {self.history} (#{self.fired.off}.."
+                f"#{len(self.fired)}) — the older rows are gone")
 
     def _tick(self, quiet_rows=True, restart=False):
         """One env beat (the INPUT face): plugin.tick(counts) -> its
@@ -703,6 +769,7 @@ class Repl(LoopVerbs, Cmd):
         self.fired.append(ev.name)
         self.fired_rows.append(("exo", self.stage, ev))
         self._env_push()
+        self._keep()
         return ev.name
 
     def _latch_done(self):
@@ -855,6 +922,7 @@ class Repl(LoopVerbs, Cmd):
             beat = getattr(self.plugin, "beat_stage", None)
             if kind == "link" and beat and ev.post == beat:
                 self._tick()          # settle entry: one env beat
+        self._keep()
         return ev.name
 
     def _sample(self):
@@ -1115,6 +1183,9 @@ class Repl(LoopVerbs, Cmd):
         except ValueError:
             self._say("usage: fork [K]")
             return
+        if 0 <= k < self.fired.off:
+            self._say(self._kept_note())
+            return
         if not k0 <= k <= n:
             self._say(f"fork K needs #{k0} <= K <= #{n}: before #{k0} "
                       "lies an edit no event explains (undo/reset to "
@@ -1147,8 +1218,9 @@ class Repl(LoopVerbs, Cmd):
         del self.fired[k:]
         del self.fired_rows[k:]
         del self.fired_how[k:]
-        self.ledger = [d for d in self.ledger if d["k"] <= k]
-        self.undo_stack = []
+        self.ledger = Window([d for d in self.ledger if d["k"] <= k],
+                             self.ledger.off)
+        self.undo_stack = Window((), len(self.undo_stack))
         self.fork_at = k
         if self.plugin is not None:
             # the counterfactual sees the env AS IT WAS at #k
@@ -1162,6 +1234,8 @@ class Repl(LoopVerbs, Cmd):
     def _ifork(self, k):
         """-> None, or the refusal (K outside [base, tip])."""
         k0, n = self._base[0], len(self.fired)
+        if 0 <= k < self.fired.off:
+            return self._kept_note()
         if not k0 <= k <= n:
             return (f"fork K needs #{k0} <= K <= #{n}: before #{k0} lies "
                     "an edit no event explains (undo/reset to reach it)")
@@ -1784,8 +1858,9 @@ class Repl(LoopVerbs, Cmd):
 
     def do_undo(self, arg):
         """back one mutating command"""
-        if not self.undo_stack:
-            self._say("nothing to undo")
+        if not self.undo_stack.items:
+            self._say(self._kept_note() + "; nothing to undo within it"
+                      if self.undo_stack.off else "nothing to undo")
             return
         (self.stage, self.counts, k, self._base, masks, nl, base_do,
          self.fork_at, env) = self.undo_stack.pop()
@@ -2587,8 +2662,8 @@ class Repl(LoopVerbs, Cmd):
         for d in self.ledger:
             if d["op"][0] in "+-~":
                 state.setdefault(d["k"], []).append(d["op"])
-        out = []
-        for k in range(len(self.fired) + 1):
+        out = [f"  ({self._kept_note()})"] if self.fired.off else []
+        for k in range(self.fired.off, len(self.fired) + 1):
             for op in state.get(k, []):
                 out.append(f"     do {op}")
             if k == self.fork_at and self.shelf is not None:
@@ -2998,6 +3073,8 @@ class Repl(LoopVerbs, Cmd):
             return super().onecmd(line)
         except KeyboardInterrupt:
             self._say("(interrupted)")
+        except Trimmed:
+            self._say(self._kept_note())
         except Exception as e:
             d = getattr(e, "diagnostic", None)
             if d is not None:         # e.g. G5 reads-undeclared: listed

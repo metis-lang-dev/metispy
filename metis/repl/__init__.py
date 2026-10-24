@@ -84,6 +84,8 @@ class Repl:
         sh = self.shell
         if not isinstance(token, int) or token < 1 or token > len(sh.undo_stack):
             raise ValueError("restore: a snapshot of this session, not %r" % (token,))
+        if token <= getattr(sh.undo_stack, "off", 0):          # a bounded history (watch-history)
+            raise ValueError("restore: %s" % sh._kept_note())
         while len(sh.undo_stack) > token:
             sh.undo_stack.pop()
         self._quiet(sh.do_undo, "")
