@@ -19,7 +19,8 @@ CORPUS = Path(__file__).resolve().parents[3] / "metis-lang/corpus"
 # one run per phase, in gate-11 order: (file, base)
 RUNS = (("diag_compile.llp", None), ("diag_kernel.llp", None),
         ("diag_pack.llp", "diag_pack_base.llp"),
-        ("diag_cycle_a.llp", None), ("diag_extends.llp", None))
+        ("diag_cycle_a.llp", None), ("diag_extends.llp", None),
+        ("diag_abstract.llp", None))
 
 
 def _diags():

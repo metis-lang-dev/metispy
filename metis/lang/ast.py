@@ -99,6 +99,16 @@ class TypeDecl:
 
 
 @dataclass(frozen=True)
+class TypesDecl:
+    """`types (a b).`: abstract types (spec 12) — names whose members an
+    instance that includes this file supplies with `type a {…}.`"""
+    names: Tuple[str, ...]
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
+
+
+@dataclass(frozen=True)
 class NamespaceDecl:
     name: str
     produce: Tuple[str, ...]
@@ -229,6 +239,8 @@ def decl_line(d) -> str:
         return f'include "{d.path}".'
     if isinstance(d, TypeDecl):
         return f"type {d.name} {{{' '.join(d.consts)}}}."
+    if isinstance(d, TypesDecl):
+        return f"types ({' '.join(d.names)})."
     if isinstance(d, NamespaceDecl):
         line = f"namespace {d.name} produce ({' '.join(d.produce)})"
         if d.consume is not None:

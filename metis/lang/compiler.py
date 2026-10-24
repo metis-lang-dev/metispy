@@ -301,7 +301,13 @@ def compile_catalog(cat: ast.Catalog,
         inherited_bwd = b.bwd
         layers = layers or b.layers
         stages = stages or b.stages
-    base_types = dict(base.catalog.sig.types) if base is not None else {}
+    # the base's types: every name it declares (abstract ones included)
+    # resolves a signature; only the defined ones carry members to check
+    # a constant against
+    base_names = set(base.catalog.sig.types) if base is not None else set()
+    base_types = {t: cs for t, cs in base.catalog.sig.types.items()
+                  if t not in base.catalog.abstract} \
+        if base is not None else {}
     vocab = _Vocab(list(cat.decls) + (list(base.source.decls)
                                       if base is not None
                                       and base.source is not None
@@ -369,6 +375,45 @@ def compile_catalog(cat: ast.Catalog,
                 ports.inputs += (d.name,)
             else:
                 ports.outputs += (d.name,)
+
+    # abstract types (spec 12): `types (…)` names a type that a `type t
+    # {…}` anywhere in the spliced unit (or the base) completes; one
+    # left abstract is in the signature with no constants — an advisory
+    # here, a finding when the unit is grounded. A signature naming a
+    # type nobody declared is type-unknown, once per type, at the first
+    # signature naming it.
+    abstract: List[str] = []
+    abstract_decl = {}
+    for d in cat.decls:
+        if isinstance(d, ast.TypesDecl):
+            for t in d.names:
+                if t not in types and t not in base_names \
+                        and t not in abstract_decl:
+                    abstract.append(t)
+                    abstract_decl[t] = d
+    declared = set(types) | base_names | set(abstract)
+    named = set()
+    for d in cat.decls:
+        if not isinstance(d, (ast.PredDecl, ast.BwdDecl)):
+            continue
+        kind = "pred" if isinstance(d, ast.PredDecl) else "bwd"
+        for t in d.args:
+            if t in declared or t in named:
+                continue
+            named.add(t)
+            emitter(vocab.decl_source(d, f"{kind}/{d.name}"))(
+                "type-unknown",
+                f"{kind} {d.name}: '{t}' is not a type — declare it: "
+                f"`types ({t}).` when an instance completes it, or "
+                f"`type {t} {{…}}`.", (("pred", d.name), ("type", t)))
+    abstract_src = {t: vocab.decl_source(abstract_decl[t], f"types/{t}")
+                    for t in abstract}
+    for t in abstract:
+        emitter(abstract_src[t])(
+            "type-abstract",
+            f"type '{t}' is abstract "
+            f"({ast.decl_line(abstract_decl[t])[:-1]}): this unit grounds "
+            f"only through an instance that completes it", (("type", t),))
 
     # read-scope validation: formals are vars; scope atoms are declared
     # resource preds; guards are bwd; every scope-atom var is bound by a
@@ -600,9 +645,9 @@ def compile_catalog(cat: ast.Catalog,
 
     kcat = Catalog(name=cat.name, version=cat.version,
                    layers=layers, stages=stages,
-                   sig=Signature(types), namespaces=namespaces,
-                   preds=preds, bwd=frozenset(bwd),
-                   entries=entries + horn_entries)
+                   sig=Signature({**types, **{t: [] for t in abstract}}),
+                   namespaces=namespaces, preds=preds, bwd=frozenset(bwd),
+                   entries=entries + horn_entries, abstract=tuple(abstract))
     for d in cat.decls:                 # decl slices (spec 08)
         key = {ast.PredDecl: "pred", ast.BwdDecl: "bwd",
                ast.NamespaceDecl: "namespace",
@@ -610,6 +655,8 @@ def compile_catalog(cat: ast.Catalog,
         if key is not None:
             kcat.srcs.setdefault(f"{key}/{d.name}",
                                  vocab.decl_source(d, f"{key}/{d.name}"))
+    for t in abstract:
+        kcat.srcs[f"types/{t}"] = abstract_src[t]
     if cat.extends is None:
         kdiags: List = []
         f = kcat.typecheck(kdiags)
@@ -624,7 +671,9 @@ def diagnose(path, base=None) -> List:
     the mirror of `metisc --diagnostics FILE [--base BASE]`: a failing
     compile's errors (LangError / CatalogError) or a clean compile's
     diagnostics; with a base (a path or a CatalogDoc) the file is
-    compiled as a pack AND admitted, so admission diagnostics join."""
+    compiled as a pack AND admitted, so admission diagnostics join; a
+    world that compiles adds what grounding it would refuse
+    (type-incomplete, spec 12)."""
     if base is not None and not isinstance(base, CatalogDoc):
         base = load_llp(base)
     try:
@@ -632,11 +681,13 @@ def diagnose(path, base=None) -> List:
     except (LangError, CatalogError) as e:
         return list(e.diagnostics)
     out = list(doc.diagnostics)
+    world = doc.catalog
     if base is not None:
         try:
-            base.catalog.admit(doc.catalog)
+            world = base.catalog.admit(doc.catalog)
         except CatalogError as e:
-            out += e.diagnostics
+            return out + e.diagnostics
+    world.incomplete(out)       # what grounding would refuse (spec 12)
     return out
 
 

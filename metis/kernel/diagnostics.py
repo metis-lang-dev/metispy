@@ -34,11 +34,18 @@ CONTEXT_CAP = 12
 # code -> (severity, phase). phase says WHERE a code fires:
 #   compile | kernel | admission  — from a .llp; the D2 gate requires a
 #                                   fixture row for every one of these
+#   ground                        — grounding a unit that compiles
+#                                   (spec 12: an abstract type left
+#                                   abstract); gated alike — a listing
+#                                   runs the ground check after a clean
+#                                   compile
 #   loop | runtime                — the gate cascade / instruments
 #                                   (fixtures with the REPL surface)
 #   internal                      — defensive kernel invariants
 #                                   unreachable from source (hand-built
 #                                   catalogs only)
+#   retired                       — kept so the code is never reused;
+#                                   no emitter
 REGISTRY: Dict[str, Tuple[str, str]] = {
     # compile
     "doc-missing": ("error", "compile"),
@@ -64,13 +71,17 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "include-cycle": ("error", "compile"),
     "extends-no-base": ("error", "compile"),
     "decl-duplicate": ("error", "compile"),
+    # spec 12: a signature naming a type nobody declared (it replaces
+    # var-type-unknown, which reported it per rule variable, later);
+    # an abstract type the unit leaves abstract (advisory)
+    "type-unknown": ("error", "compile"),
+    "type-abstract": ("warning", "compile"),
     # kernel
     "containment-produce": ("error", "kernel"),
     "containment-consume": ("error", "kernel"),
     "pred-undeclared": ("error", "kernel"),
     "bwd-as-resource": ("error", "kernel"),
     "layer-unknown": ("error", "kernel"),
-    "var-type-unknown": ("error", "kernel"),
     "stage-unknown": ("error", "kernel"),
     "link-stage-unknown": ("error", "kernel"),
     "horn-head-not-bwd": ("error", "kernel"),
@@ -82,6 +93,8 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "pack-redeclares": ("error", "admission"),
     "pack-claims-base-namespace": ("error", "admission"),
     "pack-adds-stage": ("error", "admission"),
+    # ground (spec 12)
+    "type-incomplete": ("error", "ground"),
     # loop / runtime (step 3)
     "rule-name-collision": ("warning", "loop"),
     "provenance-shape": ("warning", "loop"),
@@ -97,9 +110,12 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "comment-missing": ("error", "internal"),
     "var-untyped": ("error", "internal"),
     "kind-unknown": ("error", "internal"),
+    # retired (spec 12): every variable's type comes from a signature,
+    # so type-unknown at the signature reports it, once
+    "var-type-unknown": ("error", "retired"),
 }
 
-GATED_PHASES = ("compile", "kernel", "admission")
+GATED_PHASES = ("compile", "kernel", "admission", "ground")
 
 # code -> hint template over the code's data keys (data key order is
 # fixed per code at the emission site)
@@ -167,6 +183,11 @@ HINTS: Dict[str, str] = {
     "decl-duplicate":
         "a name is declared once per kind: remove this {kind} "
         "declaration of {name}, or rename it (first at {first})",
+    "type-unknown":
+        "declare {type}, or fix the signature of {pred} that names it",
+    "type-abstract":
+        "the instance that includes this file completes {type} with "
+        "`type {type} {{…}}.`: ground that instance",
     "pred-undeclared":
         "declare {pred}: `pred {pred}(...) : <namespace>.`",
     "bwd-as-resource":
@@ -175,8 +196,6 @@ HINTS: Dict[str, str] = {
     "layer-unknown":
         "add {layer} to the catalog's layers (...), or tag the rule with "
         "a declared layer",
-    "var-type-unknown":
-        "declare type {type}, or fix the signature that names it",
     "stage-unknown":
         "add {stage} to stages (...)",
     "link-stage-unknown":
@@ -201,6 +220,9 @@ HINTS: Dict[str, str] = {
         "the pack declares",
     "pack-adds-stage":
         "a pack may not add stage {stage}: the stage set is the base's",
+    "type-incomplete":
+        "ground the instance that includes this file, or complete {type} "
+        "here with `type {type} {{…}}.`",
     # loop (the gate cascade) — metispy only: metisc has no loop
     "rule-name-collision":
         "rename one of the {count} rules named {rule}: trace events and "
@@ -264,21 +286,6 @@ _LAYER_CODES = {"containment-produce", "containment-consume",
                 "layer-unknown", "namespace-layer-unknown"}
 
 
-def _naming_type(context, ty: str):
-    """The var-type-unknown slice (spec 08 A2): only the pred/bwd lines
-    whose signature names the unknown type — where the type was named,
-    which is what the repair needs; the rest of the rule's closure
-    (other preds, namespaces) is noise and overflowed the cap on wide
-    rules. Order kept; byte parity with metisc (diag.ml)."""
-    out = []
-    for ln in context:
-        if (ln.startswith("pred ") or ln.startswith("bwd ")) and "(" in ln:
-            args = ln[ln.index("(") + 1:ln.index(")")].split(",")
-            if ty in [a.strip() for a in args]:
-                out.append(ln)
-    return tuple(out)
-
-
 def make(code: str, text: str, src: Optional[Source],
          data: Tuple[Tuple[str, str], ...]) -> Diagnostic:
     if code not in REGISTRY:
@@ -289,8 +296,6 @@ def make(code: str, text: str, src: Optional[Source],
     context = src.context
     if code in _LAYER_CODES and src.layers:
         context = context + (src.layers,)
-    if code == "var-type-unknown":
-        context = _naming_type(context, dict(data).get("type", ""))
     if len(context) > CONTEXT_CAP:
         raise DiagnosticDefect(
             f"{code} @ {src.loc.decl}: context of {len(context)} lines "

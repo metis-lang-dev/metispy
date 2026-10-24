@@ -81,8 +81,12 @@ class Catalog:
     preds: Dict[str, str]                    # predicate -> namespace
     bwd: FrozenSet[str] = frozenset()
     entries: List[Entry] = field(default_factory=list)
+    # abstract types (spec 12): declared by `types (…)`, completed by no
+    # `type t {…}` — in the signature with no constants; grounding
+    # refuses while one is left (an instance, or a pack, completes it)
+    abstract: Tuple[str, ...] = ()
     # decl slices for catalog-level / admission diagnostics (spec 08),
-    # keyed "pred/x", "bwd/x", "namespace/y", "type/t"; filled by the
+    # keyed "pred/x", "bwd/x", "namespace/y", "type/t", "types/t"; filled by the
     # compiler, never compared
     srcs: Dict[str, Source] = field(default_factory=dict, compare=False,
                                     repr=False)
@@ -122,6 +126,23 @@ class Catalog:
                                  self.sig.types, diags))
         return f
 
+    def incomplete(self, diags: Optional[List[Diagnostic]] = None) \
+            -> List[str]:
+        """type-incomplete (spec 12 P3): one finding per abstract type
+        still abstract, in declaration order, at its `types (…)` line —
+        what grounding refuses with."""
+        from .typing import _emit
+        f: List[str] = []
+        for t in self.abstract:
+            src = self.srcs.get(f"types/{t}")
+            decl = src.subject[0][:-1] if src is not None and src.subject \
+                else f"types ({t})"
+            _emit(f, diags, "type-incomplete",
+                  f"type '{t}' has no members: declared by `{decl}`, "
+                  f"completed by no `type {t} {{…}}` — the instance that "
+                  f"includes this file supplies it", src, (("type", t),))
+        return f
+
     def checked(self) -> "Catalog":
         diags: List[Diagnostic] = []
         f = self.typecheck(diags)
@@ -137,7 +158,9 @@ class Catalog:
         d: List[Diagnostic] = []
         src = pack.srcs.get
         for t in pack.sig.types:
-            if t in self.sig.types:
+            # a pack may complete the base's abstract type (spec 12 P5)
+            if t in self.sig.types and t not in self.abstract \
+                    and t not in pack.abstract:
                 _emit(f, d, "pack-redeclares",
                       f"pack redeclares type '{t}'", src(f"type/{t}"),
                       (("kind", "type"), ("name", t)))
@@ -172,16 +195,21 @@ class Catalog:
                       (("stage", s),))
         if f:
             raise CatalogError(f, d)
+        completes = {t for t in pack.sig.types if t not in pack.abstract}
         merged = Catalog(
             name=f"{self.name}+{pack.name}",
             version=self.version,
             layers=self.layers,
             stages=self.stages,
-            sig=Signature({**self.sig.types, **pack.sig.types}),
+            sig=Signature({**self.sig.types,
+                           **{t: cs for t, cs in pack.sig.types.items()
+                              if t in completes or t not in self.sig.types}}),
             namespaces={**self.namespaces, **pack.namespaces},
             preds={**self.preds, **pack.preds},
             bwd=self.bwd | pack.bwd,
             entries=self.entries + pack.entries,
+            abstract=tuple(t for t in self.abstract if t not in completes)
+            + tuple(t for t in pack.abstract if t not in self.sig.types),
             srcs={**self.srcs, **pack.srcs})
         return merged.checked()
 
@@ -205,6 +233,10 @@ class Catalog:
     def ground(self, init_atoms, init_stage: Optional[str] = None) \
             -> Program:
         self.checked()
+        diags: List[Diagnostic] = []
+        f = self.incomplete(diags)
+        if f:
+            raise CatalogError(f, diags)
         schemas = [e.payload for e in self.entries if e.kind == "schema"]
         links = [e.payload for e in self.entries if e.kind == "link"]
         return ground_program(self.stages, schemas, links, self.sig,

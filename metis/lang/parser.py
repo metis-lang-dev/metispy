@@ -403,6 +403,14 @@ def _parse(text: str) -> ast.Catalog:
             p.next()
             stages = p.name_list_paren()
             p.punct(".")
+        elif v == "types" and p.peek(1) == ("punct", "("):
+            # abstract types (spec 12): the loc is the first declared
+            # name's token (A1), the '(' when the list is empty
+            p.next()
+            at = p.pos[p.i + 1] if p.peek(1)[0] == "ident" else p._here()
+            names = p.name_list_paren()
+            p.punct(".")
+            decls.append(ast.TypesDecl(names, *at))
         elif v == "type":
             p.next()
             at = p._here()

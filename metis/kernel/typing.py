@@ -106,12 +106,10 @@ def check_entry(entry, layers, stages, namespaces: Dict[str, Namespace],
     if entry.kind in ("prior", "binding"):
         return f
 
+    # a variable's type is a signature's (the compiler infers it), and a
+    # signature naming an undeclared type is type-unknown at compile time
+    # (spec 12; var-type-unknown is retired)
     sc = entry.payload   # ClauseSchema or LinkSchema
-    for v, t in sc.vars.items():
-        if t not in types:
-            _emit(f, diags, "var-type-unknown",
-                  f"{entry.name}: var '{v}' has unknown type '{t}'", src,
-                  (("var", v), ("type", t)))
     if entry.kind == "schema" and sc.stage not in stages:
         _emit(f, diags, "stage-unknown",
               f"{entry.name}: unknown stage '{sc.stage}'", src,
