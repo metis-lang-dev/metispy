@@ -538,11 +538,20 @@ _WIRE_OPS = {"trace": _op_trace, "map": _op_map,
              "ledger": _op_ledger}
 
 
+# the ops a lifted file (spec 12, a type still abstract) answers: its
+# findings, help and the loop's show; the rest need its program
+_LIFTED_OPS = frozenset({"findings", "help", "show"})
+
+
 def dispatch(shell, op: str, arg: str = "") -> dict:
     """One wire op against the shell: a loop verb (cmd_*) or a wire
     readout."""
     fn = getattr(shell, "cmd_" + op, None) if op not in _WIRE_OPS \
         else None
+    if getattr(shell, "prog", 0) is None and op not in _LIFTED_OPS:
+        from metis.lang.repl import lifted_refusal
+        return {"ok": False, "error": lifted_refusal(shell, op),
+                "lifted": list(shell.doc.catalog.abstract)}
     try:
         if op in _WIRE_OPS:
             return _WIRE_OPS[op](shell, arg)

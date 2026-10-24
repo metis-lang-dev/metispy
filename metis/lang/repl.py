@@ -175,6 +175,46 @@ def _source_name(name, spans):
     return base if base in spans else name
 
 
+# what a lifted file (spec 12: a type still abstract) serves: reading the
+# file, never a program — everything else answers with lifted_refusal
+_LIFTED_OK = frozenset({"help", "list", "show", "findings", "version",
+                        "reload", "key", "transcript", "quit", "exit",
+                        "EOF"})
+
+
+def where(d) -> str:
+    """A diagnostic's `file:line` — the cannot-serve and refusal prefix,
+    the file by its basename as every diagnostic renders it (metisc
+    `metisc FILE.llp` prints the same); '' without a source position."""
+    if not d.loc.line:
+        return ""
+    return f"{os.path.basename(d.loc.file) or '<input>'}:{d.loc.line}"
+
+
+def located(e, path="") -> list:
+    """An exception's findings, each prefixed `file:line:` — from its
+    structured diagnostics when it carries them (LangError /
+    CatalogError, spec 08), else a parse/lex error's own `line:col:`
+    given the served file's name — the cannot-serve listing."""
+    ds = [d for d in getattr(e, "diagnostics", []) or []
+          if d.severity == "error"]
+    if ds:
+        return [f"{where(d)}: {d.text}" if where(d) else d.text
+                for d in ds]
+    out = getattr(e, "findings", None) or [str(e)]
+    return [f"{path}:{f}" if path and re.match(r"\d+:\d+: ", f) else f
+            for f in out]
+
+
+def lifted_refusal(shell, verb: str) -> str:
+    """What a lifted file answers a verb that needs its program."""
+    ds = [d for d in shell.__dict__.get("notes", [])
+          if d.code == "type-incomplete"]
+    return (f"{verb}: no program — {shell.path.name} is lifted; ground "
+            "the instance that includes it\n  "
+            + "\n  ".join(f"{where(d)}: {d.text}" for d in ds))
+
+
 def _ground_args(name):
     """`rule[X=a,Y=b]` -> ('a', 'b'): a fired event's ground arguments,
     as on_event receives them."""
@@ -309,6 +349,18 @@ class Repl(LoopVerbs, Cmd):
         self.llm = config.get("llm", "endpoint", "")  # spec (loop.llm)
         self.sys_prompts = {}  # per-seat session overrides (prompts)
         self._load(initial=True)
+        if self.prog is None:           # a lifted file (spec 12)
+            warn = "".join(f"warning: {w}\n" for w in self.doc.warnings)
+            self.intro = warn + (
+                f"metis shell — {self.path.name} (catalog "
+                f"{self.doc.catalog.name}, lifted: "
+                f"{' '.join(self.doc.catalog.abstract)} abstract)\n"
+                "no program until an instance completes "
+                f"{', '.join(self.doc.catalog.abstract)} — "
+                f"{', '.join(sorted(_LIFTED_OK - {'exit', 'EOF'}))} "
+                "read the file; the rest refuse\n"
+                "type 'help' for commands, 'list' for the rules")
+            return
         flat = _fmt_counts(self.counts)
         if len(flat) > 60:              # tragedy wraps 5 lines flat:
             toks = sum(self.counts.values())
@@ -343,6 +395,25 @@ class Repl(LoopVerbs, Cmd):
         # a new world: the old world's runtime notes no longer speak
         self.__dict__["notes"] = []
         self.text, self.doc, self.case = text, doc, case
+        if doc.catalog.abstract:
+            # a lifted file (spec 12): served for reading — listed, shown,
+            # its findings — with no program, no state and no #init until
+            # an instance completes its abstract types
+            diags = []
+            self._lifted = doc.catalog.incomplete(diags)
+            self.__dict__["notes"] = diags
+            self.prog, self._scene_cache, self.events_tbl = None, None, []
+            self.key = ""
+            self.stage = doc.catalog.stages[0] if doc.catalog.stages \
+                else DONE
+            self.counts = {}
+            self._rebase()
+            self.atoms = set()
+            return
+        # a lifted session had no state to carry: the first program it
+        # serves starts from the file's #init
+        was_lifted = self.__dict__.get("_lifted") is not None
+        self._lifted = None
         self.prog = doc.catalog.ground(dict(case["init"]))
         # seed the read-only scene cache (wire._scene_prog) with the
         # program just grounded: the first map/trace costs no ground
@@ -352,7 +423,7 @@ class Repl(LoopVerbs, Cmd):
         self.events_tbl = canonical_events(self.prog)
         self.key = program_key(self.prog)
         self._ship_pending_notch()
-        if initial or self.stage not in (
+        if initial or was_lifted or self.stage not in (
                 list(self.prog.stages) + [DONE]):
             self.stage = self.prog.init_stage
             self.counts = dict(case["init"])
@@ -1759,6 +1830,11 @@ class Repl(LoopVerbs, Cmd):
                       "re-read file is the world now")
         for w in self.doc.warnings:
             self._say(f"warning: {w}")
+        if self.prog is None:
+            self._say(f"reloaded {self.path.name} (lifted: "
+                      f"{' '.join(self.doc.catalog.abstract)} abstract, "
+                      "no program)")
+            return
         what = "unchanged" if self.key == old_key else "NEW key"
         self._say(f"reloaded {self.path.name} ({what} "
                   f"{self.key[:12]}…); "
@@ -1791,6 +1867,9 @@ class Repl(LoopVerbs, Cmd):
         now, ◂ the present rests on it (why's cone), · fired but no
         longer matters, ? waiting (on what); then the rules of other
         stages the present rests on"""
+        if self.prog is None:
+            self._say("\n".join(self._lifted_lines()))
+            return
         self._say(f"file   {self.path}  (catalog "
                   f"{self.doc.catalog.name}, key {self.key[:12]}…)")
         last = self.fired[-1] if self.fired else "—"
@@ -1837,6 +1916,26 @@ class Repl(LoopVerbs, Cmd):
         if rel["pruned_elsewhere"]:
             out.append(f"  · {rel['pruned_elsewhere']} more fired "
                        "event(s) in other stages no longer matter")
+        return out
+
+    def _lifted_lines(self):
+        """list on a lifted file (spec 12): the file, its abstract types
+        and where they are declared, then every rule with its source
+        lines — no marks: nothing is enabled without a program."""
+        out = [f"file   {self.path}  (catalog {self.doc.catalog.name}, "
+               "lifted: no program)"]
+        for d in self.__dict__.get("notes", []):
+            if d.code == "type-incomplete":
+                out.append(f"type   {dict(d.data)['type']}: abstract, "
+                           f"declared at {where(d)} — an instance "
+                           "completes it")
+        spans, lines = self._rule_spans(), self.text.splitlines()
+        width = len(str(len(lines)))
+        out.append(f"rules  {len(spans)} (no program: none enabled)")
+        for name, (a, head, b) in sorted(spans.items(),
+                                         key=lambda kv: kv[1][0]):
+            for k in range(a, b + 1):
+                out.append(f"    {k:>{width}}  {lines[k - 1]}")
         return out
 
     def _relevance(self):
@@ -2866,7 +2965,8 @@ class Repl(LoopVerbs, Cmd):
 
     def do_key(self, arg):
         """canonical program_key of the serving catalog"""
-        self._say(self.key)
+        self._say(self.key if self.prog is not None else
+                  "no key: a lifted file has no program (spec 12)")
 
     def do_help(self, arg):
         if arg:
@@ -2883,6 +2983,10 @@ class Repl(LoopVerbs, Cmd):
         tlog = self.__dict__.get("_tlog")
         depth = self.__dict__.get("_tdepth", 0)
         verb = line.strip().split(" ", 1)[0]
+        if self.__dict__.get("prog", 0) is None and verb \
+                and verb not in _LIFTED_OK:
+            self._say(lifted_refusal(self, verb))
+            return None
         logging = tlog is not None and depth == 0 and verb not in (
             "transcript", "quit", "exit", "EOF")
         self._tdepth = depth + 1
@@ -3280,7 +3384,7 @@ def main(argv=None):
                          host=bool(args.host))
         except Exception as e:
             import json as _json
-            findings = getattr(e, "findings", None) or [str(e)]
+            findings = located(e, args.llp)
             print(_json.dumps({"ok": False, "findings": findings}),
                   file=sys.stderr)
             return 1
@@ -3304,9 +3408,9 @@ def main(argv=None):
         repl = Repl(args.llp, seed=args.seed, terminal=True,
                     plugin=args.plugin)
     except Exception as e:
-        findings = getattr(e, "findings", None) or [str(e)]
         print("cannot serve %s:\n  %s"
-              % (args.llp, "\n  ".join(findings)), file=sys.stderr)
+              % (args.llp, "\n  ".join(located(e, args.llp))),
+              file=sys.stderr)
         return 1
     while True:
         try:
