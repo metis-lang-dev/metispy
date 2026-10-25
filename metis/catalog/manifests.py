@@ -231,7 +231,8 @@ def _served_file(base, entry):
 KEYS = ("program", "extensions", "serves", "host", "intent", "clock", "reload", "records",
         "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch",
         "shared", "status", "world", "resources",      # metis-lang spec/15's interface (§2)
-        "gating")                                      # who holds a resource's commands: host (default) | program
+        "gating",                                      # who holds a resource's commands: host (default) | program
+        "beliefs", "levels", "evaluate")               # metis-lang spec/16 §2, §4, §5: the one-tick instrument's
 DIRECTIONS = ("in", "out", "resource", "world-private")
 INTENT_KEYS = ("spec",)
 ACTOR_KEYS = ("acts", "max_steps", "task")
@@ -256,6 +257,9 @@ def _paths(m):
     for k in ("program", "notch", "records"):
         if isinstance(m.get(k), str):
             yield k, m[k]
+    for name, f in (m.get("evaluate") or {}).items() if isinstance(m.get("evaluate"), dict) else ():
+        if isinstance(f, dict) and isinstance(f.get("model"), str):      # a query's world model (spec/16 §3)
+            yield "evaluate %s model" % name, f["model"]
     for k in ("extensions", "serves"):
         for x in m.get(k) or []:
             mod, sep, rel = str(x).partition(":")
@@ -307,6 +311,46 @@ def _check_interface(p, m):
             raise ManifestError("%s: resources is {name: {count: n >= 1, held_by: [pred…], free: pred}}" % p)
 
 
+def _check_belief(p, m):
+    """spec/16's three fields, their shapes: beliefs {pred: {port, one|lone?}}; levels {pred: {from: {evaluate: Q} |
+    {belief: PORT}, at: [increasing in (0, 1)], names: [|at| + 1]}}; evaluate {name: {reach|risk: OUTCOME,
+    within|at: h, budget?, model?}} (model: the world model the query runs over, spec/16 §3, else the program)."""
+    def num(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    b = m.get("beliefs")
+    if b is not None:
+        ok = isinstance(b, dict) and all(isinstance(f, dict) and isinstance(f.get("port"), str)
+                                         and not set(f) - {"port", "one", "lone"} and not ("one" in f and "lone" in f)
+                                         for f in b.values())
+        if not ok:
+            raise ManifestError("%s: beliefs is {pred: {port: PORT, one|lone: VAR}} (spec/16 §2)" % p)
+    e = m.get("evaluate")
+    if e is not None:
+        ok = isinstance(e, dict) and all(
+            isinstance(f, dict) and not set(f) - {"reach", "risk", "within", "at", "budget", "model"}
+            and (("reach" in f) != ("risk" in f)) and (("within" in f) != ("at" in f))
+            and isinstance(f.get("within", f.get("at")), int) and isinstance(f.get("model", ""), str)
+            for f in e.values())
+        if not ok:
+            raise ManifestError("%s: evaluate is {name: {reach|risk: OUTCOME, within|at: h, budget?, model?}} (spec/16 §5)" % p)
+    lv = m.get("levels")
+    if lv is not None:
+        def good(f):
+            if not isinstance(f, dict) or set(f) - {"from", "at", "names"}:
+                return False
+            src, at, names = f.get("from"), f.get("at"), f.get("names")
+            return (isinstance(src, dict) and len(src) == 1 and next(iter(src)) in ("evaluate", "belief")
+                    and isinstance(at, list) and all(num(x) and 0 < x < 1 for x in at)
+                    and all(a < b for a, b in zip(at, at[1:]))
+                    and isinstance(names, list) and len(names) == len(at) + 1 and all(isinstance(x, str) for x in names))
+        if not (isinstance(lv, dict) and all(good(f) for f in lv.values())):
+            raise ManifestError("%s: levels is {pred: {from: {evaluate: Q} | {belief: PORT}, at: [increasing in (0, 1)], "
+                                "names: [one more than at]}} (spec/16 §4)" % p)
+        bad = sorted(q for f in lv.values() for k, q in f["from"].items() if k == "evaluate" and q not in (e or {}))
+        if bad:
+            raise ManifestError("%s: levels from evaluate %s: no such query" % (p, ", ".join(bad)))
+
+
 def check_manifest(p, root=None):
     """A domain.yaml read and checked: a mapping of the known keys only,
     intent {spec} only (catalog-entry step 2: the loader refuses an unknown
@@ -335,6 +379,7 @@ def check_manifest(p, root=None):
         if k in m and not isinstance(m[k], list):
             raise ManifestError("%s: %s is a list" % (p, k))
     _check_interface(p, m)
+    _check_belief(p, m)
     if m.get("reload") not in (None, "propose", "auto"):
         raise ManifestError("%s: reload is propose or auto" % p)
     a = m.get("actor")

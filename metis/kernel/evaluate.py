@@ -868,6 +868,105 @@ def case_of_yaml(path):
     return program, init, dirs
 
 
+# -- the level ports, live (spec/16 §4; spec16 step 4): a host runs the instrument once a tick --------------------
+
+def _num_text(v) -> str:
+    """A port value as a directive's text: a decimal string as given, a float by repr (its shortest round trip)."""
+    return v if isinstance(v, str) else repr(float(v))
+
+
+def manifest_directives(man: dict, queries=None) -> List[List[str]]:
+    """A manifest's (a plain dict, the loader's) beliefs, queries (QUERIES: their names, default every one) and the
+    levels on them as the instrument's directives, in the case reader's order (beliefs, queries, levels)."""
+    dirs = []
+    for pred, f in (man.get("beliefs") or {}).items():
+        mode = "one" if "one" in f else "lone" if "lone" in f else None
+        dirs.append(["belief", pred] + ([mode, str(f[mode])] if mode else []) + ["by", f["port"]])
+    names = [q for q in (man.get("evaluate") or {}) if queries is None or q in queries]
+    for name in names:
+        f = man["evaluate"][name]
+        kind = "reach" if "reach" in f else "risk"
+        q = "within" if "within" in f else "at"
+        dirs.append(["evaluate", name, kind] + [t for t in _squash(str(f[kind])).split(" ") if t] + [q, str(f[q])]
+                    + (["budget", str(f["budget"])] if "budget" in f else []))
+    for pred, f in (man.get("levels") or {}).items():
+        src = f["from"]
+        if "evaluate" in src and src["evaluate"] not in names:
+            continue
+        s = [str(src["evaluate"])] if "evaluate" in src else ["belief", str(src["belief"])]
+        dirs.append(["level", pred, "from"] + s + ["at"] + [_num_text(x) for x in f["at"]] + ["names"] + [str(x) for x in f["names"]])
+    return dirs
+
+
+def port_directives(ports: Dict[str, Dict[Tuple[str, ...], object]]) -> List[List[str]]:
+    """{port: {args: value}} (or {port: value}, a constant) → the #port directives."""
+    out = []
+    for port, tbl in ports.items():
+        if isinstance(tbl, dict):
+            out += [["port", render(port, list(args)), _num_text(v)] for args, v in tbl.items()]
+        else:
+            out.append(["port", port, _num_text(tbl)])
+    return out
+
+
+class LevelHook:
+    """A member's level ports, live (spec/16 §4): the manifest's queries, each over its world model (`model:`, spec/16
+    §3; else the member's program), compiled and grounded ONCE; every tick, levels(counts, ports) runs the instrument
+    from the session's counts as they stand (the one-tick assumption: the beliefs, the ports' frozen table, constant
+    over the horizon) and returns the level atoms to assert, one per key (the host retracts the previous ones), and
+    the tick's report (the values, the time, a refusal). A level whose query is cut across a threshold
+    (`L pred(a..b) cut`) is asserted as nothing, and the report says so."""
+
+    def __init__(self, manifest: dict, base_dir):
+        from pathlib import Path
+        from metis.lang.compiler import compile_catalog, resolve_includes
+        from metis.lang.parser import parse as parse_llp
+        self.manifest, self.base = manifest, Path(base_dir)
+        self.preds = sorted(manifest.get("levels") or {})
+        by_model: Dict[str, List[str]] = {}
+        for name, f in (manifest.get("evaluate") or {}).items():
+            by_model.setdefault(f.get("model") or manifest["program"], []).append(name)
+        if not by_model and manifest.get("levels"):           # belief levels only: over the program
+            by_model[manifest["program"]] = []
+        self.models = []
+        for i, (model, names) in enumerate(sorted(by_model.items())):
+            path = self.base / model
+            doc = compile_catalog(resolve_includes(parse_llp(path.read_text(), file=str(path)), path.parent))
+            prog = doc.catalog.ground({})
+            dirs = manifest_directives(manifest, names)
+            if i:                                              # belief levels once, with the first model
+                dirs = [d for d in dirs if not (d[0] == "level" and d[3] == "belief")]
+            self.models.append((model, doc, prog, dirs))
+
+    def levels(self, counts: Dict[str, int], ports) -> Tuple[Dict[str, int], dict]:
+        t0 = time.process_time()
+        init = {a: n for a, n in counts.items() if n > 0}
+        atoms, values, cut, refused = {}, {}, [], None
+        pdirs = port_directives(ports)
+        for model, doc, prog, dirs in self.models:
+            beliefs = [d for d in dirs if d[0] == "belief"]
+            try:
+                r = run(doc, prog, init, beliefs + pdirs + [d for d in dirs if d[0] != "belief"])
+            except Refused as e:
+                refused = "%s: %s" % (e.code, e.text)
+                continue
+            for line in r.lines:
+                if line.startswith("V "):
+                    w = line.split()
+                    values[w[1]] = w[w.index("=") + 1] if "=" in w else line.split(" in ", 1)[1].split(" ~ ")[0]
+                elif line.startswith("L "):
+                    if line.endswith(" cut"):
+                        cut.append(line[2:-4])
+                    else:
+                        atoms[line[2:]] = 1
+        report = {"values": values, "levels": sorted(atoms), "ms": round((time.process_time() - t0) * 1000.0, 1)}
+        if cut:
+            report["cut"] = cut
+        if refused:
+            report["refused"] = refused
+        return atoms, report
+
+
 def evaluate_file(path: str, brute: bool = False):
     """metisc --evaluate FILE.llp: the file's embedded case (its #init and its instrument directives). → Result."""
     from pathlib import Path

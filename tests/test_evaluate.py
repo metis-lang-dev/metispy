@@ -126,3 +126,49 @@ def test_the_instrument_directives_are_the_instruments_only(tmp_path):
     from metis.lang.directives import embedded_case
     case = embedded_case(COIN)
     assert case["init"] == {"tossed": 1} and case["instrument"][0] == ["belief", "up", "one", "S", "by", "luck"]
+
+
+# -- the level port, live (spec16 step 4): the manifest's fields, and the host's hook -----------------------------
+
+MAN = {"program": "coin.llp", "beliefs": {"up": {"port": "luck", "one": "S"}},
+       "evaluate": {"w": {"reach": "won", "within": 2}},
+       "levels": {"odds": {"from": {"evaluate": "w"}, "at": [0.5], "names": ["poor", "good"]}}}
+
+
+def package(tmp_path):
+    d = tmp_path / "domains" / "coin"
+    d.mkdir(parents=True)
+    text = COIN.replace("#level odds from w at 0.5 names poor good\n", "").replace(
+        "pred tossed : c.", "pred tossed : c.\ntype odds_l {poor good}.\npred odds(odds_l) : c.")
+    (d / "coin.llp").write_text("\n".join(l for l in text.split("\n") if not l.startswith("#")))
+    import yaml
+    (d / "domain.yaml").write_text(yaml.safe_dump(MAN, sort_keys=False))
+    return d
+
+
+def test_a_manifest_carries_beliefs_levels_and_evaluate(tmp_path):
+    from metis.catalog import manifests as mc
+    d = package(tmp_path)
+    assert mc.get("coin", tmp_path).manifest["levels"]["odds"]["names"] == ["poor", "good"]
+    import yaml
+    for bad, msg in ((dict(MAN, levels={"odds": {"from": {"evaluate": "w"}, "at": [0.5, 0.2], "names": ["a", "b", "c"]}}), "levels is"),
+                     (dict(MAN, levels={"odds": {"from": {"evaluate": "nope"}, "at": [0.5], "names": ["poor", "good"]}}), "no such query"),
+                     (dict(MAN, evaluate={"w": {"reach": "won"}}), "evaluate is"),
+                     (dict(MAN, beliefs={"up": {"port": "luck", "one": "S", "lone": "S"}}), "beliefs is")):
+        (d / "domain.yaml").write_text(yaml.safe_dump(bad, sort_keys=False))
+        with pytest.raises(mc.ManifestError, match=msg):
+            mc.domains(tmp_path)
+
+
+def test_the_hook_asserts_the_level_of_the_state_as_it_stands(tmp_path):
+    d = package(tmp_path)
+    hook = E.LevelHook(MAN, d)
+    ports = {"luck": {("heads",): "0.7", ("tails",): "0.3"}}
+    atoms, rep = hook.levels({"tossed": 1}, ports)
+    assert atoms == {"odds(good)": 1} and rep["values"] == {"w": "7/10"} and rep["ms"] >= 0
+    atoms, rep = hook.levels({"tossed": 1}, {"luck": {("heads",): "0.2", ("tails",): "0.8"}})
+    assert atoms == {"odds(poor)": 1}
+    atoms, rep = hook.levels({}, ports)                          # nothing tossed: the fetch never comes
+    assert atoms == {"odds(poor)": 1} and rep["values"] == {"w": "0/1"}
+    atoms, rep = hook.levels({"tossed": 1}, {"luck": {("heads",): "0.7", ("tails",): "0.7"}})
+    assert atoms == {} and rep["refused"].startswith("belief-sum:")
