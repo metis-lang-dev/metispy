@@ -2,8 +2,11 @@
 % director_domain: its wake(D) / sleep(D) effects; specialist-tree s-404d001f step 2, the sequential case): a
 % woken member is granted the resource (the request is the activation), the holder before it revoked once its
 % grant is old enough (else the grant waits: want); a member put to sleep frees it (else the release waits:
-% late); the path follows the wake and the sleep. Included after director_domain and director_tree_domain (it
-% declares nothing: their preds).
+% late); the path follows the wake and the sleep. A STOP (step 3c, the agent's tick__stop) meets the routing here:
+% every woken specialist inactive, the goals sent and put aside dropped, no detour open, the attention back on the
+% planner — the routing at its start with no reload; the tree base's stop rules cancel, release and dequeue (no
+% sleep(D) effect: the sleep's own path_off and release would race them; the agent deactivates the specialists).
+% Included after director_domain and director_tree_domain (it declares nothing: their preds).
 catalog director_tree_wake 1.
 provenance text "the tree's grants and path with a routing director's wake and sleep" "2026-10-25".
 
@@ -28,4 +31,18 @@ stage act {
   path_on [dyn] : $wake(D) * offpath(D) -o path(D) * tick__goal(D).
   %% {D} is off the path.
   path_off [dyn] : $sleep(D) * path(D) * tick__goal(D) -o offpath(D).
+  %% {D} is stuck: off the path.
+  path_stuck [dyn] : tick__stuck(D) * $planner(D) * path(D) * tick__goal(D) -o offpath(D).   % a stuck planner has no goal (step 3c: a stop must not cancel it); a planner never holds, so release_stuck never wants this report
+
+  % ── the stop ──
+  %% Stopped: {D} is put to sleep.
+  stop_sleep [dyn] : $tick__stop * active(D) * $specialist(D) -o inactive(D).
+  %% Stopped: {D}'s goal {K} is dropped.
+  stop_unsend [dyn] : $tick__stop * sent(D, K) -o ().
+  %% Stopped: {D}'s goal {K}, put aside, is dropped.
+  stop_unpend [dyn] : $tick__stop * pending(D, K) -o ().
+  %% Stopped: no detour is open.
+  stop_fresh [dyn] : $tick__stop * rerouted -o fresh.
+  %% Stopped: my attention is back on {P}.
+  stop_attend [dyn] : $tick__stop * attention(D) * $specialist(D) * $planner(P) -o attention(P).
 }

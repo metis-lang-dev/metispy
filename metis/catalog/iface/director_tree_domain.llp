@@ -4,7 +4,7 @@
 % (mature_grant / young_grant, mature_status), and the start (free(R), issue(R, t0), serving(R, t0) per resource;
 % offpath, nowant, nolate, age_of(D, a0) per member). Over the protocol (iface/protocol_domain.llp): the specialists'
 % reports in (tick__want, tick__release, tick__active, tick__done, tick__stuck, the agent's tick__status), the
-% grants out (tick__grant, tick__revoke, tick__goal).
+% grants out (tick__grant, tick__revoke, tick__goal, tick__cancel on the agent's tick__stop).
 %   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request takes a ticket (a bakery:
 %     issue(R, T), queued(D, R, T)); a free R goes to the member whose ticket is serving(R, T): first asked, first
 %     served, never the evaluation order (requests relayed at one boundary take their tickets in the director's
@@ -19,6 +19,10 @@
 %     `$tick__status(D, S) * $age_of(D, A) * $mature_status(A)`.
 %   the PATH: a member reporting tick__active is pushed on the running branch (path(D), tick__goal(D)), its
 %     tick__done pops it.
+%   the STOP (step 3c, spec/15 amendment 7): tick__stop, the agent's one-tick world signal. The director cancels
+%     the members on the path (tick__cancel(D) takes D's goal: a revoke takes the body and keeps it), popping them,
+%     frees what is held (tick__revoke) and passes over the tickets queued (skipped: a waiter re-wants on its next
+%     goal). No reload: its session stays as these rules leave it.
 % A director that also routes kinds (metis-catalog's director_domain: wake / sleep) adds
 % iface/director_tree_wake.llp: the grant with the wake, the release with the sleep.
 catalog director_tree_domain 1.
@@ -87,6 +91,14 @@ stage act {
   release_report_late [dyn] : late_release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} is stuck: {R} is free.
   release_stuck [dyn] : tick__stuck(D) * holder(D, R) * held(D, A) -o free(R) * tick__revoke(D, R).
+
+  % ── the stop ──
+  %% Stopped: {D}'s goal is cancelled.
+  stop_cancel [dyn] : $tick__stop * path(D) * tick__goal(D) -o tick__cancel(D) * offpath(D).
+  %% Stopped: {R} is free.
+  stop_release [dyn] : $tick__stop * holder(D, R) * held(D, A) -o free(R) * tick__revoke(D, R).
+  %% Stopped: {D}'s ticket for {R} is passed over.
+  stop_dequeue [dyn] : $tick__stop * queued(D, R, T) -o skipped(R, T).   % skip_ticket moves serving on: [serving, issue) stays queued-or-skipped
 
   % ── the ages: the grants', the statuses' ──
   %% A tick: {D}'s grant is older.

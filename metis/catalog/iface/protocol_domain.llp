@@ -1,7 +1,7 @@
 % protocol_domain — the director interface, the generic INTERFACE PACKAGE (specialist-tree s-404d001f, brief v2 §9, §11:
 % specialist → protocol ← director, a DAG; metis-lang spec/15 amendment 2): the REPORTS a
 % specialist's tick gives the director (status, active, done, stuck, want, release) and the GRANTS the director gives a
-% specialist (grant, goal), over two abstract types the composition makes concrete — domain (the specialists'
+% specialist (grant, goal, revoke, cancel), over two abstract types the composition makes concrete — domain (the specialists'
 % names, S) and resource (R). Neither side names the other: both include this file,
 % `include "iface/protocol_domain.llp".` (found under METIS_HOME: one module for every world and catalog; no copies).
 catalog protocol_domain 1.
@@ -25,3 +25,7 @@ pred tick__release(domain, resource) : proto.      % D is done with R (its goal 
 pred tick__grant(domain, resource) : proto.        % D holds R: only the holder's commands reach the world
 pred tick__goal(domain) : proto.                   % D has a goal from the director (the path's running branch)
 pred tick__revoke(domain, resource) : proto.       % the director's: D no longer holds R (the agent retracts the grant)
+pred tick__stop : proto.                           % the agent's, a one-tick world signal: the person said stop (asserted
+                                                   % for the stop's tick, retracted at the next; the director cancels)
+pred tick__cancel(domain) : proto.                 % the director's on a stop: D's goal is withdrawn — a revoke keeps the goal,
+                                                   % a cancel takes it (spec/15 amendment 7): D gives back idle and drops it

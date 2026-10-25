@@ -17,11 +17,11 @@ def test_a_source_includes_the_protocol_from_metis_home(tmp_path):
     p.write_text('catalog member 1.\ninclude "iface/protocol_domain.llp".\n'
                  "type domain {nav cook}.\ntype resource {motion pot}.\n")
     preds = set(load_llp(p).catalog.preds)                         # found under METIS_HOME (metispy's own): no copy
-    assert {"tick__want", "tick__release", "tick__grant", "tick__status", "tick__revoke"} <= preds
+    assert {"tick__want", "tick__release", "tick__grant", "tick__status", "tick__revoke", "tick__cancel"} <= preds
 
 
 def test_every_protocol_pred_has_its_nature():
-    preds = set(re.findall(r"^pred (tick__\w+)\(", iface.path().read_text(), re.M))
+    preds = set(re.findall(r"^pred (tick__\w+)\b", iface.path().read_text(), re.M))
     nature = yaml.safe_load(iface.path("protocol_domain.yaml").read_text())["nature"]
     assert preds == set(nature)
     assert {p for p, n in nature.items() if n == "report"} == {"tick__status", "tick__active", "tick__done", "tick__stuck",
