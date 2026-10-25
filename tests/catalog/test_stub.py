@@ -105,3 +105,17 @@ def test_the_cli_runs_a_packages_cases(tmp_path):
     r = subprocess.run([sys.executable, "-m", "metis.catalog", "--root", str(root), "cases", "nav"],
                        capture_output=True, text=True)
     assert r.returncode == 1 and "FAIL" in r.stdout
+
+
+@pytest.mark.skipif(CAT is None or not (CAT / "domains" / "kitchen_pot" / "cook_a").is_dir(), reason="no catalog with kitchen_pot")
+def test_a_member_that_gates_itself_is_never_held():
+    # gating: program (the shared-pot kitchen's cook): its pot rules read the grant themselves, so what it fires without
+    # the pot (its own hand: fetch_onion, ask_pot) is sent, not held; a host-gated member (nav, no grant) is held
+    cook = mc.get("cook_a", CAT)
+    assert stub.Interface.of(cook.manifest).gating == "program"
+    rs = stub.run_package(cook)
+    assert rs and all(r.passed for r in rs), stub.render(rs)
+    first = [b for r in rs for b in r.boundaries if b.fired and not b.holding]
+    assert first and not any(i["held"] for b in first for i in b.intents)
+    nav = stub.run_package(domain("alfworld_hier/nav"))[1]
+    assert nav.boundaries[1].intents[0]["held"]                              # host gating (the default): still held

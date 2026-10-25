@@ -20,7 +20,8 @@ A package's cases are YAML files in its `cases/` directory. A case:
           out: [reached(target)]                  #   the out atoms collected at this boundary (exactly)
           status: success                         #   running | success | failure | idle
           fired: [go]                             #   the rules fired, in order (short names)
-          held: false                             #   intents fired without the resource held
+          held: false                             #   intents fired without the resource held (a host-gated member's;
+                                                  #   gating: program never holds: its rules read the grant)
 
 Per boundary the stub:
 1. checks every atom against the manifest's `shared` directions: `world` atoms must be world-private, `deliver`
@@ -86,11 +87,12 @@ def _atoms(items):
 
 @dataclass
 class Interface:
-    """What the stub reads of a manifest: the directions, the status atoms, the resources."""
+    """What the stub reads of a manifest: the directions, the status atoms, the resources, the gating."""
     shared: Dict[str, str]
     success: List[str]
     failure: List[str]
     resources: Dict[str, dict]
+    gating: str = "host"                # host: its commands held without the grant | program: its rules gate themselves
 
     @classmethod
     def of(cls, manifest):
@@ -98,7 +100,7 @@ class Interface:
         st = manifest.get("status") or {}
         res = {k: {} for k, v in sh.items() if v == "resource"}
         res.update(manifest.get("resources") or {})
-        return cls(sh, list(st.get("success") or ()), list(st.get("failure") or ()), res)
+        return cls(sh, list(st.get("success") or ()), list(st.get("failure") or ()), res, manifest.get("gating") or "host")
 
     @property
     def degenerate(self):
@@ -228,7 +230,9 @@ class Stub:
         for a in sorted(set(outs)):
             self._do("-%s %d" % (a, outs.count(a)))
         needs = sorted(self.iface.resources)
-        held = bool(needs) and not all(r in self.holding for r in needs)
+        # gating: program — the program reads its grant in its own rules, so whatever fired is sent (only the host gate
+        # holds intents: a host-gated member's without the resource)
+        held = self.iface.gating != "program" and bool(needs) and not all(r in self.holding for r in needs)
         intents = [{"event": f["event"], "held": held} for f in fired]
         # 5. the status
         put = {pred_of(a) for a in outs}
