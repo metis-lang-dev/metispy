@@ -33,12 +33,22 @@ def ground_atom(pattern: Pattern, subst: Dict[str, str]) -> str:
     return f"{pred}({','.join(subst.get(a, a) for a in args)})"
 
 
-def multiset(patterns, subst) -> Dict[str, int]:
+def multiset(patterns, subst, atoms=None) -> Dict[str, int]:
     """Accumulating duplicates is what makes substitution collapse
-    (X=Y) price as multiplicity 2 -> falling factorial x^(2)."""
+    (X=Y) price as multiplicity 2 -> falling factorial x^(2). `atoms`,
+    when given, is the grounding's atom table: one str per distinct
+    ground atom, shared by every event that names it (a room's
+    agent_at(c3_4) recurs in ~19 events; a fresh str each was a quarter
+    of an event's bytes)."""
     out: Dict[str, int] = {}
     for p in patterns:
-        a = ground_atom(p, subst)
+        if atoms is None:
+            a = ground_atom(p, subst)
+        else:
+            key = (p[0], tuple(subst.get(x, x) for x in p[1]))
+            a = atoms.get(key)
+            if a is None:
+                a = atoms[key] = ground_atom(p, subst)
         out[a] = out.get(a, 0) + 1
     return out
 

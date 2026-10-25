@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 
-@dataclass
+@dataclass(slots=True)
 class Clause:
     name: str
     consume: Dict[str, int] = field(default_factory=dict)
@@ -26,7 +26,7 @@ class Clause:
     weight: float = 1.0
 
 
-@dataclass
+@dataclass(slots=True)
 class Link:
     """qui ⊗ stage(pre) ⊗ <consume/persist> ⊸ stage(post) ⊗ <produce>.
 

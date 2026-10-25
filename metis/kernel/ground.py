@@ -121,31 +121,33 @@ def _tag(names, subst) -> str:
 
 
 def ground_schema(schema: ClauseSchema, sig: Signature,
-                  horn: Optional[HornDB] = None) -> List[Clause]:
+                  horn: Optional[HornDB] = None,
+                  atoms=None) -> List[Clause]:
     out = []
     for names, subst in _substitutions(schema.vars, schema.distinct,
                                        schema.guards, sig, horn):
         name = f"{schema.name}[{_tag(names, subst)}]" if names \
             else schema.name
         out.append(Clause(name,
-                          consume=multiset(schema.consume, subst),
-                          produce=multiset(schema.produce, subst),
-                          persist=multiset(schema.persist, subst),
+                          consume=multiset(schema.consume, subst, atoms),
+                          produce=multiset(schema.produce, subst, atoms),
+                          persist=multiset(schema.persist, subst, atoms),
                           weight=schema.weight))
     return out
 
 
 def ground_link(schema: LinkSchema, sig: Signature,
-                horn: Optional[HornDB] = None) -> List[Link]:
+                horn: Optional[HornDB] = None,
+                atoms=None) -> List[Link]:
     out = []
     for names, subst in _substitutions(schema.vars, schema.distinct,
                                        schema.guards, sig, horn):
         name = f"{schema.name}[{_tag(names, subst)}]" if names \
             else schema.name
         out.append(Link(name, pre=schema.pre, post=schema.post,
-                        consume=multiset(schema.consume, subst),
-                        produce=multiset(schema.produce, subst),
-                        persist=multiset(schema.persist, subst),
+                        consume=multiset(schema.consume, subst, atoms),
+                        produce=multiset(schema.produce, subst, atoms),
+                        persist=multiset(schema.persist, subst, atoms),
                         weight=schema.weight))
     return out
 
@@ -156,9 +158,10 @@ def ground_program(stage_order, schemas, links, sig: Signature,
     """Assemble a ground staged Program. `init_atoms` is a list of
     ground Patterns (or a ready count dict)."""
     stages = {s: [] for s in stage_order}
+    atoms = {}                        # the atom table, for this grounding only
     for sc in schemas:
-        stages[sc.stage].extend(ground_schema(sc, sig, horn))
-    glinks = [g for lk in links for g in ground_link(lk, sig, horn)]
+        stages[sc.stage].extend(ground_schema(sc, sig, horn, atoms))
+    glinks = [g for lk in links for g in ground_link(lk, sig, horn, atoms)]
     init = dict(init_atoms) if isinstance(init_atoms, dict) else \
         multiset(list(init_atoms), {})
     return Program(stages=stages, links=glinks,
