@@ -76,8 +76,8 @@ def test_the_pruned_grounding_is_the_full_products():
             cat = compile_catalog(parse(p.read_text(), file=str(p))).catalog
         except Exception:  # noqa: BLE001 — includes, packs, ports: not a standalone program
             continue
-        if not cat.abstract:            # a lifted file (spec 12) grounds through its instance
-            cats.append(cat)
+        if not cat.abstract and cat.stages:   # a lifted file (spec 12) grounds through its instance; a declarations-only
+            cats.append(cat)                   # file (a composition's types, an interface package) has nothing to ground
     assert len(cats) > 5
     for cat in cats:
         assert _clauses(cat, ground._substitutions) == _clauses(cat, _reference)
