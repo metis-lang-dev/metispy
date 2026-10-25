@@ -171,6 +171,7 @@ def test_the_manifests_extensions_list_orders_them(tmp_path):
     ("program: plant.llp\nworld: {out: at}\n", "world is \\{out"),
     ("program: plant.llp\nresources: {motion: {count: 0}}\n", "resources is \\{name"),
     ("program: plant.llp\nresources: {motion: {count: 1, owner: nav}}\n", "resources is \\{name"),
+    ("program: plant.llp\nresources: {motion: {count: 1, free: [free]}}\n", "resources is \\{name"),
 ])
 def test_the_loader_refuses_what_a_package_does_not_carry(tmp_path, yaml_text, why):
     """catalog-entry step 2: the package's keys only (CATALOG.md's table)."""
@@ -260,7 +261,7 @@ def test_the_loader_takes_the_interface_fields(tmp_path):
     (d / "domain.yaml").write_text(
         "program: nav.llp\nshared: {goto: in, reached: out, at: world-private, motion: resource}\n"
         "status: {success: [reached], failure: []}\nworld: {out: [at], in: [goto]}\n"
-        "resources: {motion: {count: 1, held_by: [moving]}}\n")
+        "resources: {motion: {count: 1, free: free, held_by: [holder]}}\n")
     n = mc.get("nav", tmp_path)
     assert n.manifest["shared"]["at"] == "world-private" and n.manifest["status"]["success"] == ["reached"]
-    assert n.manifest["resources"]["motion"]["count"] == 1
+    assert n.manifest["resources"]["motion"] == {"count": 1, "free": "free", "held_by": ["holder"]}

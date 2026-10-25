@@ -273,7 +273,9 @@ def _paths(m):
 
 def _check_interface(p, m):
     """spec/15's fields, their shapes: shared {pred: in|out|resource|world-private}, status {success: [..],
-    failure: [..]} of its out preds, world {out: [..], in: [..]}, resources {name: {count: n >= 1, held_by: [..]}}."""
+    failure: [..]} of its out preds, world {out: [..], in: [..]}, resources {name: {count: n >= 1, held_by: [..],
+    free: pred}} (free: the pred whose atom over the resource's constant is the free token; absent, the resource's
+    name is a 0-ary pred)."""
     def strs(v):
         return isinstance(v, list) and all(isinstance(x, str) for x in v)
     sh = m.get("shared")
@@ -293,11 +295,12 @@ def _check_interface(p, m):
         raise ManifestError("%s: world is {out: [pred…], in: [pred…]}" % p)
     rs = m.get("resources")
     if rs is not None:
-        ok = isinstance(rs, dict) and all(isinstance(v, dict) and not set(v) - {"count", "held_by"}
+        ok = isinstance(rs, dict) and all(isinstance(v, dict) and not set(v) - {"count", "held_by", "free"}
                                           and isinstance(v.get("count"), int) and v["count"] >= 1
-                                          and strs(v.get("held_by", [])) for v in rs.values())
+                                          and strs(v.get("held_by", [])) and isinstance(v.get("free", ""), str)
+                                          for v in rs.values())
         if not ok:
-            raise ManifestError("%s: resources is {name: {count: n >= 1, held_by: [pred…]}}" % p)
+            raise ManifestError("%s: resources is {name: {count: n >= 1, held_by: [pred…], free: pred}}" % p)
 
 
 def check_manifest(p, root=None):
