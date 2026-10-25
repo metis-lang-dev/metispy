@@ -89,7 +89,14 @@ def _substitutions(vars_, distinct, guards, sig: Signature,
             yield from walk(i + 1)
         subst.pop(v, None)
 
-    yield from walk(0)
+    try:
+        yield from walk(0)
+    finally:
+        # walk is a closure over itself: break the cycle so the memo (one
+        # entry per guard and prefix) goes with the generator, not with
+        # the next cyclic collection
+        memo.clear()
+        walk = None
 
 
 def _tag(names, subst) -> str:

@@ -54,6 +54,59 @@ class HornNonground(ValueError):
         self.diagnostic = diagnostic
 
 
+class FactTable:
+    """A ground fact predicate's rows in declaration order, with one index
+    per argument position: constant -> the row numbers holding it there
+    (ascending, so every narrowing is a subsequence of the rows)."""
+
+    __slots__ = ("rows", "arity", "at")
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.arity = len(rows[0]) if rows else 0
+        self.at = [{} for _ in range(self.arity)]
+        for j, r in enumerate(rows):
+            for i, c in enumerate(r):
+                self.at[i].setdefault(c, []).append(j)
+
+    def narrowest(self, bound):
+        """The shortest index list among the bound positions ({position:
+        constant}); None when nothing is bound (all rows)."""
+        best = None
+        for i, c in bound.items():
+            ids = self.at[i].get(c, ())
+            if best is None or len(ids) < len(best):
+                best = ids
+                if not ids:
+                    break
+        return best
+
+    def values(self, args, var, variables, subst):
+        """The constants of `var` over the rows that agree with `args`
+        (a guard's arguments; `variables` the schema's): a constant or a
+        variable bound in `subst` must match; an unbound variable is free,
+        its repeated occurrences equal. The projection the grounder filters
+        a domain by — exact when every other variable is bound, a sound
+        pre-filter (the rows that could still complete) otherwise."""
+        bound, free = {}, {}
+        for i, a in enumerate(args):
+            if a == var or (a in variables and a not in subst):
+                free.setdefault(a, []).append(i)
+            else:
+                bound[i] = subst.get(a, a) if a in variables else a
+        ids = self.narrowest(bound)
+        rows = self.rows if ids is None else (self.rows[j] for j in ids)
+        out = set()
+        for r in rows:
+            if any(r[i] != c for i, c in bound.items()):
+                continue
+            if any(len(ps) > 1 and any(r[p] != r[ps[0]] for p in ps[1:])
+                   for ps in free.values()):
+                continue
+            out.add(r[free[var][0]])
+        return out
+
+
 class HornDB:
     def __init__(self, clauses):
         self.by_pred: Dict[str, list] = {}
@@ -62,6 +115,34 @@ class HornDB:
         self._fresh = 0
         self._table: Dict[Pattern, list] = {}   # complete variants
         self._active: set = set()                # variants being tabled
+        self._facts: Dict[str, Optional["FactTable"]] = {}
+
+    def fact_table(self, pred: str) -> Optional["FactTable"]:
+        """The predicate's rows when it is defined by ground facts only (no
+        rule, no quantified variable, one arity), indexed by position and
+        constant; None otherwise. Derivability of such a predicate IS row
+        membership, so a caller may answer it from the index (spec 13 §1:
+        the missing index — a guard on a cells×8 table scanned every row
+        per call, cells³ for a room)."""
+        if pred not in self._facts:
+            cls = self.by_pred.get(pred, ())
+            ok = all(not c.body and not c.vars for c in cls) and \
+                len({len(c.head[1]) for c in cls}) <= 1
+            self._facts[pred] = FactTable([c.head[1] for c in cls]) \
+                if ok else None
+        return self._facts[pred]
+
+    def _clauses(self, g):
+        """by_pred[g's predicate], narrowed through the fact index to the
+        rows that agree with g's constants — a subsequence, so SLD order
+        (and every answer order built on it) is unchanged."""
+        cls = self.by_pred.get(g[0], ())
+        t = self.fact_table(g[0]) if cls else None
+        if t is None or len(g[1]) != t.arity:
+            return cls
+        ids = t.narrowest({i: a for i, a in enumerate(g[1])
+                           if not a.startswith("?")})
+        return cls if ids is None else [cls[j] for j in ids]
 
     # -- unification over renamed-apart variables ("?v@k") ---------------
 
@@ -100,7 +181,7 @@ class HornDB:
 
     def _resolve(self, g, rest, subst, depth):
         """Plain SLD step on goal g: one branch per matching clause."""
-        for cl in self.by_pred.get(g[0], ()):
+        for cl in self._clauses(g):
             r = self._rename(cl)
             s2 = self._unify(r.head, g, subst)
             if s2 is None:
