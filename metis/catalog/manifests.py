@@ -230,7 +230,8 @@ def _served_file(base, entry):
 # The package's manifest: every key and its reader (CATALOG.md has the table).
 KEYS = ("program", "extensions", "serves", "host", "intent", "clock", "reload", "records",
         "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch",
-        "shared", "status", "world", "resources")      # the last four: metis-lang spec/15's interface (§2)
+        "shared", "status", "world", "resources",      # metis-lang spec/15's interface (§2)
+        "gating")                                      # who holds a resource's commands: host (default) | program
 DIRECTIONS = ("in", "out", "resource", "world-private")
 INTENT_KEYS = ("spec",)
 ACTOR_KEYS = ("acts", "max_steps", "task")
@@ -293,6 +294,9 @@ def _check_interface(p, m):
     w = m.get("world")
     if w is not None and (not isinstance(w, dict) or set(w) - {"out", "in"} or not all(strs(v) for v in w.values())):
         raise ManifestError("%s: world is {out: [pred…], in: [pred…]}" % p)
+    if m.get("gating") not in (None, "host", "program"):
+        raise ManifestError("%s: gating is host or program (host: the agent holds a command until its grant; "
+                            "program: the program reads tick__grant and gates itself)" % p)
     rs = m.get("resources")
     if rs is not None:
         ok = isinstance(rs, dict) and all(isinstance(v, dict) and not set(v) - {"count", "held_by", "free"}

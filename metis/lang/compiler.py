@@ -245,6 +245,28 @@ def _singleton_fact_vars(atom, sigs) -> List[Tuple[str, str, str]]:
     return out
 
 
+def include_path(spec, base):
+    """An include's file: relative to the includer's directory, or the SERVES form `pkg.mod:path` (a file
+    inside an importable package — the manifests' form; metis.catalog:iface/protocol_domain.llp, the
+    interface packages every composition shares): the first METIS_PKG_PATH root holding pkg/mod/path (metisc's
+    rule), else the package as Python imports it."""
+    import importlib.util
+    import re
+    from pathlib import Path
+    m = re.match(r"^([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*):(.+)$", spec)
+    if m and "/" not in m.group(1):
+        import os
+        rel = Path(*m.group(1).split(".")) / m.group(2)
+        for root in filter(None, os.environ.get("METIS_PKG_PATH", "").split(":")):   # metisc's rule: the first root holding it
+            if (Path(root) / rel).is_file():
+                return (Path(root) / rel).resolve()
+        found = importlib.util.find_spec(m.group(1))
+        if found is not None:
+            root = Path(found.submodule_search_locations[0]) if found.submodule_search_locations else Path(found.origin).parent
+            return (root / m.group(2)).resolve()
+    return (Path(base) / spec).resolve()
+
+
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
     """Splice included catalogs' DECLS in place of each include (the
     literal-inclusion semantics; nested includes resolve recursively,
@@ -262,7 +284,7 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
             if not isinstance(d, ast.IncludeDecl):
                 decls.append(d)
                 continue
-            path = (Path(base) / d.path).resolve()
+            path = include_path(d.path, base)
             if str(path) in seen:     # seen = THIS include path only
                 from metis.kernel.diagnostics import Loc, Source, make
                 text = f"include cycle at {d.path}"

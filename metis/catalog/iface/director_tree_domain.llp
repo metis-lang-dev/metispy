@@ -1,0 +1,97 @@
+% director_tree_domain — the director as a TREE, the generic base (specialist-tree s-404d001f step 3b; brief v2
+% §3, §9; metis-lang spec/15 §4 form S). Every composition includes it and supplies only its instance: its
+% members (type domain), its resources (type resource), its priorities (priority(P, Q)), its hysteresis k and m
+% (mature_grant / young_grant, mature_status), and the start (free(R) per resource; offpath, nowant, nolate,
+% age_of(D, a0) per member). Over the protocol (metis.catalog:iface/protocol_domain.llp): the specialists'
+% reports in (tick__want, tick__release, tick__active, tick__done, tick__stuck, the agent's tick__status), the
+% grants out (tick__grant, tick__revoke, tick__goal).
+%   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request queues (queued(D, R));
+%     a free R goes to a queued member — several queued: the director's own sampler chooses, never the
+%     evaluation order. A release (tick__release) frees R once the grant is old enough, else it waits (late);
+%     a stuck member frees what it holds at once.
+%   PREEMPTION, the one exception to the grant's hysteresis: by a declared priority(P, Q) (a strict order: no
+%     preempt-back), a queued P takes R from its holder Q whatever the age; Q is queued again, never dropped;
+%     P's grant starts young, so the hysteresis protects it.
+%   HYSTERESIS (brief §9 rule 4): held(D, A) ages one step per `tick` the agent puts in at the boundary; a status's
+%     age age_of(D, A) restarts on changed(D) and ages on tick_s(D); a tree rule acting on a status reads
+%     `$tick__status(D, S) * $age_of(D, A) * $mature_status(A)`.
+%   the PATH: a member reporting tick__active is pushed on the running branch (path(D), tick__goal(D)), its
+%     tick__done pops it.
+% A director that also routes kinds (metis-catalog's director_domain: wake / sleep) adds
+% metis.catalog:iface/director_tree_wake.llp: the grant with the wake, the release with the sleep.
+catalog director_tree_domain 1.
+provenance text "the director as a tree: requests and grants of resources with hysteresis and priority, the path, the statuses' ages" "2026-10-25".
+layers (dyn).
+stages (act).
+include "metis.catalog:iface/protocol_domain.llp".
+
+namespace tree produce (dyn).
+
+type age {a0 a1 a2 a3}.
+bwd older(age, age).
+bwd top(age).
+bwd mature_grant(age).                    % the instance's k: the ages at which a grant may be revoked
+bwd young_grant(age).                     % … the rest
+bwd mature_status(age).                   % the instance's m: the ages at which a status is acted on
+bwd priority(domain, domain).             % the instance's: P preempts Q (a strict order)
+older(a0, a1).
+older(a1, a2).
+older(a2, a3).
+top(a3).
+pred free(resource) : tree.               % the resource, free
+pred holder(domain, resource) : tree.     % … or held
+pred held(domain, age) : tree.            % the holder's grant, its age in ticks
+pred queued(domain, resource) : tree.     % D asked for R and waits its turn
+pred late(domain) : tree.                 % asleep (or released) while its grant was young: the release waits
+pred nolate(domain) : tree.
+pred late_release(domain, resource) : tree.
+pred want(domain) : tree.                 % woken while the holder's grant is young: the grant waits
+pred nowant(domain) : tree.
+pred path(domain) : tree.                 % D is on the running branch
+pred offpath(domain) : tree.
+pred tick : tree.                         % the boundary's token for the grants' ages (the agent's)
+pred tick_s(domain) : tree.               % … for D's status's age
+pred changed(domain) : tree.              % D's status changed at this boundary
+pred age_of(domain, age) : tree.          % how many ticks D's status has held
+
+stage act {
+  % ── the requests ──
+  %% {D} asks for {R}: it waits its turn.
+  want_queue [dyn] : tick__want(D, R) -o queued(D, R).
+  %% {R} is free: {D}, waiting for it, holds it.
+  grant_on_want [dyn] : queued(D, R) * free(R) -o holder(D, R) * held(D, a0) * tick__grant(D, R).
+  %% {D} comes first: it takes {R} from {X}, who waits its turn again.
+  preempt [dyn] : queued(D, R) * $priority(D, X) * holder(X, R) * held(X, A) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * queued(X, R).
+  %% {D} gives {R} back.
+  release_on_report [dyn] : tick__release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
+  %% {D} gives {R} back while its grant is young: the release waits.
+  release_report_wait [dyn] : tick__release(D, R) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
+  %% {D}'s grant is old enough: {R} is free.
+  release_report_late [dyn] : late_release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
+  %% {D} is stuck: {R} is free.
+  release_stuck [dyn] : tick__stuck(D) * holder(D, R) * held(D, A) -o free(R) * tick__revoke(D, R).
+
+  % ── the ages: the grants', the statuses' ──
+  %% A tick: {D}'s grant is older.
+  age_grant [dyn] : tick * held(D, A) * $older(A, B) -o held(D, B).
+  %% A tick: {D}'s grant is as old as it counts.
+  age_grant_top [dyn] : tick * $held(D, A) * $top(A) -o ().
+  %% A tick: {R} is free.
+  tick_free [dyn] : tick * $free(R) -o ().
+  %% {D}'s status changed: its age starts again.
+  status_reset [dyn] : changed(D) * age_of(D, A) -o age_of(D, a0).
+  %% A tick: {D}'s status is older.
+  status_age [dyn] : tick_s(D) * age_of(D, A) * $older(A, B) -o age_of(D, B).
+  %% A tick: {D}'s status is as old as it counts.
+  status_top [dyn] : tick_s(D) * $age_of(D, A) * $top(A) -o ().
+
+  % ── the path, by the members' own reports ──
+  %% {D} is active: on the path.
+  path_push [dyn] : tick__active(D) * offpath(D) -o path(D) * tick__goal(D).
+  %% {D} is active, and on the path already.
+  active_more [dyn] : tick__active(D) * $path(D) -o ().
+  %% {D} is done: off the path.
+  path_pop [dyn] : tick__done(D) * path(D) * tick__goal(D) -o offpath(D).
+  %% {D} is done, and off the path already.
+  done_off [dyn] : tick__done(D) * $offpath(D) -o ().
+}

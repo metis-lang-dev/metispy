@@ -1,0 +1,31 @@
+% director_tree_wake — the tree's resource and path for a director that ROUTES kinds (metis-catalog's
+% director_domain: its wake(D) / sleep(D) effects; specialist-tree s-404d001f step 2, the sequential case): a
+% woken member is granted the resource (the request is the activation), the holder before it revoked once its
+% grant is old enough (else the grant waits: want); a member put to sleep frees it (else the release waits:
+% late); the path follows the wake and the sleep. Included after director_domain and director_tree_domain (it
+% declares nothing: their preds).
+catalog director_tree_wake 1.
+provenance text "the tree's grants and path with a routing director's wake and sleep" "2026-10-25".
+
+stage act {
+  %% {D} is woken: it holds {R}.
+  grant_free [dyn] : $wake(D) * free(R) -o holder(D, R) * held(D, a0) * tick__grant(D, R).
+  %% {D} is woken: it takes {R} from {X}.
+  grant_from [dyn] : $wake(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R).
+  %% {D} is woken; {X}'s grant is young: {D} waits for it.
+  grant_wait [dyn] : $wake(D) * nowant(D) * $holder(X, R) * $held(X, A) * $young_grant(A) * D <> X -o want(D).
+  %% {X}'s grant is old enough: {D} takes {R}.
+  grant_late [dyn] : want(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X -o holder(D, R) * held(D, a0) * nowant(D) * tick__revoke(X, R) * tick__grant(D, R).
+  %% {R} is free: {D} takes it.
+  grant_late_free [dyn] : want(D) * free(R) -o holder(D, R) * held(D, a0) * nowant(D) * tick__grant(D, R).
+  %% {D} sleeps: {R} is free.
+  release [dyn] : $sleep(D) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
+  %% {D} sleeps; its grant is young: the release waits.
+  release_wait [dyn] : $sleep(D) * nolate(D) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late(D).
+  %% {D}'s grant is old enough: {R} is free.
+  release_late [dyn] : late(D) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * nolate(D) * tick__revoke(D, R).
+  %% {D} is on the path.
+  path_on [dyn] : $wake(D) * offpath(D) -o path(D) * tick__goal(D).
+  %% {D} is off the path.
+  path_off [dyn] : $sleep(D) * path(D) * tick__goal(D) -o offpath(D).
+}

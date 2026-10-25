@@ -1,0 +1,27 @@
+% protocol_domain — the director interface, the generic INTERFACE PACKAGE (specialist-tree s-404d001f, brief v2 §9, §11:
+% specialist → protocol ← director, a DAG; metis-lang spec/15 amendment 2): the REPORTS a
+% specialist's tick gives the director (status, active, done, stuck, want, release) and the GRANTS the director gives a
+% specialist (grant, goal), over two abstract types the composition makes concrete — domain (the specialists'
+% names, S) and resource (R). Neither side names the other: both include this file, by its package path
+% `include "metis.catalog:iface/protocol_domain.llp".` (one module for every world and catalog; no copies).
+catalog protocol_domain 1.
+provenance text "the tick's protocol: reports in, grants out, over abstract specialists and resources" "2026-10-25".
+layers (dyn).
+types (domain resource).
+type tick__status {running success failure idle}.
+
+namespace proto produce (dyn).
+
+% ── the reports (a specialist's tick, read by the director) ──
+pred tick__status(domain, tick__status) : proto.   % the agent's reading of D's last tick (spec/15 §4.4: from its rows)
+pred tick__active(domain) : proto.                 % D's own trigger fired (step 3: the inversion)
+pred tick__done(domain) : proto.                   % D's goal is met
+pred tick__stuck(domain) : proto.                  % D cannot go on
+
+pred tick__want(domain, resource) : proto.         % D asks for R (kept asked until granted, once per need)
+pred tick__release(domain, resource) : proto.      % D is done with R (its goal may go on: a cook releases the pot, then serves)
+
+% ── the grants (the director's, read by a specialist) ──
+pred tick__grant(domain, resource) : proto.        % D holds R: only the holder's commands reach the world
+pred tick__goal(domain) : proto.                   % D has a goal from the director (the path's running branch)
+pred tick__revoke(domain, resource) : proto.       % the director's: D no longer holds R (the agent retracts the grant)
