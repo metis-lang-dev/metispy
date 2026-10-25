@@ -1,0 +1,4 @@
+# fixture: a specialist with one weight port (look), for the interface stub's `ports:`
+program: pick.llp
+shared: {seen: world-private, want: in, goto: out}
+status: {success: [goto]}

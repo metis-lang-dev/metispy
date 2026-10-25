@@ -79,6 +79,29 @@ def test_a_failing_expectation_is_a_failing_case_not_an_error(tmp_path):
                                         "held True, expected False"]
 
 
+def test_a_case_binds_the_weight_ports_to_constants(tmp_path):
+    # the alfworld task's `weight look(O, R)` (nina's gap): a program with a weight port does not load unbound, so the
+    # case binds each port to a constant; the constant prices the rule (0 prices it out: idle, the request unanswered)
+    pick = domain("weighted/pick")
+    look, blind = (stub.run_case(pick, FIX / "weighted" / "pick" / "cases" / n) for n in ("look.yaml", "blind.yaml"))
+    assert look.passed and blind.passed, stub.render([look, blind])
+    assert look.boundaries[0].fired == [{"event": "go_for[R=p1]", "rule": "go_for", "p": 1.0}]
+    assert blind.boundaries[0].fired == [] and blind.boundaries[0].status == "idle"
+    body = "boundaries:\n  - {world: [seen(p1)], deliver: [want]}\n"
+    bad = {"": "weight port look unbound: a case binds each to a constant \\(ports: {look: 1.0}\\)",
+           "ports: {look: 1.0, peek: 0.5}\n": "ports peek: not a weight port of the program \\(look\\)",
+           "ports: {look: '1.0'}\n": "ports look: '1.0' is no weight",          # numeric only
+           "ports: {look: true}\n": "ports look: True is no weight",            # a YAML bool is no number
+           "ports: {look: -1}\n": "ports look: -1 is no weight",
+           "ports: {look: .nan}\n": "ports look: nan is no weight",
+           "ports: [look]\n": "ports is a mapping"}
+    for head, msg in bad.items():
+        f = tmp_path / "c.yaml"
+        f.write_text(head + body)
+        with pytest.raises(stub.CaseError, match=msg):
+            stub.run_case(pick, f)
+
+
 CAT = installed_catalog()
 
 

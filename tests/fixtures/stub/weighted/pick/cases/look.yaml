@@ -1,0 +1,6 @@
+case: pick goes where it has seen the thing, look bound to a constant
+ports: {look: 1.0}
+boundaries:
+  - world: [seen(p1)]
+    deliver: [want]
+    expect: {out: [goto(p1)], status: success, fired: [go_for]}

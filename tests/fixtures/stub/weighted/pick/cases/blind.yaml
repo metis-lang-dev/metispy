@@ -1,0 +1,6 @@
+case: a look of 0 prices the go out, so pick stays idle with the request unanswered
+ports: {look: 0}
+boundaries:
+  - world: [seen(p1)]
+    deliver: [want]
+    expect: {out: [], status: idle, fired: []}

@@ -9,6 +9,10 @@ A package's cases are YAML files in its `cases/` directory. A case:
     init: [at(lhere)]                             # the state before the first boundary: it REPLACES the program's
                                                   #   #init (absent: the program's #init stands)
     steps: 100                                    # the most events a boundary runs to quiescence (default 100)
+    ports: {look: 1.0}                            # the program's weight ports, each bound to a constant for the
+                                                  #   whole case (a number, nothing else: no plugin, no table); a
+                                                  #   name the program does not declare is refused, and a declared
+                                                  #   port left unbound refuses the case
     boundaries:                                   # the script, one entry per tick boundary
       - lines: ["+at(lhere) 1"]                   # do-lines applied verbatim, first (a journaled session's exo rows:
                                                   #   F1's replay of a member alone from its input log)
@@ -49,6 +53,7 @@ Per boundary the stub:
     python -m metis.catalog cases NAME [--json]     (exit 1 when a case fails)"""
 import contextlib
 import io
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -152,11 +157,27 @@ class CaseResult:
 class Stub:
     """One specialist's session, driven boundary by boundary."""
 
-    def __init__(self, program, manifest, seed=1):
+    def __init__(self, program, manifest, seed=1, ports=None):
+        from metis.fw.registry import PortError, Registry
         from metis.lang.repl import Repl
         self.iface = Interface.of(manifest)
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.repl = Repl(str(program), seed=seed)
+        # the case's weight ports, each a constant: the session's registry (an embedding host's in-process bindings,
+        # no operator code imported)
+        reg = Registry()
+        for name, v in sorted((ports or {}).items()):
+            reg.weight(name, v)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.repl = Repl(str(program), seed=seed, registry=reg)
+        except PortError as e:
+            raise CaseError("weight port%s %s unbound: a case binds each to a constant (ports: {%s})"
+                            % ("s" if len(e.missing) > 1 else "", ", ".join(e.missing),
+                               ", ".join("%s: 1.0" % m for m in e.missing))) from None
+        declared = set(self.repl.doc.ports.weights)
+        unknown = sorted(set(ports or {}) - declared)
+        if unknown:
+            raise CaseError("ports %s: not a weight port of the program (%s)"
+                            % (", ".join(unknown), ", ".join(sorted(declared)) or "none"))
         self.preds = set(self.repl.doc.catalog.preds) | set(self.repl.doc.catalog.bwd)
         self.holding = set()
 
@@ -284,9 +305,16 @@ def load_case(path):
     c = yaml.safe_load(Path(path).read_text()) or {}
     if not isinstance(c, dict) or not isinstance(c.get("boundaries"), list):
         raise CaseError("%s: a case is a mapping with boundaries: [...]" % path)
-    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "boundaries"})
+    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "ports", "boundaries"})
     if unknown:
         raise CaseError("%s: unknown key%s %s" % (path, "s" if len(unknown) > 1 else "", ", ".join(unknown)))
+    ports = c.get("ports")
+    if ports is not None and not isinstance(ports, dict):
+        raise CaseError("%s: ports is a mapping, a weight port to its constant ({look: 1.0})" % path)
+    for name, v in (ports or {}).items():
+        # numeric only (a YAML bool is an int to Python: refused too), finite and not negative: a weight
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
+            raise CaseError("%s: ports %s: %r is no weight (a number >= 0)" % (path, name, v))
     for i, b in enumerate(c["boundaries"]):
         bad = sorted(set(b or {}) - {"lines", "world", "deliver", "grant", "revoke", "run", "expect"})
         if bad:
@@ -298,7 +326,7 @@ def run_case(domain, case_path):
     """Run one case file against DOMAIN (a manifests.Domain, or (program path, manifest dict)). → CaseResult."""
     program, manifest = (domain.program, domain.manifest) if hasattr(domain, "manifest") else domain
     c = load_case(case_path)
-    s = Stub(program, manifest, seed=c.get("seed", 1))
+    s = Stub(program, manifest, seed=c.get("seed", 1), ports=c.get("ports"))
     if "init" in c:                                    # the case's state replaces the program's #init
         for a, n in sorted(s.repl.counts.items()):
             if n > 0:

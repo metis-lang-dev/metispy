@@ -1,0 +1,16 @@
+% fixture: a specialist with a weight port (the alfworld task's `look`, reduced) for the interface stub's `ports:`
+% (specialist-tree s-404d001f step 3b): it goes where it has seen the thing, priced by look
+catalog pick 1.
+provenance hand "a weighted pick for the interface stub's ports" "2026-10-25".
+layers (dyn).
+stages (act).
+type place {p0 p1}.
+namespace pick produce (dyn).
+pred seen(place) : pick.
+pred want : pick.
+pred goto(place) : pick.
+weight look(R) reads {seen(R)}.
+stage act {
+  %% I go and look in {R}.
+  go_for [dyn] : want * $seen(R) -o goto(R)  @w look(R).
+}
