@@ -76,6 +76,9 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     # an abstract type the unit leaves abstract (advisory)
     "type-unknown": ("error", "compile"),
     "type-abstract": ("warning", "compile"),
+    # eval-perf P11 (spec 14 §1): a rule whose guards close a cycle —
+    # its grounding is AGM-bounded, not output-linear (advisory)
+    "guard-cyclic": ("warning", "compile"),
     # kernel
     "containment-produce": ("error", "kernel"),
     "containment-consume": ("error", "kernel"),
@@ -188,6 +191,9 @@ HINTS: Dict[str, str] = {
     "type-abstract":
         "the instance that includes this file completes {type} with "
         "`type {type} {{…}}.`: ground that instance",
+    "guard-cyclic":
+        "a guard over all of {{{vars}}}, or a precomputed table, makes it "
+        "acyclic; the program is still correct",
     "pred-undeclared":
         "declare {pred}: `pred {pred}(...) : <namespace>.`",
     "bwd-as-resource":
