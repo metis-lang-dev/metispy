@@ -50,10 +50,20 @@ def _substitutions(vars_, distinct, guards, sig: Signature,
             raise ValueError("guarded schema needs a HornDB")
         return
     at = [([], []) for _ in names]    # per position: the guards, the pairs it completes
+    early = [[] for _ in names]       # per position: fact-table guards it occurs in
     closed = []                       # guards with no variable: checked once
+    variables = set(names)
     for g in guards or ():
         vs = sorted({pos[a] for a in g[1] if a in pos})
-        if vs:
+        if vs and horn is not None and horn.fact_table(g[0]) is not None:
+            # a guard on a ground fact table filters EVERY position it
+            # names, from the index, as soon as that position is bound —
+            # the guard cut eliminated first, not at its last variable:
+            # a prefix no row can complete is never extended (the same
+            # substitutions, in the same order: domains are only filtered)
+            for i in vs:
+                early[i].append(g)
+        elif vs:
             at[vs[-1]][0].append(g)
         else:
             closed.append(g)
@@ -71,6 +81,13 @@ def _substitutions(vars_, distinct, guards, sig: Signature,
             return
         v, (gs, ds) = names[i], at[i]
         dom = domains[i]
+        for g in early[i]:
+            key = (g, v, tuple(subst.get(a) for a in g[1]))
+            vals = memo.get(key)
+            if vals is None:
+                vals = memo[key] = horn.fact_table(g[0]).values(
+                    g[1], v, variables, subst)
+            dom = [c for c in dom if c in vals]
         checks = []
         for g in gs:
             vals = _values(horn, g, v, subst, memo)
