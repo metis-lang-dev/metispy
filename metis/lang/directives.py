@@ -55,7 +55,7 @@ def embedded_case(text: str) -> Dict:
     {init, steps, seeds, unknowns, queries, liks}."""
     case = {"init": {}, "steps": 0, "seeds": 0,
             "unknowns": [], "queries": [], "liks": [],
-            "interactive": [], "plugin": "", "notch": []}
+            "interactive": [], "plugin": "", "notch": [], "instrument": []}
     for raw in text.splitlines():
         line = squash_atoms(raw.strip())
         if not line.startswith("#"):
@@ -89,6 +89,10 @@ def embedded_case(text: str) -> Dict:
             # TERMINAL shell imports it (D4) — every other reader of
             # the case ignores it.
             case["plugin"] = args[0]
+        elif key in ("belief", "port", "evaluate", "expect", "level") and args:
+            # the one-tick instrument's (spec/16 §5): read by metis.kernel.evaluate
+            # (metisc --evaluate) only; every other reader of the case ignores them
+            case["instrument"].append([key] + args)
         elif key == "notch" and len(args) == 1:
             # a fitted overlay file (<stem>.notch.json) shipped on the
             # plugin's registry at serve, as `notch load` ships it; the
