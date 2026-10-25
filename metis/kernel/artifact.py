@@ -187,7 +187,8 @@ def wire(program: Path, extensions: Sequence[Path], doc, prog, steps):
         cmd = [m, "--wire", str(program)]
         for e in extensions:
             cmd += ["--extension", str(e)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        from metis.catalog import metisc_env
+        r = subprocess.run(cmd, capture_output=True, text=True, env=metisc_env())   # METIS_HOME: the same includes
         if r.returncode != 0:
             raise RuntimeError(f"metisc --wire {Path(program).name}: exit "
                                f"{r.returncode}: {(r.stderr or r.stdout).strip()[:400]}")

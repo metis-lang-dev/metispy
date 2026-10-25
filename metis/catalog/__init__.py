@@ -554,6 +554,14 @@ def metisc():
     return os.environ.get("METISC") or shutil.which("metisc")
 
 
+def metisc_env():
+    """The environment for a metisc this process starts: METIS_HOME defaulted to metispy's own (metis/catalog, where
+    the shared iface/ packages are), so both toolchains resolve an include in the same three places."""
+    env = dict(os.environ)
+    env.setdefault("METIS_HOME", str(Path(__file__).resolve().parent))
+    return env
+
+
 NO_METISC = ("no metisc to check a program's edit: set METISC or put metisc on PATH "
              "(build it: make -C <a metis-lang checkout> metisc, then src/metisc)")
 
@@ -569,7 +577,7 @@ def diagnostics(path, base=None):
     if not m:
         raise ValueError(NO_METISC)
     p = subprocess.run([m, "--diagnostics-json", str(path), *(["--base", str(base)] if base else [])],
-                       capture_output=True, text=True, timeout=120)
+                       capture_output=True, text=True, timeout=120, env=metisc_env())
     if p.returncode:
         why = (p.stderr or p.stdout).strip().splitlines()
         return [{"code": "metisc-failed", "severity": "error", "decl": None, "line": None, "hint": None,
