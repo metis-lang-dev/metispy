@@ -119,3 +119,21 @@ def test_a_member_that_gates_itself_is_never_held():
     assert first and not any(i["held"] for b in first for i in b.intents)
     nav = stub.run_package(domain("alfworld_hier/nav"))[1]
     assert nav.boundaries[1].intents[0]["held"]                              # host gating (the default): still held
+
+
+def test_journaled_do_lines_replay_a_boundary(tmp_path):
+    f = tmp_path / "c.yaml"
+    f.write_text("boundaries:\n"
+                 "  - lines: ['+at(lhere) 1', '+recat(dest,l1) 1', '+goto(dest) 1']\n"
+                 "    expect: {fired: [go], out: [reached(dest)]}\n"
+                 "  - lines: ['-at(l1) 1', '+at(l2) 1']\n"
+                 "    expect: {fired: []}\n"
+                 "  - lines: ['+goto(p1) 1', '+recat(p1,l1) 1']\n"
+                 "    run: false\n"
+                 "    expect: {fired: []}\n"                                 # a take: the inputs only
+                 "  - expect: {fired: [go]}\n")                              # its next beat runs them
+    r = stub.run_case(domain("alfworld_hier/nav"), f)
+    assert r.passed, stub.render([r])
+    f.write_text("boundaries:\n  - lines: ['goto(dest)']\n")
+    with pytest.raises(stub.CaseError, match="no do-line"):
+        stub.run_case(domain("alfworld_hier/nav"), f)

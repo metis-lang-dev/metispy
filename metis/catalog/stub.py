@@ -10,7 +10,10 @@ A package's cases are YAML files in its `cases/` directory. A case:
                                                   #   #init (absent: the program's #init stands)
     steps: 100                                    # the most events a boundary runs to quiescence (default 100)
     boundaries:                                   # the script, one entry per tick boundary
-      - world: [at(lhere), recat(target, l1)]     # the world-private readings NOW (synced: the listed atoms of
+      - lines: ["+at(lhere) 1"]                   # do-lines applied verbatim, first (a journaled session's exo rows:
+                                                  #   F1's replay of a member alone from its input log)
+        run: true                                 # false: the inputs only, no rule runs (the Live's take of a grant)
+        world: [at(lhere), recat(target, l1)]     # the world-private readings NOW (synced: the listed atoms of
                                                   #   those preds stand, every other atom of them is retracted;
                                                   #   `atom 0` reads an atom gone)
         deliver: [goto(target)]                   # in-copies, asserted with this boundary's stamp (linear: a
@@ -190,7 +193,13 @@ class Stub:
             if badr:
                 raise CaseError("grant/revoke %s: not a resource of the manifest (%s)"
                                 % (", ".join(badr), ", ".join(sorted(self.iface.resources)) or "none"))
-        # 2. the world's readings (synced per pred), the in-copies, the grants
+        # 2. the journaled do-lines as they are (no direction check: a replay's inputs are what the member was
+        # given), then the world's readings (synced per pred), the in-copies, the grants
+        for line in spec.get("lines") or ():
+            line = str(line).strip()
+            if not line or line[0] not in "+-":
+                raise CaseError("lines: %r is no do-line (+atom n | -atom n)" % line)
+            self._do(line)
         if world:
             preds = {pred_of(a) for a, _ in world}
             want = dict(world)
@@ -215,11 +224,12 @@ class Stub:
             t = self._token(r)
             if t and not self._count(t):
                 self._do("+%s 1" % t)
-        # 3. to quiescence
+        # 3. to quiescence (run: false — the inputs only, as the Live's take of a grant: no rule fires until the
+        # member's next beat)
         before = {a: n for a, n in self.repl.counts.items() if n > 0}
         fired = []
         with contextlib.redirect_stdout(io.StringIO()):
-            while len(fired) < steps and self.repl._candidates():
+            while spec.get("run", True) and len(fired) < steps and self.repl._candidates():
                 name = self.repl._sample()
                 fired.append({"event": name, "rule": name.split("[")[0], "p": self.repl.fired_how[-1].get("p")})
         # 4. the outs handed over (retracted), the intents
@@ -278,7 +288,7 @@ def load_case(path):
     if unknown:
         raise CaseError("%s: unknown key%s %s" % (path, "s" if len(unknown) > 1 else "", ", ".join(unknown)))
     for i, b in enumerate(c["boundaries"]):
-        bad = sorted(set(b or {}) - {"world", "deliver", "grant", "revoke", "expect"})
+        bad = sorted(set(b or {}) - {"lines", "world", "deliver", "grant", "revoke", "run", "expect"})
         if bad:
             raise CaseError("%s: boundary %d: unknown key%s %s" % (path, i, "s" if len(bad) > 1 else "", ", ".join(bad)))
     return c
