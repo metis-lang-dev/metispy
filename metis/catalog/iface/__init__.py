@@ -1,6 +1,6 @@
 """metis.catalog.iface — the generic interface packages (specialist-tree s-404d001f; metis-lang spec/15): declaration-
 only modules every composition shares. protocol_domain.llp: the director interface (reports in, grants out).
-A source includes one by its package path, `include "metis.catalog:iface/protocol_domain.llp".`; path(name)
+A source includes one by its package path, `include "protocol_domain.llp".`; path(name)
 gives the file (an installer that roots a world copies it from here: copy(name, dst))."""
 import shutil
 from pathlib import Path

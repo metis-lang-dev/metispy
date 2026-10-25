@@ -246,25 +246,22 @@ def _singleton_fact_vars(atom, sigs) -> List[Tuple[str, str, str]]:
 
 
 def include_path(spec, base):
-    """An include's file: relative to the includer's directory, or the SERVES form `pkg.mod:path` (a file
-    inside an importable package — the manifests' form; metis.catalog:iface/protocol_domain.llp, the
-    interface packages every composition shares): the first METIS_PKG_PATH root holding pkg/mod/path (metisc's
-    rule), else the package as Python imports it."""
-    import importlib.util
-    import re
+    """An include's file, the first of (the user's ruling, specialist-tree s-404d001f): (1) relative to the
+    including file's directory (BASE); (2) relative to the catalog root the session runs in (the cwd-root rule:
+    $METIS_CATALOG, else the cwd); (3) under METIS_HOME, the one directory of the shared packages — by default
+    metispy's own metis/catalog (its iface/ interface packages: `include "iface/protocol_domain.llp".`). A miss
+    names the three places searched."""
+    import os
     from pathlib import Path
-    m = re.match(r"^([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*):(.+)$", spec)
-    if m and "/" not in m.group(1):
-        import os
-        rel = Path(*m.group(1).split(".")) / m.group(2)
-        for root in filter(None, os.environ.get("METIS_PKG_PATH", "").split(":")):   # metisc's rule: the first root holding it
-            if (Path(root) / rel).is_file():
-                return (Path(root) / rel).resolve()
-        found = importlib.util.find_spec(m.group(1))
-        if found is not None:
-            root = Path(found.submodule_search_locations[0]) if found.submodule_search_locations else Path(found.origin).parent
-            return (root / m.group(2)).resolve()
-    return (Path(base) / spec).resolve()
+    from metis import catalog
+    home = Path(os.environ.get("METIS_HOME") or Path(catalog.__file__).resolve().parent)
+    places = [Path(base), catalog.root(), home]
+    for d in places:
+        if (d / spec).is_file():
+            return (d / spec).resolve()
+    raise FileNotFoundError("include %r: not under %s" % (spec, ", ".join(
+        "%s (%s)" % (d, why) for d, why in zip(places, ("the including file's directory", "the catalog root",
+                                                         "METIS_HOME")))))
 
 
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:

@@ -2,8 +2,8 @@
 % specialist → protocol ← director, a DAG; metis-lang spec/15 amendment 2): the REPORTS a
 % specialist's tick gives the director (status, active, done, stuck, want, release) and the GRANTS the director gives a
 % specialist (grant, goal), over two abstract types the composition makes concrete — domain (the specialists'
-% names, S) and resource (R). Neither side names the other: both include this file, by its package path
-% `include "metis.catalog:iface/protocol_domain.llp".` (one module for every world and catalog; no copies).
+% names, S) and resource (R). Neither side names the other: both include this file,
+% `include "iface/protocol_domain.llp".` (found under METIS_HOME: one module for every world and catalog; no copies).
 catalog protocol_domain 1.
 provenance text "the tick's protocol: reports in, grants out, over abstract specialists and resources" "2026-10-25".
 layers (dyn).

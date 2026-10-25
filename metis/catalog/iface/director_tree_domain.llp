@@ -1,29 +1,31 @@
 % director_tree_domain — the director as a TREE, the generic base (specialist-tree s-404d001f step 3b; brief v2
 % §3, §9; metis-lang spec/15 §4 form S). Every composition includes it and supplies only its instance: its
 % members (type domain), its resources (type resource), its priorities (priority(P, Q)), its hysteresis k and m
-% (mature_grant / young_grant, mature_status), and the start (free(R) per resource; offpath, nowant, nolate,
-% age_of(D, a0) per member). Over the protocol (metis.catalog:iface/protocol_domain.llp): the specialists'
+% (mature_grant / young_grant, mature_status), and the start (free(R), issue(R, t0), serving(R, t0) per resource;
+% offpath, nowant, nolate, age_of(D, a0) per member). Over the protocol (iface/protocol_domain.llp): the specialists'
 % reports in (tick__want, tick__release, tick__active, tick__done, tick__stuck, the agent's tick__status), the
 % grants out (tick__grant, tick__revoke, tick__goal).
-%   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request queues (queued(D, R));
-%     a free R goes to a queued member — several queued: the director's own sampler chooses, never the
-%     evaluation order. A release (tick__release) frees R once the grant is old enough, else it waits (late);
+%   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request takes a ticket (a bakery:
+%     issue(R, T), queued(D, R, T)); a free R goes to the member whose ticket is serving(R, T): first asked, first
+%     served, never the evaluation order (requests relayed at one boundary take their tickets in the director's
+%     sampled order). A release (tick__release) frees R once the grant is old enough, else it waits (late);
 %     a stuck member frees what it holds at once.
 %   PREEMPTION, the one exception to the grant's hysteresis: by a declared priority(P, Q) (a strict order: no
-%     preempt-back), a queued P takes R from its holder Q whatever the age; Q is queued again, never dropped;
-%     P's grant starts young, so the hysteresis protects it.
+%     preempt-back), a queued P takes R from its holder Q whatever the age, out of turn (its ticket is skipped when
+%     its turn comes); Q takes a new ticket — queued again behind those already waiting, never dropped; P's grant
+%     starts young, so the hysteresis protects it.
 %   HYSTERESIS (brief §9 rule 4): held(D, A) ages one step per `tick` the agent puts in at the boundary; a status's
 %     age age_of(D, A) restarts on changed(D) and ages on tick_s(D); a tree rule acting on a status reads
 %     `$tick__status(D, S) * $age_of(D, A) * $mature_status(A)`.
 %   the PATH: a member reporting tick__active is pushed on the running branch (path(D), tick__goal(D)), its
 %     tick__done pops it.
 % A director that also routes kinds (metis-catalog's director_domain: wake / sleep) adds
-% metis.catalog:iface/director_tree_wake.llp: the grant with the wake, the release with the sleep.
+% iface/director_tree_wake.llp: the grant with the wake, the release with the sleep.
 catalog director_tree_domain 1.
 provenance text "the director as a tree: requests and grants of resources with hysteresis and priority, the path, the statuses' ages" "2026-10-25".
 layers (dyn).
 stages (act).
-include "metis.catalog:iface/protocol_domain.llp".
+include "protocol_domain.llp".
 
 namespace tree produce (dyn).
 
@@ -41,7 +43,20 @@ top(a3).
 pred free(resource) : tree.               % the resource, free
 pred holder(domain, resource) : tree.     % … or held
 pred held(domain, age) : tree.            % the holder's grant, its age in ticks
-pred queued(domain, resource) : tree.     % D asked for R and waits its turn
+type ticket {t0 t1 t2 t3 t4 t5 t6 t7}.   % the requests' tickets (a bakery: first asked, first served), wrapping
+bwd tnext(ticket, ticket).
+tnext(t0, t1).
+tnext(t1, t2).
+tnext(t2, t3).
+tnext(t3, t4).
+tnext(t4, t5).
+tnext(t5, t6).
+tnext(t6, t7).
+tnext(t7, t0).
+pred issue(resource, ticket) : tree.      % R's next ticket to hand out (the instance's start: issue(R, t0))
+pred serving(resource, ticket) : tree.    % … and the ticket whose turn it is (serving(R, t0))
+pred queued(domain, resource, ticket) : tree.   % D asked for R and waits with its ticket
+pred skipped(resource, ticket) : tree.    % a ticket whose holder came first by priority: its turn is passed over
 pred late(domain) : tree.                 % asleep (or released) while its grant was young: the release waits
 pred nolate(domain) : tree.
 pred late_release(domain, resource) : tree.
@@ -56,12 +71,14 @@ pred age_of(domain, age) : tree.          % how many ticks D's status has held
 
 stage act {
   % ── the requests ──
-  %% {D} asks for {R}: it waits its turn.
-  want_queue [dyn] : tick__want(D, R) -o queued(D, R).
-  %% {R} is free: {D}, waiting for it, holds it.
-  grant_on_want [dyn] : queued(D, R) * free(R) -o holder(D, R) * held(D, a0) * tick__grant(D, R).
-  %% {D} comes first: it takes {R} from {X}, who waits its turn again.
-  preempt [dyn] : queued(D, R) * $priority(D, X) * holder(X, R) * held(X, A) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * queued(X, R).
+  %% {D} asks for {R}: it takes a ticket.
+  want_queue [dyn] : tick__want(D, R) * issue(R, T) * $tnext(T, T2) -o queued(D, R, T) * issue(R, T2).
+  %% {R} is free and it is {D}'s turn: {D} holds it.
+  grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2).
+  %% {D} comes first: it takes {R} from {X}, who takes a new ticket.
+  preempt [dyn] : queued(D, R, T) * $priority(D, X) * holder(X, R) * held(X, A) * issue(R, T3) * $tnext(T3, T4) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * skipped(R, T) * queued(X, R, T3) * issue(R, T4).
+  %% {D}'s turn was taken by priority: the next ticket's turn.
+  skip_ticket [dyn] : skipped(R, T) * serving(R, T) * $tnext(T, T2) -o serving(R, T2).
   %% {D} gives {R} back.
   release_on_report [dyn] : tick__release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} gives {R} back while its grant is young: the release waits.
