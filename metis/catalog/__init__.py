@@ -1011,11 +1011,15 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     rd.add_argument("--title", metavar="TEXT", help="what the world is, after '<name> — '")
     bd = sub.add_parser("build", help="the domain's bundle (build/, metispy's emitter)")
     bd.add_argument("name")
+    cs = sub.add_parser("cases", help="the domain's own cases (cases/*.yaml) through the interface stub: the "
+                                      "specialist alone, its manifest's interface closed by the cases' facts "
+                                      "(exit 1 when one fails)")
+    cs.add_argument("name")
     rt = sub.add_parser("root", help="the catalog root")
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     more = [sub.add_parser(v, help=h) for v, (h, _) in extra.items()]
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, rt, st, inst, *more):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, rt, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1073,6 +1077,11 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
             out = dry(a.name, {**kw, "r": r}) if a.dry_run else apply(a.name, r=r, **kw)
         elif a.cmd == "build":
             out = {"name": a.name, "bundle": build(a.name, r)}
+        elif a.cmd == "cases":
+            from . import stub
+            res = stub.run_package(get(a.name, r))
+            print(json.dumps([c.as_dict() for c in res], indent=1) if a.json else stub.render(res))
+            return 0 if all(c.passed for c in res) else 1
         elif a.cmd == "take":
             if a.readme and a.readme_from_run:
                 raise ValueError("take: --readme or --readme-from-run, not both")

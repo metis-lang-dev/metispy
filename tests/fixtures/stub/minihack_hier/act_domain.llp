@@ -1,0 +1,47 @@
+% fixture: copied from metis-worlds branch specialist-tree-2 (8d172fe) for the interface stub's tests (specialist-tree s-404d001f step 1d)
+% act_domain — MiniHack's one-cell actions: a door, a beast beside the robot (semantic-world s-227b8e1b step 2, world/mh_hier.py): over roles, the level the host's map.
+catalog act_domain 1.
+provenance text "MiniHack's one-cell actions: a door, a beast beside the robot" "2026-10-25".
+layers (dyn).
+stages (act).
+types (cell beast).
+type dir {n e s w ne se sw nw}.
+type doorstate {open closed}.
+type said_kind {ate blocked cant died door_closed door_here door_locked door_opened fell_pit hit hunger hurt killed nevermind nothing_here nothing_to_apply other picked prompt see_here stopped trap_door unlocked welcome whamm}.
+namespace act produce (dyn).
+pred agent_at(cell) : act.
+pred step(cell) : act.
+pred door(cell, doorstate) : act.
+pred monster(beast, cell) : act.
+pred said(said_kind) : act.             % the world's message, one beat
+pred next(cell, dir, cell) : act.        % the host's: between bound cells, on the live session
+pred open(cell) : act.
+pred fight(cell) : act.
+pred tried(cell) : act.
+pred kicked(cell) : act.
+pred swung(cell) : act.
+pred opened(cell) : act.
+pred cleared(cell) : act.
+pred refused(cell) : act.
+stage act {
+  %% The door {D} is closed: I open it.
+  open_door [dyn] : open(P) * $agent_at(C) * $next(C, D, P) * $door(P, closed) -o tried(P).
+  %% The door {D} is locked: I kick it.
+  kick_door [dyn] : tried(P) * said(door_locked) * $agent_at(C) * $next(C, D, P) * $door(P, closed) -o kicked(P).
+  %% It holds: I kick it again.
+  kick_on [dyn] : kicked(P) * said(whamm) * $agent_at(C) * $next(C, D, P) * $door(P, closed) -o kicked(P).
+  %% The door is broken: the way is open.
+  door_gone [dyn] : kicked(P) * $step(P) -o opened(P).
+  %% The door is open.
+  door_open [dyn] : tried(P) * $door(P, open) -o opened(P).
+  %% The door is already open.
+  was_open [dyn] : open(P) * $door(P, open) -o opened(P).
+  %% {B} is in my way, {D}: I fight it.
+  move_fight [dyn] : fight(P) * $agent_at(C) * $next(C, D, P) * $monster(B, P) -o swung(P).
+  %% It still stands: again.
+  fight_on [dyn] : swung(P) * said(hit) * $monster(B, P) -o fight(P).
+  %% The way is clear.
+  clear [dyn] : swung(P) * $step(P) -o cleared(P).
+  %% The way is clear.
+  was_clear [dyn] : fight(P) * $step(P) -o cleared(P).
+}

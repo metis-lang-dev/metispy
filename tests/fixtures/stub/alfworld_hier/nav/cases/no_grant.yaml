@@ -1,0 +1,9 @@
+case: nav without the body is held, then answers when granted
+boundaries:
+  - world: [at(lhere), recat(dest, lhere)]
+    expect: {out: [], status: idle}             # no goal: nothing fires
+  - deliver: [goto(dest)]
+    expect: {out: [reached(dest)], status: success, fired: [here], held: true}   # it fired, but would not reach the world
+  - grant: [motion]
+    deliver: [goto(dest)]
+    expect: {out: [reached(dest)], status: success, fired: [here], held: false}

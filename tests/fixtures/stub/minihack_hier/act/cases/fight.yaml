@@ -1,0 +1,10 @@
+case: act fights a beast in the way until the cell is clear
+boundaries:
+  - world: [agent_at(p1), next(p1, e, p2), monster(b1, p2)]
+    deliver: [fight(p2)]
+    grant: [motion]
+    expect: {out: [], status: running, fired: [move_fight]}
+  - world: [agent_at(p1), next(p1, e, p2), monster(b1, p2), said(hit)]   # hit, it still stands
+    expect: {out: [], status: running, fired: [fight_on, move_fight]}
+  - world: [agent_at(p1), next(p1, e, p2), step(p2)]                    # it is gone
+    expect: {out: [cleared(p2)], status: success, fired: [clear]}

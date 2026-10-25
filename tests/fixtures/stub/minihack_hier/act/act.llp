@@ -1,0 +1,6 @@
+% fixture: copied from metis-worlds branch specialist-tree-2 (8d172fe) for the interface stub's tests (specialist-tree s-404d001f step 1d)
+% act — MiniHack's act over the role vocabulary (world/mh_hier.py): compiled once, the level the host's map.
+catalog act 1.
+provenance text "the act specialist over roles" "2026-10-25".
+include "../act_domain.llp".
+include "../capacity.llp".

@@ -1,0 +1,4 @@
+# fixture: minihack act's manifest as specialist-tree-2's mh_hier.manifest_fields writes it
+program: act.llp
+shared: {agent_at: world-private, step: world-private, door: world-private, monster: world-private, next: world-private, said: world-private, open: in, fight: in, opened: out, cleared: out, refused: out, motion: resource}
+status: {success: [opened, cleared], failure: [refused]}

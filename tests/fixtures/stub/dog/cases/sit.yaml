@@ -1,0 +1,6 @@
+case: the dog sits on the command (a single member, no shared fields)
+init: [idle, posture(standing), floor_dry, battery_ok]
+boundaries:
+  - deliver: [cmd_sit]
+    expect: {status: running, fired: [sit]}
+  - expect: {status: idle, fired: []}

@@ -1,0 +1,9 @@
+case: access is elsewhere, the detour runs, then it answers
+boundaries:
+  - world: [at(lhere), recat(p2, l2), notopenable(p2)]
+    deliver: [open(p2)]
+    grant: [motion]
+    expect: {out: [elsewhere(p2)], status: running, fired: [not_here]}    # a detour report, neither success nor failure
+  - world: [at(l2), recat(p2, l2), notopenable(p2)]                       # nav took the robot there
+    deliver: [open(p2)]                                                    # the goal comes back
+    expect: {out: [accessible(p2)], status: success, fired: [no_door]}

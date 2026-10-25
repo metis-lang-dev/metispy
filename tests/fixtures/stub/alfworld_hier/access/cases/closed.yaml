@@ -1,0 +1,6 @@
+case: access opens a closed receptacle where the robot stands
+boundaries:
+  - world: [at(l1), recat(p1, l1), openable(p1), closed(p1)]
+    deliver: [open(p1)]
+    grant: [motion]
+    expect: {out: [accessible(p1)], status: success, fired: [open_closed], held: false}

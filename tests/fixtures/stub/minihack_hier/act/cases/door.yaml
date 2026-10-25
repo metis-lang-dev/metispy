@@ -1,0 +1,8 @@
+case: act opens a closed door beside the robot
+boundaries:
+  - world: [agent_at(p1), next(p1, e, p2), door(p2, closed)]
+    deliver: [open(p2)]
+    grant: [motion]
+    expect: {out: [], status: running, fired: [open_door]}
+  - world: [agent_at(p1), next(p1, e, p2), door(p2, open), step(p2)]     # the world: the door opened
+    expect: {out: [opened(p2)], status: success, fired: [door_open]}

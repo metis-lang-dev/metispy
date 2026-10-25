@@ -1,0 +1,8 @@
+case: nav goes to a receptacle elsewhere, holding the body
+boundaries:
+  - world: [at(lhere), recat(dest, l1)]
+    deliver: [goto(dest)]
+    grant: [motion]
+    expect: {out: [reached(dest)], status: success, fired: [go], held: false}
+  - world: [at(l1), recat(dest, l1)]          # the world confirms where the robot is now
+    expect: {out: [], status: idle, fired: []}

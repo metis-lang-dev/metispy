@@ -1,0 +1,4 @@
+# fixture: the nav specialist's manifest as metis-worlds specialist-tree-2's gen_hier.manifest_fields writes it
+program: nav.llp
+shared: {at: world-private, recat: world-private, goto: in, reached: out, motion: resource}
+status: {success: [reached], failure: []}

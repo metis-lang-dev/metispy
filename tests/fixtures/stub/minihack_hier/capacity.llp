@@ -1,0 +1,8 @@
+% fixture: copied from metis-worlds branch specialist-tree-2 (8d172fe) for the interface stub's tests (specialist-tree s-404d001f step 1d)
+% capacity — a grid's roles (semantic_world.grid, k = 8): the cells a goal needs, the things
+% and the beasts; the level is the host's map.
+catalog capacity 1.
+provenance text "the grid role vocabulary at capacity 8" "2026-10-25".
+type cell {goal p1 p2 p3 p4 p5 p6 p7 p8}.
+type thing {target other}.
+type beast {b1 b2}.

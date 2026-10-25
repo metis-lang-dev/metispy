@@ -1,0 +1,8 @@
+case: the dog refuses to stand on a low battery, then stands once charged
+init: [idle, posture(sitting), floor_dry, battery_low]      # the case's whole state (the program's #init is replaced)
+boundaries:
+  - deliver: [cmd_stand]
+    expect: {status: running, fired: [stand_low]}
+  - world: [battery_ok, battery_low 0]     # the reading changes: charged, no longer low (`atom 0` reads it gone)
+    deliver: [cmd_stand]
+    expect: {status: running, fired: [stand]}
