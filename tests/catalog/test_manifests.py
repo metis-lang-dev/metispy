@@ -163,6 +163,14 @@ def test_the_manifests_extensions_list_orders_them(tmp_path):
     ("program: plant.llp\nnotch: ../../../n.notch.json\n", "notch '../../../n.notch.json' leaves"),
     ("program: plant.llp\nrecords: ../../../r/\n", "records '../../../r/' leaves"),
     ("program: plant.llp\nintent: {spec: ../../../i.yaml}\n", "intent.spec '../../../i.yaml' leaves"),
+    # spec/15's interface fields, their shapes (specialist-tree s-404d001f)
+    ("program: plant.llp\nshared: {at: maybe}\n", "shared is \\{pred: in"),
+    ("program: plant.llp\nshared: [at]\n", "shared is \\{pred: in"),
+    ("program: plant.llp\nshared: {done: out}\nstatus: {success: [done], later: []}\n", "status is \\{success"),
+    ("program: plant.llp\nshared: {done: out}\nstatus: {success: [gone]}\n", "status names gone, not an out pred"),
+    ("program: plant.llp\nworld: {out: at}\n", "world is \\{out"),
+    ("program: plant.llp\nresources: {motion: {count: 0}}\n", "resources is \\{name"),
+    ("program: plant.llp\nresources: {motion: {count: 1, owner: nav}}\n", "resources is \\{name"),
 ])
 def test_the_loader_refuses_what_a_package_does_not_carry(tmp_path, yaml_text, why):
     """catalog-entry step 2: the package's keys only (CATALOG.md's table)."""
@@ -242,3 +250,17 @@ def test_the_actor_key(tmp_path):
     (d / "plant.llp").write_text("catalog plant 1.\n")
     (d / "domain.yaml").write_text("program: plant.llp\nactor: {max_steps: 40, task: reach the stairs}\n")
     assert mc.get("plant", tmp_path).manifest["actor"] == {"max_steps": 40, "task": "reach the stairs"}
+
+
+def test_the_loader_takes_the_interface_fields(tmp_path):
+    """spec/15 §2: shared, status, world and resources are a package's keys (the composition reads them)."""
+    d = tmp_path / "domains/nav"
+    d.mkdir(parents=True)
+    (d / "nav.llp").write_text("catalog nav 1.\n")
+    (d / "domain.yaml").write_text(
+        "program: nav.llp\nshared: {goto: in, reached: out, at: world-private, motion: resource}\n"
+        "status: {success: [reached], failure: []}\nworld: {out: [at], in: [goto]}\n"
+        "resources: {motion: {count: 1, held_by: [moving]}}\n")
+    n = mc.get("nav", tmp_path)
+    assert n.manifest["shared"]["at"] == "world-private" and n.manifest["status"]["success"] == ["reached"]
+    assert n.manifest["resources"]["motion"]["count"] == 1

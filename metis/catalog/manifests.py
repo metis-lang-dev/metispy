@@ -229,7 +229,9 @@ def _served_file(base, entry):
 
 # The package's manifest: every key and its reader (CATALOG.md has the table).
 KEYS = ("program", "extensions", "serves", "host", "intent", "clock", "reload", "records",
-        "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch")
+        "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch",
+        "shared", "status", "world", "resources")      # the last four: metis-lang spec/15's interface (§2)
+DIRECTIONS = ("in", "out", "resource", "world-private")
 INTENT_KEYS = ("spec",)
 ACTOR_KEYS = ("acts", "max_steps", "task")
 
@@ -269,6 +271,35 @@ def _paths(m):
         yield "intent.spec", m["intent"]["spec"]
 
 
+def _check_interface(p, m):
+    """spec/15's fields, their shapes: shared {pred: in|out|resource|world-private}, status {success: [..],
+    failure: [..]} of its out preds, world {out: [..], in: [..]}, resources {name: {count: n >= 1, held_by: [..]}}."""
+    def strs(v):
+        return isinstance(v, list) and all(isinstance(x, str) for x in v)
+    sh = m.get("shared")
+    if sh is not None:
+        if not isinstance(sh, dict) or any(not isinstance(k, str) or v not in DIRECTIONS for k, v in sh.items()):
+            raise ManifestError("%s: shared is {pred: %s}" % (p, " | ".join(DIRECTIONS)))
+    st = m.get("status")
+    if st is not None:
+        if not isinstance(st, dict) or set(st) - {"success", "failure"} or not all(strs(v) for v in st.values()):
+            raise ManifestError("%s: status is {success: [pred…], failure: [pred…]}" % p)
+        outs = {k for k, v in (sh or {}).items() if v == "out"}
+        bad = sorted(x for v in st.values() for x in v if x not in outs)
+        if bad:
+            raise ManifestError("%s: status names %s, not an out pred of shared" % (p, ", ".join(bad)))
+    w = m.get("world")
+    if w is not None and (not isinstance(w, dict) or set(w) - {"out", "in"} or not all(strs(v) for v in w.values())):
+        raise ManifestError("%s: world is {out: [pred…], in: [pred…]}" % p)
+    rs = m.get("resources")
+    if rs is not None:
+        ok = isinstance(rs, dict) and all(isinstance(v, dict) and not set(v) - {"count", "held_by"}
+                                          and isinstance(v.get("count"), int) and v["count"] >= 1
+                                          and strs(v.get("held_by", [])) for v in rs.values())
+        if not ok:
+            raise ManifestError("%s: resources is {name: {count: n >= 1, held_by: [pred…]}}" % p)
+
+
 def check_manifest(p, root=None):
     """A domain.yaml read and checked: a mapping of the known keys only,
     intent {spec} only (catalog-entry step 2: the loader refuses an unknown
@@ -296,6 +327,7 @@ def check_manifest(p, root=None):
     for k in ("extensions", "serves", "pair"):
         if k in m and not isinstance(m[k], list):
             raise ManifestError("%s: %s is a list" % (p, k))
+    _check_interface(p, m)
     if m.get("reload") not in (None, "propose", "auto"):
         raise ManifestError("%s: reload is propose or auto" % p)
     a = m.get("actor")
