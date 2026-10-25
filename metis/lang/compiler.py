@@ -197,6 +197,34 @@ class _Vocab:
                       subject, tuple(ctx), lay)
 
 
+def _guard_cycle(guards, variables) -> List[str]:
+    """The cyclic core of a rule's guard hypergraph (eval-perf P11, spec
+    14 §1): one edge per guard, its variables (constants ignored, empty
+    edges dropped), reduced by GYO until nothing changes — a variable in
+    one edge only goes, an empty edge or one inside another goes (of two
+    equal edges, one). Acyclic: [] (P1 grounds it output-linear); else
+    the variables left, sorted (its grounding is AGM-bounded)."""
+    es = [set(a for a in args if a in variables) for _, args in guards]
+    es = [e for e in es if e]
+    changed = True
+    while changed and es:
+        changed = False
+        for e in es:
+            for v in sorted(e):
+                if sum(v in f for f in es) == 1:
+                    e.discard(v)
+                    changed = True
+        keep = []
+        for i, e in enumerate(es):
+            if not e or any(j != i and e <= f and (e != f or j < i)
+                            for j, f in enumerate(es)):
+                changed = True
+                continue
+            keep.append(e)
+        es = keep
+    return sorted(set().union(*es)) if es else []
+
+
 def _singleton_fact_vars(atom, sigs) -> List[Tuple[str, str, str]]:
     """A var occurring ONCE in a fact is almost always a typo
     (`plus(n0,N,M).` meant N twice): it silently means 'every value'.
@@ -589,6 +617,13 @@ def compile_catalog(cat: ast.Catalog,
                             r.weight.factor,
                             tuple(t.value for t in r.weight.args),
                             r.weight.complement)
+                cyc = _guard_cycle(guards, vars_)
+                if cyc:
+                    emit("guard-cyclic",
+                         f"{r.name}: its guards form a cycle over "
+                         f"{', '.join(cyc)}: grounding it is AGM-bounded, "
+                         f"not output-linear",
+                         (("rule", r.name), ("vars", " ".join(cyc))))
                 entries.append(Entry(
                     name=f"{r.layer}/{r.name}", layer=r.layer,
                     kind="schema", comment=r.doc, provenance=prov,
@@ -632,6 +667,13 @@ def compile_catalog(cat: ast.Catalog,
                     emit("link-post-bwd",
                          f"{d.name}: bwd '{a.pred}' in link post",
                          (("pred", a.pred),))
+            cyc = _guard_cycle(lguards, vars_)
+            if cyc:
+                emit("guard-cyclic",
+                     f"{d.name}: its guards form a cycle over "
+                     f"{', '.join(cyc)}: grounding it is AGM-bounded, "
+                     f"not output-linear",
+                     (("rule", d.name), ("vars", " ".join(cyc))))
             entries.append(Entry(
                 name=f"{d.layer}/{d.name}", layer=d.layer, kind="link",
                 comment=d.doc, provenance=prov, src=lsrc,
