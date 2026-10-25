@@ -63,6 +63,12 @@ def arities(text):
             for m in (PRED.match(l.strip()) for l in text.splitlines()) if m}
 
 
+def arg_types(text):
+    """{pred: [its arguments' types]} of TEXT's pred declarations."""
+    return {m.group(1): [a.strip() for a in (m.group(2) or "").split(",") if a.strip()]
+            for m in (PRED.match(l.strip()) for l in text.splitlines()) if m}
+
+
 def private(text, member):
     """The preds TEXT declares in MEMBER's own namespace."""
     return {m.group(1) for m in (PRED.match(l.strip()) for l in text.splitlines()) if m and m.group(3) == member}
@@ -123,8 +129,10 @@ def cancel_rules(text, member, goal_kinds, ends=(), decls="", idle="idle", names
     """MEMBER's cancel rules over TEXT (its base; DECLS: the family package it includes, for the goal kinds'
     arities): one per state, and cancel_none for a member with IDLE. A lifted base (NAMESPACE its own, MEMBER a
     variable) names its member by BIND, a read the rules bind it with (`$self(S)`); an idle token with an argument
-    takes the member (`calm(S)`). A member with neither goal kinds nor a trigger gets none: nothing to cancel."""
+    takes the member (`calm(S)`), and so does a state token's argument of that type (`asked(S)`: a member's own
+    tokens never range over the domains). A member with neither goal kinds nor a trigger gets none."""
     ar = dict(arities(decls), **arities(text))
+    ty = dict(arg_types(decls), **arg_types(text))
     has_idle = idle in private(text, namespace or member)
     out = []
     sts = states(text, member, goal_kinds, ends, crossing=arities(decls), idle=idle, namespace=namespace, world=world)
@@ -139,12 +147,16 @@ def cancel_rules(text, member, goal_kinds, ends=(), decls="", idle="idle", names
         raise StubError("%s: its idle %s takes %d arguments (none, or the member)" % (member, idle, ar[idle]))
     back = "%s(%s)" % (idle, member) if ar.get(idle) else idle
     me = "tick__cancel(%s)%s" % (member, " * " + bind if bind else "")
+    mine = (ty.get(idle) or [None])[0]               # the member's type, when its idle takes the member
     for st in sts:
         toks, n = [], 0
         for p in st:
             k = ar.get(p, 0)
-            toks.append("%s(%s)" % (p, ", ".join("V%d" % (n + i) for i in range(k))) if k else p)
-            n += k
+            vs = []
+            for t in (ty.get(p) or [None] * k)[:k]:   # an argument of the member's type is the member (the binder's)
+                vs.append(member if mine is not None and t == mine else "V%d" % n)
+                n += vs[-1] != member
+            toks.append("%s(%s)" % (p, ", ".join(vs)) if k else p)
         name = "cancel_" + "_".join(p for p in st if p != "busy") if len(st) > 1 or not has_idle else "cancel"
         out += ["  %% Stopped: I drop my goal.",
                 "  %s [dyn] : %s * %s -o %s." % (name, me, " * ".join(toks), back if has_idle else "one")]

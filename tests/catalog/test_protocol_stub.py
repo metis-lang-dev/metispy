@@ -80,3 +80,35 @@ def test_a_tracked_token_with_no_declaration_is_refused_by_name():
     with pytest.raises(ps.StubError, match="walk: no declaration for goto"):
         ps.cancel_rules(text, "walk", ["goto"])
     assert ps.cancel_rules(text, "walk", ["goto"], decls="pred goto(place) : nav.\n")
+
+
+LIFTED = """catalog worker_domain 1.
+include "iface/protocol_domain.llp".
+layers (dyn).
+stages (act).
+namespace worker produce (dyn).
+type place {p1 p2}.
+bwd self(domain).
+pred job : worker.
+pred calm(domain) : worker.
+pred asked(domain) : worker.
+pred bench(place) : worker.
+stage act {
+  %% I need the bench: I ask.
+  ask [dyn] : $job * $self(S) * calm(S) -o asked(S) * tick__want(S, motion) * tick__active(S).
+  %% Done at the bench.
+  finish [dyn] : job * asked(S) * $self(S) -o calm(S) * tick__done(S).
+}
+"""
+
+
+def test_a_lifted_member_binds_its_own_tokens_to_the_binder():
+    # the base several members instantiate (its own namespace, the member a variable bound by self): calm its idle;
+    # a token of the member's type takes the binder's variable (asked(S)), never a fresh one over the domains
+    rules = ps.cancel_rules(LIFTED, "S", [], idle="calm", namespace="worker", bind="$self(S)", world=["job"])
+    assert [l for l in rules if "[dyn]" in l] == [
+        "  cancel [dyn] : tick__cancel(S) * $self(S) * asked(S) -o calm(S).",
+        "  cancel_none [dyn] : calm(S) * tick__cancel(S) * $self(S) -o calm(S).   "
+        "% the race: its done and the stop in one director beat (path_pop, stop_cancel: the sampled order)"]
+    assert ps.refresh(ps.refresh(LIFTED, "S", idle="calm", namespace="worker", bind="$self(S)", world=["job"]),
+                      "S", idle="calm", namespace="worker", bind="$self(S)", world=["job"]).count(ps.BEGIN) == 1
