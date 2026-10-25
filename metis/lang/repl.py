@@ -859,32 +859,45 @@ class Repl(LoopVerbs, Cmd):
 
     def _maybe_enabled(self, kind, stage):
         """The events of (kind, stage) that MAY be enabled now, in table
-        order: those that need nothing, and those whose one indexed atom
-        (the rarest they consume or read) is held — an event missing any
-        atom it needs has weight 0, so the tier is the same as weighing
-        every event of the table (a planner's 28k each beat)."""
+        order: those that need nothing, and those every atom of which
+        (consumed or read) is held — an event missing any atom it needs
+        has weight 0, so the tier is the same as weighing every event of
+        the table (a planner's 28k each beat). Kept incrementally: each
+        event counts the atoms it needs that are not held, and a call
+        moves only the events of the atoms whose holding changed since
+        the last call — a room's standing floor(D) is never revisited,
+        where filing a move under its one rarest atom weighed 8·cells
+        moves a turn (eval-perf step 2e: 1.45 ms at 200 cells)."""
         tbl = self.events_tbl
         cidx = self.__dict__.get("_cidx")
-        if cidx is None or cidx[0] is not tbl or cidx[2] != len(tbl):    # a new table (load, reload, revise) or a longer one
-            freq = {}
-            for _, _, ev in tbl:
-                for a in set(ev.consume) | set(ev.persist):
-                    freq[a] = freq.get(a, 0) + 1
-            index = {}
+        if cidx is None or cidx[0] is not tbl or cidx[1] != len(tbl):    # a new table (load, reload, revise) or a longer one
+            by, missing, free = {}, [], {}
             for i, (k, s, ev) in enumerate(tbl):
-                free, by = index.setdefault((k, s), ([], {}))
                 needs = set(ev.consume) | set(ev.persist)
-                if needs:
-                    by.setdefault(min(needs, key=lambda a: (freq[a], a)), []).append(i)
-                else:
-                    free.append(i)
-            cidx = self.__dict__["_cidx"] = (tbl, index, len(tbl))
-        free, by = cidx[1].get((kind, stage), ((), {}))
-        out = list(free)
-        for a, n in self.counts.items():
-            if n > 0 and a in by:
-                out.extend(by[a])
-        return sorted(out)
+                missing.append(len(needs))
+                if not needs:
+                    free.setdefault((k, s), []).append(i)
+                for a in needs:
+                    by.setdefault(a, []).append(i)
+            # (table, length, atom -> events, missing counts, no-need
+            # events per tier, the held set they reflect, enabled per tier)
+            cidx = self.__dict__["_cidx"] = [tbl, len(tbl), by, missing,
+                                             free, set(), {}]
+        _, _, by, missing, free, held, enabled = cidx
+        now = {a for a, n in self.counts.items() if n > 0}
+        for a in held - now:
+            for i in by.get(a, ()):
+                if missing[i] == 0:
+                    enabled[tbl[i][:2]].discard(i)
+                missing[i] += 1
+        for a in now - held:
+            for i in by.get(a, ()):
+                missing[i] -= 1
+                if missing[i] == 0:
+                    enabled.setdefault(tbl[i][:2], set()).add(i)
+        cidx[5] = now
+        return sorted(free.get((kind, stage), []) +
+                      list(enabled.get((kind, stage), ())))
 
     def _fire(self, i, how="sampled", ws=None):
         """Fire event i; `ws` = the tier it was chosen from (computed
