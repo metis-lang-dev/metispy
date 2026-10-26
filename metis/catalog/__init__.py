@@ -8,6 +8,7 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
     catalog.root()                  # $METIS_CATALOG, else the cwd (cd DIR && metis-loop: DIR is the catalog)
     catalog.home()                  # $METIS_HOME, else metispy's own metis/catalog: the shared packages
     catalog.find_package("dog")     # <root>/domains/dog, else <home>/domains/dog (the include rule's order)
+    catalog.shared()                # METIS_HOME's domains the root lacks: index()/listing() mark them shared
     catalog.state()                 # DIR/.metis/: the loop's own state (git-ignored when DIR is a checkout)
     catalog.installed()             # the installed metis-catalog's own {catalog, tools}: never the root
     catalog.domains()               # [Domain] — every manifest, by name (the loader's Domain)
@@ -105,14 +106,29 @@ def package_domains(name, r=None):
     return [x for x in loader().domains(base) if x.dir.resolve().is_relative_to(d) and not x.partner_of]
 
 
-def _shared(r):
-    """METIS_HOME's domains a root without them sees (a name in both is the root's); none when the
-    root is given, is METIS_HOME, or METIS_HOME has no domains/."""
-    h = home()
-    if r or h == root() or not (h / "domains").is_dir():
+def shared(r=None):
+    """METIS_HOME's domains the root `r` (default the root) does not have (a name in both is the
+    root's); none when the root is METIS_HOME or METIS_HOME has no domains/."""
+    h, r = home(), _r(r)
+    if h == r or not (h / "domains").is_dir():
         return []
-    own = {d.name for d in loader().domains(root())}
+    own = {d.name for d in loader().domains(r)}
     return [d for d in loader().domains(h) if d.name not in own]
+
+
+def shared_index(r=None):
+    """index() rows of shared(r), marked shared, their path absolute (no .llp, as index's)."""
+    names = {d.name for d in shared(r)}
+    if not names:
+        return []
+    return [dict(e, shared=True, path=str(home() / e["path"]), **({"readme": str(home() / e["readme"])}
+                                                                    if e.get("readme") else {}))
+            for e in loader().index(home()) if e["kind"] == "domain" and e["name"] in names]
+
+
+def _shared(r):
+    """shared() for a call with no root given; a given root sees only itself."""
+    return [] if r else shared()
 
 
 def state(r=None) -> Path:
@@ -162,12 +178,10 @@ def index(r=None):
     .llp (metis_catalog.index) — none under a dot directory (.metis/, the
     loop's own state; .git/, .venv/, .pi/ …): the root is a workspace too."""
     out = [e for e in loader().index(_r(r)) if not hidden(e.get("path"))]
-    shared = _shared(r)
-    if shared:                                 # METIS_HOME's domains, marked shared (their path is absolute)
-        names = {d.name for d in shared}
-        out[:0] = [dict(e, shared=True, path=str(home() / e["path"])) for e in loader().index(home())
-                   if e["kind"] == "domain" and e["name"] in names]
-        out.sort(key=lambda e: e["kind"] != "domain")
+    if not r:                                  # METIS_HOME's domains, marked shared, after the root's
+        rows = shared_index()
+        if rows:
+            out = sorted(out + rows, key=lambda e: e["kind"] != "domain")
     return out
 
 
@@ -187,15 +201,15 @@ def listing(r=None):
     """The agent console's rows (py service and Go console alike): the
     index's domains, then each partner (never listed alone in the index) as
     its own row, kind partner."""
-    shared = _shared(r)
+    home_ = _shared(r)
     out = [dict({k: e.get(k) for k in ("name", "kind", "path", "display", "line", "has")},
                 **({"shared": True} if e.get("shared") else {}))
            for e in index(r) if e["kind"] == "domain"]
-    for d in domains(r) + shared:
+    for d in domains(r) + home_:
         if d.partner_of:
             out.append(dict({"name": d.name, "kind": "partner", "path": str(d.dir), "display": d.display,
                              "line": d.line, "has": d.has(), "partner_of": d.partner_of},
-                            **({"shared": True} if any(d is x for x in shared) else {})))
+                            **({"shared": True} if any(d is x for x in home_) else {})))
     return out
 
 
@@ -803,7 +817,8 @@ def take(name, src, r=None, readme=None):
     include (includes(): inside the domain directory only), the host, the
     notch (its fitted overlay), intent.yaml (apply generates intent/ again)
     and a corpus, and its README (or `readme`). Never records/ or build/ (the
-    agents' own). Refused when r has the domain already, or the domain names a
+    agents' own), cases/ (the package's own hand-written tests) or another
+    document beside its README (a transcript). Refused when r has the domain already, or the domain names a
     file take does not carry (serves, agent, pair: bring those by hand) or keeps one elsewhere
     than its directory's layout. Then `apply(name, **take(name, src, r))`."""
     r, src = _r(r), Path(src).resolve()

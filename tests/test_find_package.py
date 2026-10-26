@@ -83,7 +83,8 @@ def test_the_listing_marks_homes_domains_shared(two):
     assert set(rows) == {"dog", "plant", "lamp", "lamp_a"}
     assert not rows["dog"].get("shared") and not rows["plant"].get("shared")
     assert rows["lamp"]["shared"] and Path(rows["lamp"]["path"] + ".llp").is_file()      # a path, no .llp: absolute
-    assert [e["name"] for e in catalog.index() if e["kind"] == "domain"][:2] == ["lamp", "lamp_a"]
+    assert [e["name"] for e in catalog.index() if e["kind"] == "domain"][-2:] == ["lamp", "lamp_a"]      # after the root's
+    assert [d.name for d in catalog.shared(catalog.root())] == ["lamp", "lamp_a"] and len(catalog.shared_index(catalog.root())) == 2
 
 
 def test_a_given_root_sees_only_itself(two):
