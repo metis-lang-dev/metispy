@@ -1108,6 +1108,11 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
                                       "specialist alone, its manifest's interface closed by the cases' facts "
                                       "(exit 1 when one fails)")
     cs.add_argument("name")
+    gd = sub.add_parser("golden", help="the domain's golden (goldens/: day.jsonl and intents.jsonl in, their "
+                                       ".out.jsonl written by metis.domain.day); --check: regenerate and diff "
+                                       "(exit 1 on a difference)")
+    gd.add_argument("name")
+    gd.add_argument("--check", action="store_true")
     rt = sub.add_parser("root", help="the catalog root")
     hm = sub.add_parser("home", help="METIS_HOME: the shared packages")
     fd = sub.add_parser("find", help="a package: <root>/domains/NAME, else <home>/domains/NAME; its domains")
@@ -1115,7 +1120,7 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     more = [sub.add_parser(v, help=h) for v, (h, _) in extra.items()]
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, rt, hm, fd, st, inst, *more):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, gd, rt, hm, fd, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1184,6 +1189,25 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
             res = stub.run_package(get(a.name, r))
             print(json.dumps([c.as_dict() for c in res], indent=1) if a.json else stub.render(res))
             return 0 if all(c.passed for c in res) else 1
+        elif a.cmd == "golden":
+            from metis.domain import day
+            d = get(a.name, r)
+            if a.check:
+                bad = day.check(d)
+                if a.json:
+                    print(json.dumps({"name": a.name, "ok": not bad, "problems": [{"file": f, "problem": w} for f, w in bad]}))
+                else:
+                    for f, w in bad:
+                        print("%s goldens/%s: %s" % (a.name, f, w))
+                    if not bad:
+                        print("%s: the goldens are what the package makes" % a.name)
+                return 1 if bad else 0
+            files = day.golden(d)
+            if not files:
+                raise ValueError(f"{a.name}: no goldens/day.jsonl or goldens/intents.jsonl to run")
+            for f, text in files.items():
+                (d.dir / day.GOLDENS / f).write_text(text)
+            out = {"name": a.name, "wrote": sorted(str(d.dir / day.GOLDENS / f) for f in files)}
         elif a.cmd == "take":
             if a.readme and a.readme_from_run:
                 raise ValueError("take: --readme or --readme-from-run, not both")
