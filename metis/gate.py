@@ -65,14 +65,15 @@ when it is cornered. The human gate above is the default and is unchanged.
     replay_identical (bool), vector (the complexity vector's change: a number, a list or a
     dict summed, or {before, after}; `flat` the flat program's, for the conventions move), fits_records (bool:
     the candidate fires on its record and on no record it contradicts); for a refactoring move,
-    `move` (split | conventions | direct | prune) and `ambiguous` (the goal kinds more than one
-    specialist takes: a count, or {before, after}); numbers of another type refuse in words, before any
+    `move` (split | conventions | direct | compose | prune) and `ambiguous` (the goal kinds more than one
+    specialist takes: a count, or {before, after}); `interface` (compose: metisc --interface's
+    {errors, warnings} counts over the composition); numbers of another type refuse in words, before any
     verdict and with no plan left waiting (a bool is no real number: `true` is not +1);
   - the verdict per phase (POLICY.md, the experimental gate):
       explore   fits_records, and the likelihood not down
       exploit   the likelihood up, or the success up with the likelihood not down
       refactor  replay_identical, the success (and a given likelihood) not down, the vector down;
-                with `move` (split | conventions | direct | prune) each move against the base it
+                with `move` (split | conventions | direct | compose | prune) each move against the base it
                 replaces, by its own gain (loop-policy step 2c, the architect's ruling):
                   split        replay_identical, the success not down, the vector down
                   conventions  replay_identical, the success not down, `ambiguous` down ({before, after}: the goal kinds
@@ -81,6 +82,10 @@ when it is cornered. The human gate above is the default and is unchanged.
                   direct       replay_identical, the success not down, `ambiguous` 0 (every port
                                routable); the vector reported, not judged (the director's facts are
                                the price of automatic activation)
+                  compose      replay_identical, the success not down, `interface` 0 errors (the split
+                               as a tick tree: metisc --interface's I1-I12 over the composition;
+                               its warnings reported, not judged); the vector reported, not judged
+                               (policy-tuning-2 s-e075f47f, brief v2 §A)
                   prune        replay_identical, the success and the likelihood (required: what the
                                rules explain) not down, the vector down
                 a given likelihood or success a move does not name is still not down
@@ -121,7 +126,7 @@ class Refused(ValueError):
     """A rule of the gate said no: its words are the message."""
 
 
-MOVES = ("split", "conventions", "direct", "prune")
+MOVES = ("split", "conventions", "direct", "compose", "prune")
 
 
 def _vector(v):
@@ -138,6 +143,11 @@ def _vector(v):
 
 def _count(v):
     return _real(v) and v >= 0
+
+
+def _interface_ok(v):
+    """interface: {errors, warnings} — metisc --interface's counts (numbers not below 0)."""
+    return isinstance(v, dict) and set(v) == {"errors", "warnings"} and _count(v["errors"]) and _count(v["warnings"])
 
 
 def _ambiguous_ok(v):
@@ -192,6 +202,9 @@ def check_numbers(numbers):
     if numbers.get("ambiguous") is not None and not _ambiguous_ok(numbers["ambiguous"]):
         raise Refused("numbers: ambiguous is a count of goal kinds (a number not below 0), or {before, after} of counts; "
                       f"not {json.dumps(numbers['ambiguous'], default=str)}")
+    if numbers.get("interface") is not None and not _interface_ok(numbers["interface"]):
+        raise Refused("numbers: interface is metisc --interface's {errors, warnings} (counts not below 0); "
+                      f"not {json.dumps(numbers['interface'], default=str)}")
     return dict(numbers)
 
 
@@ -252,12 +265,16 @@ def _move(n, need, check, why):
     if r is not None:
         check(bool(r), "the records replay the same")
     needs = {"split": ("success", "vector"), "conventions": ("success", "ambiguous", "vector"), "direct": ("success", "ambiguous"),
-             "prune": ("success", "likelihood", "vector")}[move]
+             "compose": ("success", "interface"), "prune": ("success", "likelihood", "vector")}[move]
     got = {k: need(k) for k in needs}
     for k in ("success", "likelihood"):                         # named by the move, or given: not down
         x = got.get(k, n.get(k))
         if x is not None:
             check(x >= 0, f"the held-out {k} not down ({x:+g})")
+    i = got.get("interface")
+    if i is not None:
+        check(i["errors"] == 0, f"the interface check passes (metisc --interface: {i['errors']:g} error(s), "
+                                f"{i['warnings']:g} warning(s) reported)")
     a = got.get("ambiguous")
     if a is not None:
         after = a["after"] if isinstance(a, dict) else a

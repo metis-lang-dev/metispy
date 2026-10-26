@@ -222,6 +222,8 @@ SPLIT = {"move": "split", "replay_identical": True, "success": 0.0, "likelihood"
 CONV = {"move": "conventions", "replay_identical": True, "success": 0.0, "ambiguous": {"before": 2, "after": 0},
         "vector": {"before": 409, "after": 1446}, "flat": 9855}
 DIRECT = {"move": "direct", "replay_identical": True, "success": 0.0, "ambiguous": 0, "vector": {"before": 1446, "after": 1457}}
+COMPOSE = {"move": "compose", "replay_identical": True, "success": 0.0, "interface": {"errors": 0, "warnings": 4},
+           "vector": {"before": 1446, "after": 1490}}
 PRUNE = {"move": "prune", "replay_identical": True, "success": 0.0, "likelihood": -0.62, "vector": {"before": 9855, "after": 9645}}
 
 
@@ -243,6 +245,12 @@ PRUNE = {"move": "prune", "replay_identical": True, "success": 0.0, "likelihood"
     (dict(DIRECT, ambiguous={"before": 2, "after": 1}), "refuse", "not: every port routable (ambiguous goal kinds 1)"),
     (dict(DIRECT, success=-0.1), "refuse", "not: the held-out success not down"),
     ({k: v for k, v in DIRECT.items() if k != "ambiguous"}, "refuse", "ambiguous: not measured"),
+    (COMPOSE, "accept", "the interface check passes (metisc --interface: 0 error(s), 4 warning(s) reported)"),
+    (dict(COMPOSE, interface={"errors": 1, "warnings": 0}), "refuse", "not: the interface check passes"),
+    (dict(COMPOSE, replay_identical=False), "refuse", "not: the records replay the same"),
+    (dict(COMPOSE, success=-0.5), "refuse", "not: the held-out success not down"),
+    ({k: v for k, v in COMPOSE.items() if k != "interface"}, "refuse", "interface: not measured"),
+    (COMPOSE, "accept", "the complexity vector reported, not judged (+44)"),   # the tick's rules and the director's
     (PRUNE, "refuse", "not: the held-out likelihood not down (-0.62)"),        # G1: they carry the world model
     (dict(PRUNE, likelihood=0.0), "accept", "the complexity vector down"),
     ({k: v for k, v in PRUNE.items() if k != "likelihood"}, "refuse", "likelihood: not measured"),
@@ -270,7 +278,9 @@ def test_without_a_move_the_refactor_judge_is_as_before():
     ({"replay_identical": True, "success": 0.0, "vector": {"before": [9], "after": [True]}}, "vector is the complexity vector"),
     ({"fits_records": "yes", "likelihood": 0.0}, "fits_records is true or false"),
     ("good", "an object of the measures"),
-    (dict(SPLIT, move="lift"), "move is split | conventions | direct | prune"),
+    (dict(SPLIT, move="lift"), "move is split | conventions | direct | compose | prune"),
+    (dict(COMPOSE, interface=0), "interface is metisc --interface's"),
+    (dict(COMPOSE, interface={"errors": -1, "warnings": 0}), "interface is metisc --interface's"),
     (dict(DIRECT, ambiguous=-1), "ambiguous is a count"),
     (dict(DIRECT, ambiguous=True), "ambiguous is a count"),
     (dict(CONV, ambiguous={"before": 2}), "ambiguous is a count"),
