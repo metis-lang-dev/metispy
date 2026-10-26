@@ -314,7 +314,8 @@ def _check_interface(p, m):
 def _check_belief(p, m):
     """spec/16's three fields, their shapes: beliefs {pred: {port, one|lone?}}; levels {pred: {from: {evaluate: Q} |
     {belief: PORT}, at: [increasing in (0, 1)], names: [|at| + 1]}}; evaluate {name: {reach|risk: OUTCOME,
-    within|at: h, budget?, model?}} (model: the world model the query runs over, spec/16 §3, else the program)."""
+    within|at: h, budget?, model?, tick?}} (model: the world model the query runs over, spec/16 §3, else the program;
+    tick: the stage whose entries count h and the step rows, spec/16 §10.1)."""
     def num(x):
         return isinstance(x, (int, float)) and not isinstance(x, bool)
     b = m.get("beliefs")
@@ -327,12 +328,13 @@ def _check_belief(p, m):
     e = m.get("evaluate")
     if e is not None:
         ok = isinstance(e, dict) and all(
-            isinstance(f, dict) and not set(f) - {"reach", "risk", "within", "at", "budget", "model"}
+            isinstance(f, dict) and not set(f) - {"reach", "risk", "within", "at", "budget", "model", "tick"}
             and (("reach" in f) != ("risk" in f)) and (("within" in f) != ("at" in f))
             and isinstance(f.get("within", f.get("at")), int) and isinstance(f.get("model", ""), str)
+            and isinstance(f.get("tick", ""), str)
             for f in e.values())
         if not ok:
-            raise ManifestError("%s: evaluate is {name: {reach|risk: OUTCOME, within|at: h, budget?, model?}} (spec/16 §5)" % p)
+            raise ManifestError("%s: evaluate is {name: {reach|risk: OUTCOME, within|at: h, budget?, model?, tick?}} (spec/16 §5)" % p)
     lv = m.get("levels")
     if lv is not None:
         def good(f):

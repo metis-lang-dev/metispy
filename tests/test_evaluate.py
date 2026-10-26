@@ -158,6 +158,10 @@ def test_a_manifest_carries_beliefs_levels_and_evaluate(tmp_path):
         (d / "domain.yaml").write_text(yaml.safe_dump(bad, sort_keys=False))
         with pytest.raises(mc.ManifestError, match=msg):
             mc.domains(tmp_path)
+    ticked = dict(MAN, evaluate={"w": {"reach": "won", "within": 2, "tick": "act"}})   # §10.1: a query by tick
+    (d / "domain.yaml").write_text(yaml.safe_dump(ticked, sort_keys=False))
+    assert mc.domains(tmp_path)
+    assert E.manifest_directives(ticked)[1] == ["evaluate", "w", "reach", "won", "within", "2", "tick", "act"]
 
 
 def test_the_hook_asserts_the_level_of_the_state_as_it_stands(tmp_path):
@@ -172,3 +176,25 @@ def test_the_hook_asserts_the_level_of_the_state_as_it_stands(tmp_path):
     assert atoms == {"odds(poor)": 1} and rep["values"] == {"w": "0/1"}
     atoms, rep = hook.levels({"tossed": 1}, {"luck": {("heads",): "0.7", ("tails",): "0.7"}})
     assert atoms == {} and rep["refused"].startswith("belief-sum:")
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="no metis-lang checkout beside metispy (corpus/evaluate)")
+def test_the_hook_reads_the_hosts_table_by_step_and_counts_ticks():
+    # nav-belief step 2b: the crossing (corpus/evaluate/crossing.yaml) as a host drives it live — the intent a
+    # categorical belief, the hazards closing(B, I) a table by step (a list per argument tuple), the queries by tick —
+    # gives the case's numbers (its golden, --brute equal)
+    man = {"program": "crossing.llp", "beliefs": {"intent": {"port": "mind", "one": "I"}},
+           "evaluate": {"engaged": {"risk": "engaged(_)", "within": 3, "tick": "robot"},
+                        "stairs": {"reach": "home", "within": 4, "tick": "robot"},
+                        "engaged_at": {"risk": "engaged(_)", "at": 3, "tick": "robot"}}}
+    ports = {"mind": {("b1", "hostile"): 0.5, ("b1", "wandering"): 0.5, ("b2", "hostile"): 0.2, ("b2", "wandering"): 0.8},
+             "closing": {("b1", "hostile"): [0.3, 0.5, 0.7], ("b1", "wandering"): [0.05, 0.05, 0.1],
+                         ("b2", "hostile"): [0.2, 0.4, 0.6], ("b2", "wandering"): [0.02, 0.02, 0.05]}}
+    hook = E.LevelHook(man, CORPUS)
+    _, rep = hook.levels({"at(c0)": 1, "turn": 1, "free(b1)": 1, "free(b2)": 1, "fuel": 10}, ports)
+    assert rep["values"] == {"engaged": "323818289/500000000", "stairs": "2401/10000", "engaged_at": "323818289/500000000"}
+    assert E.port_directives({"closing": {("b1", "hostile"): [0.3, 0.5]}, "k": 0.5}) == [
+        ["port", "closing(b1,hostile)", "step", "0.3", "0.5"], ["port", "k", "0.5"]]
+    frozen = dict(ports, closing={k: v[-1] for k, v in ports["closing"].items()})   # the last row frozen: a hazard higher
+    _, rep2 = hook.levels({"at(c0)": 1, "turn": 1, "free(b1)": 1, "free(b2)": 1, "fuel": 10}, frozen)
+    assert Fraction(rep2["values"]["engaged"]) > Fraction(rep["values"]["engaged"])

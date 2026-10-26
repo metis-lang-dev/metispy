@@ -106,6 +106,7 @@ class Query:
     within: bool
     h: int
     budget: int
+    tick: Optional[str] = None    # §10.1: h and the step rows count ticks, a tick opening on each entry into this stage
 
 
 @dataclass
@@ -127,14 +128,18 @@ def parse(dirs: List[List[str]]):
             beliefs.append(Belief(toks[1], "indep", None, toks[3]))
         elif len(toks) == 6 and toks[0] == "belief" and toks[2] in ("one", "lone") and toks[4] == "by":
             beliefs.append(Belief(toks[1], toks[2], toks[3], toks[5]))
-        elif len(toks) == 3 and toks[0] == "port":
+        elif len(toks) >= 3 and toks[0] == "port" and toks[2:] != ["step"]:
             name, args = split_atom(toks[1])
-            try:
-                float(toks[2])
-            except ValueError:            # a binding that computes: the host's function form (§10)
-                _refuse("port-function", "port %s bound to %s: a binding that computes is the host's function form "
-                        "(spec/16 §10, later); a case binds numbers or a table of them" % (toks[1], toks[2]))
-            tbl.append((name, tuple(args) if "(" in toks[1] else None, number("port " + toks[1], toks[2])))
+            # one value (the frozen table), or `step v0 v1 …`: a value per step of the horizon, row t read at step t
+            # (spec/16 §10.1)
+            vs = toks[3:] if toks[2] == "step" else toks[2:] if len(toks) == 3 else bad(toks)
+            for v in vs:
+                try:
+                    float(v)
+                except ValueError:        # a binding that computes: the host's function form (§10)
+                    _refuse("port-function", "port %s bound to %s: a binding that computes is the host's function form "
+                            "(spec/16 §10, later); a case binds numbers, a table of them, or a table by step" % (toks[1], v))
+            tbl.append((name, tuple(args) if "(" in toks[1] else None, [number("port " + toks[1], v) for v in vs]))
         elif len(toks) >= 3 and toks[0] == "evaluate" and toks[2] in ("reach", "risk"):
             name, kind, rest = toks[1], toks[2], toks[3:]
             if any(q.name == name for q in queries):
@@ -146,14 +151,19 @@ def parse(dirs: List[List[str]]):
                 i += 1
             if i + 1 >= len(rest) or not conj:
                 bad(toks)
-            tail = rest[i + 2:]
-            if tail == []:
-                budget = DEFAULT_BUDGET
-            elif len(tail) == 2 and tail[0] == "budget":
-                budget = int(tail[1])
-            else:
-                bad(toks)
-            queries.append(Query(name, kind, conj, rest[i] == "within", int(rest[i + 1]), budget))
+            # the budget, the world model the query runs over (§5 `model`: read by `groups`, the caller's), the tick
+            tail, budget, tick = rest[i + 2:], DEFAULT_BUDGET, None
+            while tail:
+                if tail[0] == "budget" and len(tail) >= 2:
+                    budget = int(tail[1])
+                elif tail[0] == "model" and len(tail) >= 2:
+                    pass
+                elif tail[0] == "tick" and len(tail) >= 2:
+                    tick = tail[1]
+                else:
+                    bad(toks)
+                tail = tail[2:]
+            queries.append(Query(name, kind, conj, rest[i] == "within", int(rest[i + 1]), budget, tick))
         elif len(toks) == 3 and toks[0] == "expect":
             expects.append((toks[1], toks[2]))
         elif len(toks) >= 3 and toks[0] == "level" and toks[2] == "from":
@@ -180,11 +190,12 @@ class St:
     stage: str
     counts: Dict[str, int]
     undrawn: Tuple[int, ...]
+    tick: int = 0                 # the ticks opened since the start (0 without `tick`)
 
     def key(self) -> str:
         """metisc's key, byte for byte: the cut's canonical order is the sort of these strings."""
-        return "%s|%s|%s" % (self.stage, "".join("%s:%d " % (a, self.counts[a]) for a in sorted(self.counts)),
-                             "".join("%d " % g for g in self.undrawn))
+        return "%s|%s|%s%s" % (self.stage, "".join("%s:%d " % (a, self.counts[a]) for a in sorted(self.counts)),
+                               "".join("%d " % g for g in self.undrawn), "|%d" % self.tick if self.tick > 0 else "")
 
 
 def matches(pat, a: str) -> bool:
@@ -239,7 +250,11 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
         if key is not None and len(key) != len(ports.weights[n]):
             _refuse("port-unknown", "port %s: %d arguments, %s takes %d" % (render(n, key), len(key), n, len(ports.weights[n])))
 
-    def port_value(port, args):
+    def at_step(rows_, t):
+        """Row t at step t; past the table's end, its last row (the frozen table is the one-row case)."""
+        return rows_[min(t, len(rows_) - 1)]
+
+    def port_rows(port, args):
         args = tuple(args)
         for n, a, v in tbl:
             if n == port and a == args:
@@ -249,11 +264,16 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
                 return v
         _refuse("port-unbound", "weight port %s is unbound at %s: the case binds it (#port %s VALUE, or a value "
                 "per argument tuple)" % (port, render(port, args), port))
-    # the events, their frozen weights: prior × the port factor
+
+    def port_value(port, args):
+        """A belief's presence draw reads row 0: the world at the tick."""
+        return at_step(port_rows(port, args), 0)
+    # the events' weights, prior × the port factor, one per row of the port's table (one row: frozen)
     rows = canonical_events(prog)
-    w0 = []
+    w_rows = []
     for kind, stage, ev in rows:
         w = number("rule " + ev.name, "%.17g" % ev.weight)
+        ws = [w]
         if kind == "clause":
             base = ev.name.split("[", 1)[0]
             ref = ports.weight_refs.get(base)
@@ -261,13 +281,17 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
                 tag = ev.name.split("[", 1)[1].rstrip("]") if "[" in ev.name else ""
                 subst = dict(kv.split("=") for kv in tag.split(",")) if tag else {}
                 args = [subst.get(a, a) for a in ref.args]
-                v = port_value(ref.factor, args)
-                if ref.complement:
-                    if v > ONE:
-                        _refuse("port-value", "~%s: %s above 1" % (ref.factor, render(ref.factor, args)))
-                    v = ONE - v
-                w = w * v
-        w0.append(w)
+                ws = []
+                for v in port_rows(ref.factor, args):
+                    if ref.complement:
+                        if v > ONE:
+                            _refuse("port-value", "~%s: %s above 1" % (ref.factor, render(ref.factor, args)))
+                        v = ONE - v
+                    ws.append(w * v)
+        w_rows.append(ws)
+
+    def weight(i, t):
+        return at_step(w_rows[i], t)
     tiers: Dict[Tuple[str, str], List[int]] = {}
     for i, (kind, stage, _) in enumerate(rows):
         tiers.setdefault((kind, stage), []).append(i)
@@ -370,7 +394,7 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
         worlds *= len(g.worlds)
 
     # the choice at a state: spec 06 §4's tiers, exactly
-    def choice(st):
+    def choice(st, t):
         if st.stage == DONE:
             return [(None, ONE)]
 
@@ -379,7 +403,7 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
             for i in tiers.get((kind, st.stage), ()):
                 n = transition_count(rows[i][2], st.counts)
                 if n:
-                    w = w0[i] * n
+                    w = weight(i, t) * n
                     if w:
                         out.append((i, w))
             return out
@@ -389,9 +413,9 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
         tot = sum((w for _, w in ws), ZERO)
         return [(i, w / tot) for i, w in ws]
 
-    def apply(st, e):
+    def apply(tk, st, e):
         if e is None:
-            return St(DONE, st.counts, st.undrawn)
+            return St(DONE, st.counts, st.undrawn, st.tick)
         kind, _, ev = rows[e]
         c = dict(st.counts)
         for a, n in ev.consume.items():
@@ -402,7 +426,9 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
                 c.pop(a, None)
         for a, n in ev.produce.items():
             c[a] = c.get(a, 0) + n
-        return St(ev.post if kind == "link" and ev.post else st.stage, c, st.undrawn)
+        stage = ev.post if kind == "link" and ev.post else st.stage
+        # a link into the tick's stage opens the next tick
+        return St(stage, c, st.undrawn, st.tick + 1 if kind == "link" and tk is not None and tk == stage else st.tick)
 
     # R2: a group is drawn where its presence could first matter
     def settle(must, st, m):
@@ -415,7 +441,7 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
             c = dict(st.counts)
             for a in atoms:
                 c[a] = c.get(a, 0) + 1
-            out += settle(must, St(st.stage, c, undrawn), m * q)
+            out += settle(must, St(st.stage, c, undrawn, st.tick), m * q)
         return out
     st0 = St(prog.init_stage, {a: n for a, n in init.items() if n > 0}, tuple(range(ng)))
     maxbits = [0]
@@ -431,60 +457,75 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
             return qg(g) or st.stage in g.stages
         hit, cut = [ZERO], [ZERO]
 
+        def finished(st):
+            """By tick (§10.1): a state that has opened tick h is finished, and so is one at DONE."""
+            return q.tick is not None and (st.tick >= q.h or st.stage == DONE)
+        final: Dict[str, Tuple[St, Fraction]] = {}
+
+        def put(tbl_, st, m):
+            k = st.key()
+            if k in tbl_:
+                tbl_[k] = (tbl_[k][0], tbl_[k][1] + m)
+            else:
+                tbl_[k] = (st, m)
+
         def admit(tbl_, sm):
             st, m = sm
             note(m)
             if q.within and holds(st.counts, q.conj):
                 hit[0] += m
-            elif q.within and st.stage == DONE:
-                pass                                           # a miss, frozen
+            elif q.within and (st.stage == DONE or finished(st)):
+                pass                                           # a miss
+            elif finished(st):
+                put(final, st, m)                              # at: the final slice is what finishes
             else:
-                k = st.key()
-                if k in tbl_:
-                    tbl_[k] = (tbl_[k][0], tbl_[k][1] + m)
-                else:
-                    tbl_[k] = (st, m)
+                put(tbl_, st, m)
         cur: Dict[str, Tuple[St, Fraction]] = {}
         for sm in settle(must, st0, ONE):
             admit(cur, sm)
         retained = len(cur)
         t = 0
-        while t < q.h and cur:
+        while (q.tick is not None or t < q.h) and cur:
             t += 1
             out: Dict[str, Tuple[St, Fraction]] = {}
             for _, (st, m) in sorted(cur.items()):
                 if retained + len(out) >= q.budget:
                     cut[0] += m
                 else:
-                    for e, pe in choice(st):
-                        for sm in settle(must, apply(st, e), m * pe):
+                    for e, pe in choice(st, st.tick if q.tick is not None else t - 1):
+                        for sm in settle(must, apply(q.tick, st, e), m * pe):
                             admit(out, sm)
             retained += len(out)
             cur = out
-        lo = hit[0] if q.within else sum((m for st, m in cur.values() if holds(st.counts, q.conj)), ZERO)
+        lo = hit[0] if q.within else sum((m for st, m in (cur if q.tick is None else final).values()
+                                          if holds(st.counts, q.conj)), ZERO)
         return lo, lo + cut[0], cut[0], retained
 
     def referee(q):
         hit, paths = [ZERO], [0]
 
+        def over(st, t):
+            return st.stage == DONE or (st.tick >= q.h if q.tick is not None else t == q.h)
+
         def dfs(st, m, t):
+            def nxt():
+                for e, pe in choice(st, st.tick if q.tick is not None else t):
+                    dfs(apply(q.tick, st, e), m * pe, t + 1)
             if q.within:
                 if holds(st.counts, q.conj):
                     hit[0] += m
                     paths[0] += 1
-                elif t == q.h or st.stage == DONE:
+                elif over(st, t):
                     paths[0] += 1
                 else:
-                    for e, pe in choice(st):
-                        dfs(apply(st, e), m * pe, t + 1)
+                    nxt()
             else:
-                if t == q.h or st.stage == DONE:
+                if over(st, t):
                     paths[0] += 1
                     if holds(st.counts, q.conj):
                         hit[0] += m
                 else:
-                    for e, pe in choice(st):
-                        dfs(apply(st, e), m * pe, t + 1)
+                    nxt()
         for st, m in settle(lambda g, st: True, st0, ONE):
             dfs(st, m, 0)
         return hit[0], paths[0]
@@ -501,11 +542,19 @@ def run(doc, prog, init: Dict[str, int], dirs: List[List[str]], brute: bool = Fa
             line = "N belief-read %s %s" % (rule, p)
             if p in reads and line not in notes:
                 notes.append(line)
+    # a port read by step (spec/16 §10.1): its rows, and §8's multilinearity gone for it (metisc's order: its table
+    # is the directives' in reverse)
+    for n, _, r in reversed(tbl):
+        k = max(len(r2) for m2, _, r2 in tbl if m2 == n)
+        line = "N step-table %s rows %d" % (n, k)
+        if len(r) > 1 and line not in notes:
+            notes.append(line)
     results: Dict[str, Tuple[Fraction, Fraction, Fraction]] = {}
     costs, vlines = [], []
     for q in queries:
         pat = " * ".join(render(p, a) for p, a in q.conj)
-        head = "V %s %s %s %s %d" % (q.name, q.kind, pat, "within" if q.within else "at", q.h)
+        head = "V %s %s %s %s %d%s" % (q.name, q.kind, pat, "within" if q.within else "at", q.h,
+                                       " tick " + q.tick if q.tick is not None else "")
         maxbits[0] = 0
         t0 = time.process_time()
         if brute:
@@ -692,6 +741,38 @@ def _leaf(file, lno, rest):
     return rest
 
 
+def _continued(lines):
+    """A flow value may run over several lines: a line whose brackets are left open (outside quotes) takes the next
+    lines until they close (Iface.continued). LINES: [(lno, line)]."""
+    def depth(s):
+        d, q = 0, False
+        for c in s:
+            if c == '"':
+                q = not q
+            elif not q:
+                if c in "[{":
+                    d += 1
+                elif c in "]}":
+                    d -= 1
+        return d
+    out, k = [], 0
+    while k < len(lines):
+        lno, l = lines[k]
+        k += 1
+        t = l.strip()
+        if t == "" or t[0] == "#":
+            out.append((lno, l))
+            continue
+        d = depth(l)
+        while d > 0 and k < len(lines):
+            l2 = lines[k][1]
+            k += 1
+            l = l + " " + l2.strip()
+            d += depth(l2)
+        out.append((lno, l))
+    return out
+
+
 def read_yaml_block(file):
     """metisc's instrument reader (Iface.read_yaml_block): `key: value` lines and block MAPPINGS (`key:` alone opens
     a map indented below it); leaves are scalars and flow values; block lists are refused."""
@@ -700,7 +781,7 @@ def read_yaml_block(file):
         raw = f.read().decode().split("\n")
     if raw and raw[-1] == "":
         raw = raw[:-1]
-    for lno, l in enumerate(raw, 1):
+    for lno, l in _continued(list(enumerate(raw, 1))):
         t = l.strip()
         if t == "" or t[0] == "#":
             continue
@@ -753,9 +834,10 @@ def _squash(a):
 
 
 def case_of_yaml(path):
-    """A case YAML and its manifest (found by `manifest:`, the cases/ convention, or beside it) → (the program's
-    path, the init [(atom, n)], the directives in the embedded form's order): beliefs, ports, the manifest's
-    queries then the case's, expects, levels (Evaluate.case_of_yaml)."""
+    """A case YAML and its manifest (found by `manifest:`, the cases/ convention, or beside it) → (the manifest's
+    directory, the program's path relative to it, the init [(atom, n)], the directives in the embedded form's order):
+    beliefs, ports, the manifest's queries then the case's, expects, levels (Evaluate.case_of_yaml; its checks in
+    metisc's order: init, beliefs, levels, ports, expects, the case's queries, the manifest's)."""
     import os
 
     def bad(m):
@@ -789,7 +871,7 @@ def case_of_yaml(path):
     man = read_yaml_block(mpath)
     if man.get("program") is None:
         bad("%s: no program" % mpath)
-    program = os.path.join(os.path.dirname(mpath), scal("program", man.get("program")))
+    program = scal("program", man.get("program"))
     init = []
     for x in lst("init", case.get("init")) if case.get("init") is not None else []:
         t = _squash(scal("init", x))
@@ -798,7 +880,7 @@ def case_of_yaml(path):
             init.append((t[:i], int(t[i + 1:])))
         else:
             init.append((t, 1))
-    dirs = []
+    beliefs = []
     for pred, f in mp("beliefs", man.get("beliefs")) if man.get("beliefs") is not None else []:
         f = mp("beliefs " + pred, f)
         if f.get("port") is None:
@@ -806,25 +888,13 @@ def case_of_yaml(path):
         port = scal("port", f.get("port"))
         one, lone = f.get("one"), f.get("lone")
         if one is not None and lone is None:
-            dirs.append(["belief", pred, "one", scal("one", one), "by", port])
+            beliefs.append(["belief", pred, "one", scal("one", one), "by", port])
         elif lone is not None and one is None:
-            dirs.append(["belief", pred, "lone", scal("lone", lone), "by", port])
+            beliefs.append(["belief", pred, "lone", scal("lone", lone), "by", port])
         elif one is None and lone is None:
-            dirs.append(["belief", pred, "by", port])
+            beliefs.append(["belief", pred, "by", port])
         else:
             bad("beliefs %s: one or lone, not both" % pred)
-    for port, b in mp("ports", case.get("ports")) if case.get("ports") is not None else []:
-        if isinstance(b, str):
-            dirs.append(["port", port, b])
-        elif isinstance(b, _Map):
-            for atom, x in b:
-                a = _squash(atom)
-                if split_atom(a)[0] != port:
-                    bad("ports %s: the entry %s is not an argument tuple of %s" % (port, atom, port))
-                dirs.append(["port", a, scal("ports " + atom, x)])
-        else:
-            _refuse("port-function", "port %s bound to a list: a binding that computes is the host's function form "
-                    "(spec/16 §10, later); a case binds numbers or a table of them" % port)
 
     def queries(src):
         out = []
@@ -844,12 +914,16 @@ def case_of_yaml(path):
                 q, h = "at", scal("at", at)
             else:
                 bad("evaluate %s: one of within, at" % name)
-            budget = ["budget", scal("budget", f.get("budget"))] if f.get("budget") is not None else []
-            out.append(["evaluate", name, kind] + [t for t in _squash(pat).split(" ") if t] + [q, h] + budget)
+            opts = []
+            for k in ("budget", "model", "tick"):
+                if f.get(k) is not None:
+                    opts += [k, scal(k, f.get(k))]
+            for k, _ in f:
+                if k not in ("reach", "risk", "within", "at", "budget", "model", "tick"):
+                    bad("evaluate %s: unknown key %s (reach|risk, within|at, budget, model, tick)" % (name, k))
+            out.append(["evaluate", name, kind] + [t for t in _squash(pat).split(" ") if t] + [q, h] + opts)
         return out
-    dirs += queries(man) + queries(case)
-    for n, x in mp("expect", case.get("expect")) if case.get("expect") is not None else []:
-        dirs.append(["expect", n, scal("expect", x)])
+    levels = []
     for pred, f in mp("levels", man.get("levels")) if man.get("levels") is not None else []:
         f = mp("levels " + pred, f)
         src = f.get("from")
@@ -864,8 +938,93 @@ def case_of_yaml(path):
             if f.get(k) is None:
                 bad("levels %s: no %s" % (pred, k))
             return [scal(k, x) for x in lst(k, f.get(k))]
-        dirs.append(["level", pred, "from"] + s + ["at"] + get("at") + ["names"] + get("names"))
-    return program, init, dirs
+        levels.append(["level", pred, "from"] + s + ["at"] + get("at") + ["names"] + get("names"))
+    ports = []
+    for port, b in mp("ports", case.get("ports")) if case.get("ports") is not None else []:
+        if isinstance(b, str):
+            ports.append(["port", port, b])
+        elif isinstance(b, _Map) and len(b) == 1 and b[0][0] == "step" and isinstance(b[0][1], list) \
+                and not isinstance(b[0][1], _Map):
+            # a table by step (spec/16 §10.1): a number per row, or the same atom table in every row
+            rows = b[0][1]
+            if not rows:
+                bad("ports %s: step: an empty table" % port)
+            elif isinstance(rows[0], str):
+                ports.append(["port", port, "step"] + [scal("ports " + port + " step", r) for r in rows])
+            elif isinstance(rows[0], _Map):
+                atoms = [a for a, _ in rows[0]]
+                for r in rows:
+                    if not (isinstance(r, _Map) and sorted(a for a, _ in r) == sorted(atoms)):
+                        bad("ports %s: step: every row the same atoms as the first (%s)" % (port, ", ".join(atoms)))
+                for atom in atoms:
+                    a = _squash(atom)
+                    if split_atom(a)[0] != port:
+                        bad("ports %s: the entry %s is not an argument tuple of %s" % (port, atom, port))
+                    ports.append(["port", a, "step"] + [scal("ports " + atom, r.get(atom)) for r in rows])
+            else:
+                bad("ports %s: step: a row is a number or an atom table" % port)
+        elif isinstance(b, _Map):
+            for atom, x in b:
+                a = _squash(atom)
+                if split_atom(a)[0] != port:
+                    bad("ports %s: the entry %s is not an argument tuple of %s" % (port, atom, port))
+                ports.append(["port", a, scal("ports " + atom, x)])
+        else:
+            _refuse("port-function", "port %s bound to a list: a binding that computes is the host's function form "
+                    "(spec/16 §10, later); a case binds numbers or a table of them" % port)
+    expects = [["expect", n, scal("expect", x)] for n, x in
+               (mp("expect", case.get("expect")) if case.get("expect") is not None else [])]
+    qc = queries(case)
+    qm = queries(man)
+    return os.path.dirname(mpath), program, init, beliefs + ports + qm + qc + expects + levels
+
+
+# -- the queries' world models (spec/16 §3, §5 `model`) -------------------------------------------------------------
+
+def _model_of(d):
+    if d[:1] != ["evaluate"]:
+        return None
+    return next((d[i + 1] for i in range(len(d) - 1) if d[i] == "model"), None)
+
+
+def groups(dirs: List[List[str]], program: str) -> List[Tuple[str, List[List[str]]]]:
+    """The directives grouped by the world model each query runs over (Evaluate.groups): [(model, its directives)],
+    the models in path order (the first group, the program's or the first model's, takes the belief levels and the
+    rest); a model outside the package refused (model-path)."""
+    for d in dirs:
+        m = _model_of(d)
+        if m is None:
+            continue
+        depth = 0
+        for c in m.split("/"):
+            if depth < 0:
+                break
+            depth += 0 if c in ("", ".") else -1 if c == ".." else 1
+        if m.startswith("/") or depth < 0:
+            _refuse("model-path", "evaluate %s: model %s is outside the package" % (d[1], m))
+    qkey = [(d[1], _model_of(d) or program) for d in dirs if d[:1] == ["evaluate"]]
+    keys = sorted({k for _, k in qkey}) or [program]
+    qk = dict(qkey)
+    out = []
+    for i, key in enumerate(keys):
+        first = i == 0
+
+        def mine(q):
+            return qk[q] == key if q in qk else first
+        sel = []
+        for d in dirs:
+            if d[0] in ("belief", "port"):
+                ok = True
+            elif d[0] in ("evaluate", "expect"):
+                ok = mine(d[1])
+            elif d[0] == "level" and len(d) > 3 and d[2] == "from":
+                ok = first if d[3] == "belief" else mine(d[3])
+            else:
+                ok = first
+            if ok:
+                sel.append(d)
+        out.append((key, sel))
+    return out
 
 
 # -- the level ports, live (spec/16 §4; spec16 step 4): a host runs the instrument once a tick --------------------
@@ -888,7 +1047,8 @@ def manifest_directives(man: dict, queries=None) -> List[List[str]]:
         kind = "reach" if "reach" in f else "risk"
         q = "within" if "within" in f else "at"
         dirs.append(["evaluate", name, kind] + [t for t in _squash(str(f[kind])).split(" ") if t] + [q, str(f[q])]
-                    + (["budget", str(f["budget"])] if "budget" in f else []))
+                    + (["budget", str(f["budget"])] if "budget" in f else [])
+                    + (["tick", str(f["tick"])] if "tick" in f else []))
     for pred, f in (man.get("levels") or {}).items():
         src = f["from"]
         if "evaluate" in src and src["evaluate"] not in names:
@@ -899,13 +1059,17 @@ def manifest_directives(man: dict, queries=None) -> List[List[str]]:
 
 
 def port_directives(ports: Dict[str, Dict[Tuple[str, ...], object]]) -> List[List[str]]:
-    """{port: {args: value}} (or {port: value}, a constant) → the #port directives."""
+    """{port: {args: value}} (or {port: value}, a constant) → the #port directives. A value may be a list, the
+    host's table by step (spec/16 §10.1): row t prices the event chosen at step t (at tick t under a query's tick),
+    past its end the last row."""
+    def vals(v):
+        return ["step"] + [_num_text(x) for x in v] if isinstance(v, (list, tuple)) else [_num_text(v)]
     out = []
     for port, tbl in ports.items():
         if isinstance(tbl, dict):
-            out += [["port", render(port, list(args)), _num_text(v)] for args, v in tbl.items()]
+            out += [["port", render(port, list(args))] + vals(v) for args, v in tbl.items()]
         else:
-            out.append(["port", port, _num_text(tbl)])
+            out.append(["port", port] + vals(tbl))
     return out
 
 
@@ -967,25 +1131,41 @@ class LevelHook:
         return atoms, report
 
 
-def evaluate_file(path: str, brute: bool = False):
-    """metisc --evaluate FILE.llp: the file's embedded case (its #init and its instrument directives). → Result."""
-    from pathlib import Path
-    from metis.lang.compiler import compile_catalog, resolve_includes
+def evaluate_groups(path: str):
+    """metisc --evaluate FILE's case: (the base directory, the init, [(the world model's path, its directives)])."""
+    import os
     from metis.lang.directives import embedded_case
-    from metis.lang.parser import parse as parse_llp
     if str(path).endswith(".yaml"):
-        llp, init_l, dirs = case_of_yaml(str(path))         # a case YAML and its manifest (§5)
+        base, program, init_l, dirs = case_of_yaml(str(path))     # a case YAML and its manifest (§5)
         init = {}
         for a, n in init_l:
             init[a] = n
-        llp = Path(llp)
     else:
-        llp = Path(path)
-        case = embedded_case(llp.read_text())
-        init, dirs = case["init"], case["instrument"]
+        case = embedded_case(open(path).read())
+        base, program, init, dirs = os.path.dirname(str(path)), os.path.basename(str(path)), case["init"], case["instrument"]
+    return base, init, [(os.path.join(base, m), ds) for m, ds in groups(dirs, program)]
+
+
+def evaluate_one(llp, init, dirs, brute=False) -> Result:
+    from pathlib import Path
+    from metis.lang.compiler import compile_catalog, resolve_includes
+    from metis.lang.parser import parse as parse_llp
+    llp = Path(llp)
     doc = compile_catalog(resolve_includes(parse_llp(llp.read_text(), file=str(llp)), llp.parent))
     prog = doc.catalog.ground(init)
     return run(doc, prog, init, dirs, brute=brute)
+
+
+def evaluate_file(path: str, brute: bool = False) -> Result:
+    """metisc --evaluate FILE.llp|CASE.yaml: every world model's group run, their listings in path order. → Result."""
+    _, init, gs = evaluate_groups(path)
+    lines, costs, mism = [], [], 0
+    for llp, dirs in gs:
+        r = evaluate_one(llp, init, dirs, brute)
+        lines += r.lines
+        costs += r.costs
+        mism += r.mismatches
+    return Result(lines, costs, mism)
 
 
 def main(argv=None) -> int:
@@ -1001,19 +1181,28 @@ def main(argv=None) -> int:
         print("--evaluate: unknown argument %s" % sorted(bad)[0], file=sys.stderr)
         return 2
     try:
-        r = evaluate_file(path, brute="--brute" in flags)
+        _, init, gs = evaluate_groups(path)
     except YamlError as e:
         print("error: %s" % e, file=sys.stderr)
         return 1
     except Refused as e:
         print("refused %s: %s" % (e.code, e.text), file=sys.stderr)
         return 2
-    for line in r.lines:
-        print(line)
-    if "--cost" in flags:
-        for line in r.costs:
-            print(line, file=sys.stderr)
-    return 1 if r.mismatches else 0
+    mism = 0
+    for llp, dirs in gs:                     # a group's listing is out before a later group's refusal (metisc's)
+        try:
+            r = evaluate_one(llp, init, dirs, brute="--brute" in flags)
+        except Refused as e:
+            sys.stdout.flush()
+            print("refused %s: %s" % (e.code, e.text), file=sys.stderr)
+            return 2
+        for line in r.lines:
+            print(line)
+        if "--cost" in flags:
+            for line in r.costs:
+                print(line, file=sys.stderr)
+        mism += r.mismatches
+    return 1 if mism else 0
 
 
 if __name__ == "__main__":
