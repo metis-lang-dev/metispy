@@ -6,6 +6,8 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
 
     from metis import catalog
     catalog.root()                  # $METIS_CATALOG, else the cwd (cd DIR && metis-loop: DIR is the catalog)
+    catalog.home()                  # $METIS_HOME, else metispy's own metis/catalog: the shared packages
+    catalog.find_package("dog")     # <root>/domains/dog, else <home>/domains/dog (the include rule's order)
     catalog.state()                 # DIR/.metis/: the loop's own state (git-ignored when DIR is a checkout)
     catalog.installed()             # the installed metis-catalog's own {catalog, tools}: never the root
     catalog.domains()               # [Domain] — every manifest, by name (the loader's Domain)
@@ -64,6 +66,55 @@ def root() -> Path:
     return Path(c).resolve() if c else Path.cwd().resolve()
 
 
+def home() -> Path:
+    """METIS_HOME: the one directory of the shared packages (the user's ruling, specialist-tree
+    s-404d001f), by default metispy's own metis/catalog (its iface/ interface packages)."""
+    h = os.environ.get("METIS_HOME")
+    return Path(h).resolve() if h else Path(__file__).resolve().parent
+
+
+def places(r=None):
+    """Where a catalog path is looked for, in order: [(dir, why)] — the catalog root, then METIS_HOME
+    (the compiler's include rule after the including file's own directory: metis.lang.compiler
+    include_path)."""
+    return [(_r(r), "the catalog root"), (home(), "METIS_HOME")]
+
+
+def find(rel, r=None, kind="file") -> Path:
+    """`rel` (a file, or with kind="dir" a directory) under the first of places(): FileNotFoundError
+    naming every place searched when it is in none."""
+    test = Path.is_dir if kind == "dir" else Path.is_file
+    ps = places(r)
+    for d, _ in ps:
+        if test(d / rel):
+            return (d / rel).resolve()
+    raise FileNotFoundError("%r: not under %s" % (str(rel), ", ".join("%s (%s)" % (d, why) for d, why in ps)))
+
+
+def find_package(name, r=None) -> Path:
+    """The package `name`: <root>/domains/<name>, else <home>/domains/<name> (metis-packages s-65778b98
+    step 3: what --pkg NAME loads and the widget picks); a miss names both places."""
+    return find(Path("domains") / name, r, kind="dir")
+
+
+def package_domains(name, r=None):
+    """The domains of the package `name` (its manifests, the package's own and any nested; a
+    partner is stepped with its pair, so it is not listed): what --pkg NAME installs."""
+    d = find_package(name, r)
+    base = next(p for p, _ in places(r) if d.is_relative_to(p))
+    return [x for x in loader().domains(base) if x.dir.resolve().is_relative_to(d) and not x.partner_of]
+
+
+def _shared(r):
+    """METIS_HOME's domains a root without them sees (a name in both is the root's); none when the
+    root is given, is METIS_HOME, or METIS_HOME has no domains/."""
+    h = home()
+    if r or h == root() or not (h / "domains").is_dir():
+        return []
+    own = {d.name for d in loader().domains(root())}
+    return [d for d in loader().domains(h) if d.name not in own]
+
+
 def state(r=None) -> Path:
     """DIR/.metis/, the loop's own state in the catalog DIR it runs in
     (records, sessions, scratch files), made when missing. When DIR is a
@@ -86,13 +137,23 @@ def _r(r):
 
 
 def domains(r=None):
-    """Every domain with a manifest, by name (metis_catalog Domain)."""
+    """Every domain with a manifest, by name (metis_catalog Domain): the root's (METIS_HOME's shared
+    ones are listing()'s and get()'s, marked shared)."""
     return loader().domains(_r(r))
 
 
 def get(name, r=None):
-    """The domain `name` (KeyError when there is no manifest of it)."""
-    return loader().get(name, _r(r))
+    """The domain `name`: the root's, else (no root given) METIS_HOME's, as find_package resolves a
+    package (KeyError naming both when neither has a manifest of it)."""
+    try:
+        return loader().get(name, _r(r))
+    except KeyError:
+        if r is not None:
+            raise
+        for d in _shared(r):
+            if d.name == name:
+                return d
+        raise KeyError("no domain %r in %s" % (name, ", ".join("%s (%s)" % (p, why) for p, why in places()))) from None
 
 
 def index(r=None):
@@ -100,7 +161,14 @@ def index(r=None):
     (their display line, what they have, the host spec), then every other
     .llp (metis_catalog.index) — none under a dot directory (.metis/, the
     loop's own state; .git/, .venv/, .pi/ …): the root is a workspace too."""
-    return [e for e in loader().index(_r(r)) if not hidden(e.get("path"))]
+    out = [e for e in loader().index(_r(r)) if not hidden(e.get("path"))]
+    shared = _shared(r)
+    if shared:                                 # METIS_HOME's domains, marked shared (their path is absolute)
+        names = {d.name for d in shared}
+        out[:0] = [dict(e, shared=True, path=str(home() / e["path"])) for e in loader().index(home())
+                   if e["kind"] == "domain" and e["name"] in names]
+        out.sort(key=lambda e: e["kind"] != "domain")
+    return out
 
 
 def walk(pattern, r=None):
@@ -119,13 +187,15 @@ def listing(r=None):
     """The agent console's rows (py service and Go console alike): the
     index's domains, then each partner (never listed alone in the index) as
     its own row, kind partner."""
-    r = _r(r)
-    out = [{k: e.get(k) for k in ("name", "kind", "path", "display", "line", "has")}
+    shared = _shared(r)
+    out = [dict({k: e.get(k) for k in ("name", "kind", "path", "display", "line", "has")},
+                **({"shared": True} if e.get("shared") else {}))
            for e in index(r) if e["kind"] == "domain"]
-    for d in domains(r):
+    for d in domains(r) + shared:
         if d.partner_of:
-            out.append({"name": d.name, "kind": "partner", "path": str(d.dir), "display": d.display,
-                        "line": d.line, "has": d.has(), "partner_of": d.partner_of})
+            out.append(dict({"name": d.name, "kind": "partner", "path": str(d.dir), "display": d.display,
+                             "line": d.line, "has": d.has(), "partner_of": d.partner_of},
+                            **({"shared": True} if any(d is x for x in shared) else {})))
     return out
 
 
@@ -1024,10 +1094,13 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
                                       "(exit 1 when one fails)")
     cs.add_argument("name")
     rt = sub.add_parser("root", help="the catalog root")
+    hm = sub.add_parser("home", help="METIS_HOME: the shared packages")
+    fd = sub.add_parser("find", help="a package: <root>/domains/NAME, else <home>/domains/NAME; its domains")
+    fd.add_argument("name")
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     more = [sub.add_parser(v, help=h) for v, (h, _) in extra.items()]
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, rt, st, inst, *more):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, rt, hm, fd, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1069,6 +1142,12 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
             out = {"name": a.name, "fingerprint": fingerprint(a.name, r)}
         elif a.cmd == "root":
             out = {"root": str(_r(r))}
+        elif a.cmd == "home":
+            out = {"home": str(home())}
+        elif a.cmd == "find":
+            d = find_package(a.name, r)
+            out = {"name": a.name, "dir": str(d), "from": "root" if d.is_relative_to(_r(r)) else "home",
+                   "domains": [x.name for x in package_domains(a.name, r)]}
         elif a.cmd == "state":
             out = {"state": str(state(r))}
         elif a.cmd == "installed":

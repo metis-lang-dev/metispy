@@ -251,17 +251,15 @@ def include_path(spec, base):
     $METIS_CATALOG, else the cwd); (3) under METIS_HOME, the one directory of the shared packages — by default
     metispy's own metis/catalog (its iface/ interface packages: `include "iface/protocol_domain.llp".`). A miss
     names the three places searched."""
-    import os
     from pathlib import Path
     from metis import catalog
-    home = Path(os.environ.get("METIS_HOME") or Path(catalog.__file__).resolve().parent)
-    places = [Path(base), catalog.root(), home]
-    for d in places:
-        if (d / spec).is_file():
-            return (d / spec).resolve()
-    raise FileNotFoundError("include %r: not under %s" % (spec, ", ".join(
-        "%s (%s)" % (d, why) for d, why in zip(places, ("the including file's directory", "the catalog root",
-                                                         "METIS_HOME")))))
+    if (Path(base) / spec).is_file():
+        return (Path(base) / spec).resolve()
+    try:
+        return catalog.find(spec)              # the catalog root, then METIS_HOME: one rule with find_package
+    except FileNotFoundError:
+        raise FileNotFoundError("include %r: not under %s" % (spec, ", ".join(
+            "%s (%s)" % (d, why) for d, why in [(Path(base), "the including file's directory")] + catalog.places()))) from None
 
 
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
