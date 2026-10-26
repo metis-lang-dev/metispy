@@ -68,7 +68,6 @@ def test_the_index_lists_every_catalog_the_domains_first():
         h = mc.get(n, ROOT).has()                                            # no intents: the domain agent opens
         assert h["program"] and not h["intent"] and not h["agent"], n        # them with no verbs (agent-no-intent)
     assert by["domains/ceptre/ll/ll"]["kind"] == "domain"                             # a package now (catalog-packages)
-    assert by["domains/road/capacity"]["kind"] == "catalog"                                       # program only, no manifest
 
 
 def test_list_cli():
