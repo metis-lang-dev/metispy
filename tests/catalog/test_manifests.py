@@ -119,7 +119,7 @@ def test_the_kitchen_pair_serves_its_pair_scenes():
     pair.SCENES), not the loop console's kitchen.llp."""
     from metis.catalog import manifests as mc
     pytest.importorskip("metis.domains.kitchen")
-    k, s = mc.get("kitchen").serves(), mc.get("kitchen_shared").serves()
+    k, s = mc.get("kitchen", ROOT).serves(), mc.get("kitchen_shared", ROOT).serves()
     assert [x.name for x in k] == ["kitchen_host.llp"] and k[0].is_file()
     assert [x.name for x in s] == ["kitchen_shared.llp"] and s[0].is_file()
     assert k[0].parent.name == "catalogs" and s[0].parent.name == "shared"
@@ -264,3 +264,14 @@ def test_the_loader_takes_the_interface_fields(tmp_path):
     n = mc.get("nav", tmp_path)
     assert n.manifest["shared"]["at"] == "world-private" and n.manifest["status"]["success"] == ["reached"]
     assert n.manifest["resources"]["motion"] == {"count": 1, "free": "free", "held_by": ["holder"]}
+
+
+def test_root_is_the_env_else_the_cwd(monkeypatch, tmp_path):
+    """The loader's root is metis.catalog.root(): $METIS_CATALOG, else the cwd, never the installed
+    metis_catalog's own (release-r02 step 2b; the user's rule: the catalog is the pwd)."""
+    from metis import catalog
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert mc.root() == catalog.root() == tmp_path.resolve()
+    monkeypatch.setenv("METIS_CATALOG", str(ROOT))
+    assert mc.root() == catalog.root() == ROOT.resolve()

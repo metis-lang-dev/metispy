@@ -33,7 +33,7 @@ program-only domain); every other .llp is listed as a plain catalog, with
 what it has read off the checkout (#plugin, #notch, a README).
 
     from metis.catalog import manifests as mc
-    mc.root()                 # the catalog ($METIS_CATALOG, else the installed metis_catalog's own, else the cwd)
+    mc.root()                 # the catalog ($METIS_CATALOG, else the cwd)
     mc.domains()              # [Domain] — every manifest, by name
     mc.get("dog")             # Domain: .program .extensions() .serves() .host .host_spec_for(program_dir) .intent … .has()
     mc.index()                # every catalog for a console's list: the domains first (display line, has)
@@ -62,16 +62,11 @@ def data_dir():
 
 
 def root():
-    """The catalog: $METIS_CATALOG, else the installed metis_catalog's own (its
-    package directory: the wheel carries domains/ and tools/ in it), else the
-    repo it lives in (a checkout, an editable install), else the cwd."""
+    """The catalog: $METIS_CATALOG, else the cwd (the user's rule, cwd-root s-ddac2cbf: the
+    catalog is the pwd), as metis.catalog.root(). The installed metis_catalog's own domains
+    are found by data_dir() (metis.catalog.installed()), never as a default root (release-r02)."""
     env = os.environ.get("METIS_CATALOG")
-    if env:
-        return Path(env).resolve()
-    own = data_dir()
-    if own is None:
-        return Path.cwd().resolve()
-    return own if (own / "domains").is_dir() else own.parent
+    return Path(env).resolve() if env else Path.cwd().resolve()
 
 
 @dataclass

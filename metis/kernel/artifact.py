@@ -271,16 +271,22 @@ def write(out: Path, files: dict) -> Path:
 
 def _catalog():
     """The loader a domain NAME needs (a .llp path does not), metis.catalog.manifests
-    (was metis_catalog; metis-packages s-65778b98) over the installed metis-catalog's
-    domains, else the checkout $METIS_CATALOG names, else a metis-catalog checkout
-    beside this source tree (the dev layout): its get(name) and domains(). Without
-    any, a clear error, not a bare ImportError (a wheel install has no sibling)."""
+    (was metis_catalog; metis-packages s-65778b98) over the catalog $METIS_CATALOG names,
+    else the cwd when it is a catalog (it has domains/: the catalog is the pwd), else the
+    installed metis-catalog's own domains, else a metis-catalog checkout beside this source
+    tree (the dev layout): its get(name) and domains(). Without any, a clear error, not a
+    bare ImportError (a wheel install has no sibling)."""
     from metis.catalog import manifests
     env = os.environ.get("METIS_CATALOG")
-    if manifests.data_dir() is not None and not env:
-        root = manifests.root()
+    own = manifests.data_dir()
+    if env:
+        root = Path(env)
+    elif (Path.cwd() / "domains").is_dir():
+        root = Path.cwd()
+    elif own is not None:
+        root = own if (own / "domains").is_dir() else own.parent
     else:
-        root = Path(env) if env else Path(__file__).resolve().parents[3] / "metis-catalog"
+        root = Path(__file__).resolve().parents[3] / "metis-catalog"
     if not (root / "domains").is_dir():
         raise RuntimeError(
             "a domain name needs metis-catalog: install it (pip install -e "

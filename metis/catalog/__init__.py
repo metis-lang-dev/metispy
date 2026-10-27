@@ -46,7 +46,7 @@ import yaml
 
 STATE = ".metis"                      # DIR/.metis/: the loop's own state in the catalog it runs in
 
-from .manifests import Domain, ManifestError, data_dir  # noqa: E402,F401 — the loader's types, here too
+from .manifests import SKIP, Domain, ManifestError, data_dir  # noqa: E402,F401 — the loader's types, here too
 import importlib  # noqa: E402
 
 
@@ -478,7 +478,7 @@ def _notch_file(d, keys, whole):
 
 
 def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-         r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None):
+         r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None, carried=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
@@ -507,7 +507,11 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
     notch: the fitted overlay's JSON text, written as the file the manifest's notch
     names (beside domain.yaml, a .notch.json), else <name>.notch.json, which the
-    manifest then names."""
+    manifest then names.
+
+    carried {path relative to the domain directory: text}: the package's own files take()
+    brings as they are (goldens/, cases/, intent/*-spoken.txt), written there after the
+    generated intent files, so the package's own text is what lands."""
     import re
     r = _r(r)
     prog, d = _program_of(name, r)
@@ -572,6 +576,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
             cur = yaml.safe_load((d / "domain.yaml").read_text()) or {}
         if not isinstance(cur.get("intent"), dict):
             keys.setdefault("intent", {"spec": "intent.yaml"})
+    for rel_, text in (carried or {}).items():
+        if d is None:
+            raise ValueError(f"{name}: carried files belong to a domain directory")
+        cp_ = (Path(d) / rel_).resolve()
+        if Path(d).resolve() not in cp_.parents or Path(rel_).parts[0] in SKIP:
+            raise ValueError(f"{name}: a carried file stays inside the domain's directory, outside {', '.join(SKIP)}: "
+                             f"not {rel_!r}")
+        files[cp_] = text
     if whole is not None or keys or (d is not None and program is not None and not (d / "domain.yaml").is_file()
                                      and d.parent == r / "domains"):
         if d is None:
@@ -610,14 +622,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
 
 def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-          r=None, display=None, line=None, as_is=None, included=None, notch=None):
+          r=None, display=None, line=None, as_is=None, included=None, notch=None, carried=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
     files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is,
-                 included=included, notch=notch)
+                 included=included, notch=notch, carried=carried)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -808,6 +820,7 @@ def edit(name, path, old, new, replace_all=False, r=None):
 
 # what take() carries: the manifest's keys whose files it brings, and the ones with no file
 TAKEN = ("program", "extensions", "host", "intent", "notch", "display", "line", "voice", "clock", "reload", "records")
+CARRIED = ("goldens", "cases")      # a package's own directories take() brings whole, as they are
 
 
 def take(name, src, r=None, readme=None):
@@ -816,9 +829,10 @@ def take(name, src, r=None, readme=None):
     domain.yaml as it is, the program, the extensions, the files they
     include (includes(): inside the domain directory only), the host, the
     notch (its fitted overlay), intent.yaml (apply generates intent/ again)
-    and a corpus, and its README (or `readme`). Never records/ or build/ (the
-    agents' own), cases/ (the package's own hand-written tests) or another
-    document beside its README (a transcript). Refused when r has the domain already, or the domain names a
+    and a corpus, its README (or `readme`), and as they are (`carried`) its goldens/ (the
+    package's contract: what both runtimes are held to), its cases/ (its hand-written
+    specialist tests) and intent/*-spoken.txt. Never records/ or build/ (the agents' own) or
+    another document beside its README (a transcript). Refused when r has the domain already, or the domain names a
     file take does not carry (serves, agent, pair: bring those by hand) or keeps one elsewhere
     than its directory's layout. Then `apply(name, **take(name, src, r))`."""
     r, src = _r(r), Path(src).resolve()
@@ -858,10 +872,13 @@ def take(name, src, r=None, readme=None):
     it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
     if readme is None and (d / "README.md").is_file():
         readme = _text(d / "README.md")
+    carried = {f.relative_to(d).as_posix(): _text(f) for f in [
+        *(f for sub in CARRIED for f in sorted((d / sub).rglob("*")) if f.is_file() and "__pycache__" not in f.parts),
+        *sorted((d / "intent").glob("*-spoken.txt"))]}
     return dict(program=_text(s.program), extensions=ext, manifest=_text(d / "domain.yaml"),
                 intents=_text(it) if it.is_file() else None, host=host,
                 corpus=_text(cp) if cp.is_file() else None, readme=readme, included=included or None,
-                notch=notch)
+                notch=notch, carried=carried or None)
 
 
 def header(prog):

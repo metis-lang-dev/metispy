@@ -253,6 +253,15 @@ def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
     for f in ("dog.llp", "dog_host.py", "domain.yaml", "intent.yaml", "README.md", *(
             "intent/" + n for n in ("dog.gbnf", "dog-prompt.txt", "dog-spoken.txt", "dog-corpus.tsv"))):
         assert (dst / "domains/dog" / f).read_text() == (scratch / "domains/dog" / f).read_text(), f
+    # the package whole (release-r02 step 2b): its goldens (its contract) and its cases, as they are; never build/
+    own = [p.relative_to(scratch / "domains/dog").as_posix() for sub in ("goldens", "cases")
+           for p in sorted((scratch / "domains/dog" / sub).rglob("*")) if p.is_file()]
+    assert "goldens/day.jsonl" in own and "cases/sit.yaml" in own
+    for f in own:
+        assert (dst / "domains/dog" / f).read_text() == (scratch / "domains/dog" / f).read_text(), f
+    assert not (dst / "domains/dog/build").exists() and not (dst / "domains/dog/records").exists()
+    with pytest.raises(ValueError, match="carried file"):
+        catalog.plan("dog", carried={"build/x": "x"}, r=dst)
     assert catalog.fingerprint("dog", dst) == catalog.fingerprint("dog", scratch)
     with pytest.raises(ValueError, match="already"):
         catalog.take("dog", scratch, dst)
