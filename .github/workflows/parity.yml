@@ -41,7 +41,7 @@ jobs:
         run: pip install -e './metispy[test]'
       - name: Parity suite (metisc <-> referee)
         working-directory: metispy
-        run: pytest -q -rs tests/test_ocaml_parity.py
+        run: pytest -q -rs tests/test_ocaml_parity.py tests/test_catalog_image.py
       - name: Registry drift (gen_metisc_registry regenerates diag.ml; diff must be clean)
         run: |
           python metispy/tools/gen_metisc_registry.py metis-lang/src/diag.ml

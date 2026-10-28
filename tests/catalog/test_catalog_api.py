@@ -127,9 +127,17 @@ def test_installed_is_the_packages_own_never_the_root(monkeypatch, tmp_path):
     assert cli(["installed", "--json"], cwd=tmp_path) == {k: str(v) for k, v in got.items()}
 
 
-def test_metisc_is_the_env_else_path_else_a_refusal(monkeypatch, tmp_path):
+def test_metisc_is_the_env_else_the_sibling_else_path_else_a_refusal(monkeypatch, tmp_path):
     monkeypatch.delenv("METISC", raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))
+    sib = tmp_path / "metis-lang" / "src" / "metisc"
+    monkeypatch.setattr(catalog, "SIBLING_METISC", sib)
+    assert catalog.metisc() is None
+    sib.parent.mkdir(parents=True)                       # the metis-lang checkout beside metispy's (the loop's rule)
+    sib.write_text("#!/bin/sh\n")
+    sib.chmod(0o755)
+    assert catalog.metisc() == str(sib)
+    sib.unlink()
     assert catalog.metisc() is None
     (tmp_path / "x.llp").write_text(LAMP)
     with pytest.raises(ValueError, match="set METISC or put metisc on PATH"):

@@ -160,7 +160,11 @@ def domains(r=None):
 
 def get(name, r=None):
     """The domain `name`: the root's, else (no root given) METIS_HOME's, as find_package resolves a
-    package (KeyError naming both when neither has a manifest of it)."""
+    package (KeyError naming both when neither has a manifest of it). A generated member of an image in use
+    (metis.catalog.image.use: the derived director, whose source the link wrote) is found first."""
+    from .image import USED
+    if name in USED and r is None:
+        return USED[name]
     try:
         return loader().get(name, _r(r))
     except KeyError:
@@ -644,10 +648,18 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
 # ── one exact edit of a file on disk ─────────────────────────────────────────
 
 def metisc():
-    """The metis compiler for an edit's diagnostics: $METISC, else metisc on PATH;
-    None when there is none (diagnostics() then refuses with NO_METISC)."""
+    """The metis compiler (an edit's diagnostics, the link, the build): $METISC, else the metis-lang checkout beside
+    metispy's (src/metisc, the loop's rule), else metisc on PATH; None when there is none (the callers then refuse
+    with NO_METISC)."""
     import shutil
-    return os.environ.get("METISC") or shutil.which("metisc")
+    if os.environ.get("METISC"):
+        return os.environ["METISC"]
+    if SIBLING_METISC.is_file() and os.access(SIBLING_METISC, os.X_OK):
+        return str(SIBLING_METISC)
+    return shutil.which("metisc")
+
+
+SIBLING_METISC = Path(__file__).resolve().parents[3] / "metis-lang" / "src" / "metisc"   # a checkout beside metispy's
 
 
 def metisc_env():
@@ -1028,11 +1040,20 @@ def readme(name, src, run=None, summary=None, title=None):
 
 
 def build(name, r=None):
-    """The domain's bundle (domains/<name>/build/, git-ignored), by metispy's
-    emitter in a child (python -m metis.kernel.artifact): its one-line
-    account. Raises ValueError with the emitter's own error."""
+    """The package's build (its build/, git-ignored): a COMPOSITION package (composition.yaml in its directory) is
+    linked into an image by `metisc build` (spec/17 §7; the stale members recompiled), its one line
+    `image NAME v-HASH DIR`; a lone domain gets its bundle by metispy's emitter in a child (python -m
+    metis.kernel.artifact), its one-line account. Raises ValueError with the compiler's or the emitter's error."""
     import subprocess
     r = _r(r)
+    try:
+        pkg = find_package(name, r)
+    except FileNotFoundError:
+        pkg = None
+    if pkg is not None and (pkg / "composition.yaml").is_file():
+        from . import image
+        d = image.build(pkg)
+        return "image %s v-%s %s" % (d.name.split(".image.")[0], d.name.rpartition(".v-")[2], d)
     get(name, r)
     p = subprocess.run([sys.executable, "-m", "metis.kernel.artifact", name], cwd=r, capture_output=True, text=True,
                        env={**os.environ, "METIS_CATALOG": str(r)}, timeout=600)
@@ -1119,8 +1140,14 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     rd.add_argument("--run", metavar="DIR", help="the run's directory (records/formalize-calls.jsonl, seed.json)")
     rd.add_argument("--summary", metavar="FILE", help="the paragraph after the title, from FILE (- = stdin)")
     rd.add_argument("--title", metavar="TEXT", help="what the world is, after '<name> — '")
-    bd = sub.add_parser("build", help="the domain's bundle (build/, metispy's emitter)")
+    bd = sub.add_parser("build", help="the package's build: a composition's image (metisc build), else the domain's "
+                                      "bundle (build/, metispy's emitter)")
     bd.add_argument("name")
+    lk = sub.add_parser("link", help="metisc --link DIR/composition.yaml: the image (DIR/build, or -o OUT); --check: "
+                                     "the listing only")
+    lk.add_argument("dir")
+    lk.add_argument("-o", dest="out", metavar="OUT", help="the image's parent directory (default: DIR/build)")
+    lk.add_argument("--check", action="store_true", help="the link's checks and the image line, nothing written")
     cs = sub.add_parser("cases", help="the domain's own cases (cases/*.yaml) through the interface stub: the "
                                       "specialist alone, its manifest's interface closed by the cases' facts "
                                       "(exit 1 when one fails)")
@@ -1137,7 +1164,7 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     more = [sub.add_parser(v, help=h) for v, (h, _) in extra.items()]
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, cs, gd, rt, hm, fd, st, inst, *more):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, lk, cs, gd, rt, hm, fd, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1201,6 +1228,13 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
             out = dry(a.name, {**kw, "r": r}) if a.dry_run else apply(a.name, r=r, **kw)
         elif a.cmd == "build":
             out = {"name": a.name, "bundle": build(a.name, r)}
+        elif a.cmd == "link":
+            from . import image
+            text, d = image.link(a.dir, a.out, a.check)       # (not `listing`: that is the module's function)
+            if not a.json:
+                print(text, end="")
+                return 0
+            out = {"dir": str(Path(a.dir).resolve()), "listing": text, "image": str(d) if d else None}
         elif a.cmd == "cases":
             from . import stub
             res = stub.run_package(get(a.name, r))

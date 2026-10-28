@@ -158,3 +158,50 @@ def world_host(here, module, env=None, world=None, up=6):
             sys.path.insert(0, c)
             break
     return importlib.import_module(module)
+
+
+class PassHost:
+    """The host of a director with no world of its own (the kitchen's pass, the road's director, a GENERATED direct
+    member, linker s-5908724a step 3): it exists so the agent can take lines into the director's session (the
+    relayed reports and statuses, its grants' ages). Nothing to read, nothing to do; the agent's world lines (a
+    stop's +tick__stop / -tick__stop) are handed in at its next tick."""
+
+    def __init__(self):
+        self.beat, self.due, self.script, self.last, self.queue = 0, (), {}, None, []
+
+    def bind(self, reg):
+        pass
+
+    def tick(self, counts):
+        self.beat += 1
+        dos, self.queue = self.queue, []
+        return dos
+
+    def on_event(self, name, args):
+        pass
+
+    def observe(self, counts):
+        return {}
+
+    def reading(self):
+        return {}
+
+    def sync(self, counts):
+        return []
+
+    def pending(self):
+        return False
+
+    def world(self, lines):
+        self.queue += [l.strip() for l in lines if l.strip()]
+
+    def snapshot(self):
+        return {"beat": self.beat, "queue": list(self.queue)}
+
+    def restore(self, snap):
+        self.beat, self.queue = snap["beat"], list(snap.get("queue", ()))
+
+
+def pass_host(case=None):
+    """The factory a manifest names as `host: metis.host:pass_host`."""
+    return PassHost()
