@@ -648,18 +648,11 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
 # ── one exact edit of a file on disk ─────────────────────────────────────────
 
 def metisc():
-    """The metis compiler (an edit's diagnostics, the link, the build): $METISC, else the metis-lang checkout beside
-    metispy's (src/metisc, the loop's rule), else metisc on PATH; None when there is none (the callers then refuse
-    with NO_METISC)."""
+    """The metis compiler for an edit's diagnostics: $METISC, else metisc on PATH;
+    None when there is none (diagnostics() then refuses with NO_METISC). The link and the build resolve their own
+    (metis.catalog.image.metisc: the sibling checkout too)."""
     import shutil
-    if os.environ.get("METISC"):
-        return os.environ["METISC"]
-    if SIBLING_METISC.is_file() and os.access(SIBLING_METISC, os.X_OK):
-        return str(SIBLING_METISC)
-    return shutil.which("metisc")
-
-
-SIBLING_METISC = Path(__file__).resolve().parents[3] / "metis-lang" / "src" / "metisc"   # a checkout beside metispy's
+    return os.environ.get("METISC") or shutil.which("metisc")
 
 
 def metisc_env():

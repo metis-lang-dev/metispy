@@ -14,7 +14,7 @@ from metis.catalog.manifests import Domain
 CORPUS = Path(__file__).resolve().parents[2] / "metis-lang" / "corpus" / "iface"
 KITCHEN = CORPUS / "kitchen_pot"
 
-pytestmark = pytest.mark.skipif(not catalog.metisc() or not (KITCHEN / "composition.yaml").is_file(),
+pytestmark = pytest.mark.skipif(not I.metisc() or not (KITCHEN / "composition.yaml").is_file(),
                                 reason="no metisc, or no metis-lang corpus beside metispy")
 
 
@@ -76,3 +76,19 @@ def test_a_generated_director_is_a_package_with_the_pass_host(kitchen):
     I.unuse(img)
     with pytest.raises(KeyError):
         catalog.get("tree_director")
+
+
+def test_the_link_finds_metisc_as_the_loop_does(monkeypatch, tmp_path):
+    """$METISC, else the metis-lang checkout beside metispy's, else PATH (the edit's diagnostics keep theirs)."""
+    monkeypatch.delenv("METISC", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    sib = tmp_path / "metis-lang" / "src" / "metisc"
+    monkeypatch.setattr(I, "SIBLING_METISC", sib)
+    assert I.metisc() is None
+    sib.parent.mkdir(parents=True)
+    sib.write_text("#!/bin/sh\n")
+    sib.chmod(0o755)
+    assert I.metisc() == str(sib) and catalog.metisc() is None
+    monkeypatch.setenv("METISC", "/opt/metisc")
+    assert I.metisc() == "/opt/metisc"
+

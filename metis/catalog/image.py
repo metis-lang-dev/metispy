@@ -27,8 +27,22 @@ USED = {}
 PASS_HOST = "metis.host:pass_host"
 
 
+SIBLING_METISC = Path(__file__).resolve().parents[3] / "metis-lang" / "src" / "metisc"   # a checkout beside metispy's
+
+
+def metisc():
+    """The compiler the link and the build run (the loop's rule, linker step 3): $METISC, else the metis-lang
+    checkout beside metispy's (src/metisc), else metisc on PATH; None when there is none."""
+    import shutil
+    if os.environ.get("METISC"):
+        return os.environ["METISC"]
+    if SIBLING_METISC.is_file() and os.access(SIBLING_METISC, os.X_OK):
+        return str(SIBLING_METISC)
+    return shutil.which("metisc")
+
+
 def _metisc():
-    from metis.catalog import NO_METISC, metisc, metisc_env
+    from metis.catalog import NO_METISC, metisc_env
     m = metisc()
     if not m:
         raise ValueError(NO_METISC)
