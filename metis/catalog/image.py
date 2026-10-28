@@ -66,15 +66,18 @@ def _image_dir(out, listing):
     return d
 
 
-def link(path, out=None, check=False):
+def link(path, out=None, check=False, plan=None):
     """metisc --link COMPOSITION: (the listing, the image dir or None with --check). A composition dir means its
-    composition.yaml; the image goes to OUT, by default build/ beside the composition. Raises ValueError with the
-    listing when the link reports errors (a non-zero exit)."""
+    composition.yaml; the image goes to OUT, by default build/ beside the composition; PLAN (a plans/<p>.yaml) is
+    linked with it into the image's plans/<p>.json (spec/17 §5). Raises ValueError with the listing when the link
+    reports errors (a non-zero exit)."""
     comp = Path(path).resolve()
     if comp.is_dir():
         comp = comp / "composition.yaml"
     out = Path(out).resolve() if out else comp.parent / "build"
     cmd = ["--link", comp.name] + (["--check"] if check else ["-o", str(out)])
+    if plan:
+        cmd += ["--plan", str(Path(plan).resolve())]
     rc, listing = _run(cmd, comp.parent)
     if rc:
         raise ValueError("metisc --link %s: exit %d\n%s" % (comp, rc, listing.strip()[-2000:]))

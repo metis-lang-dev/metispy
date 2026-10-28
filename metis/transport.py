@@ -57,18 +57,24 @@ def atom(text):
     return text
 
 
-def message(image, plan, frm, tick, diff):
-    """Tick `tick`'s message from process `frm`: diff {atom: signed count, 0 left out}, in atom order."""
+def message(image, plan, frm, tick, diff, sequence=()):
+    """Tick `tick`'s message from process `frm`: diff {atom: signed count, 0 left out}, in atom order; then
+    `sequence`, [(atom, signed count)] kept in its order and never folded — a command port's acts, whose order the
+    world's effects depend on (a cook's load before its start), one line each."""
     lines = ["M image=%s plan=%s from=%s tick=%d" % (image, plan, frm, tick)]
     for a in sorted(diff):
         n = int(diff[a])
         if n:
             lines.append("%s %s %d" % ("+" if n > 0 else "-", atom(a), abs(n)))
+    for a, n in sequence:
+        if n:
+            lines.append("%s %s %d" % ("+" if n > 0 else "-", atom(a), abs(int(n))))
     return "\n".join(lines + ["."]) + "\n"
 
 
 def parse_message(text):
-    """→ {image, plan, from, tick, diff}; TransportError on a malformed header, atom line or end."""
+    """→ {image, plan, from, tick, diff, lines}: diff the atoms folded, lines [(atom, signed count)] in the
+    message's order; TransportError on a malformed header, atom line or end."""
     lines = [l for l in text.splitlines() if l.strip()]
     if not lines or not lines[0].startswith("M ") or lines[-1] != ".":
         raise TransportError("not a message (M … .): %r" % text[:80])
@@ -76,14 +82,16 @@ def parse_message(text):
     missing = [k for k in ("image", "plan", "from", "tick") if k not in head]
     if missing:
         raise TransportError("M header without %s" % ", ".join(missing))
-    diff = {}
+    diff, seq = {}, []
     for l in lines[1:-1]:
         parts = l.split()
         if len(parts) != 3 or parts[0] not in "+-" or not parts[2].isdigit():
             raise TransportError("not an atom line (+|- atom n): %r" % l)
-        diff[atom(parts[1])] = diff.get(parts[1], 0) + (1 if parts[0] == "+" else -1) * int(parts[2])
+        n = (1 if parts[0] == "+" else -1) * int(parts[2])
+        diff[atom(parts[1])] = diff.get(parts[1], 0) + n
+        seq.append((parts[1], n))
     return {"image": head["image"], "plan": head["plan"], "from": head["from"], "tick": int(head["tick"]),
-            "diff": diff}
+            "diff": diff, "lines": seq}
 
 
 def hello(image, plan, lock, process):
@@ -187,13 +195,16 @@ class SocketCarrier:
                 "%s %s here, %s at %s" % (k, a, b, self.theirs["process"]) for k, a, b in bad)))
         return self.theirs
 
-    def send(self, tick, diff):
-        """Tick `tick`'s committed atoms (diff {atom: signed count}) to the peer."""
-        self._send(message(self.mine["image"], self.mine["plan"], self.process, tick, diff))
-        self.trace.append({"dir": "send", "from": self.process, "tick": tick, "atoms": len([n for n in diff.values() if n])})
+    def send(self, tick, diff, sequence=()):
+        """Tick `tick`'s committed atoms (diff {atom: signed count}; sequence: ordered lines, see message) to the
+        peer."""
+        self._send(message(self.mine["image"], self.mine["plan"], self.process, tick, diff, sequence))
+        self.trace.append({"dir": "send", "from": self.process, "tick": tick,
+                           "atoms": len([n for n in diff.values() if n]) + len(list(sequence))})
 
-    def receive(self, tick, beat, wait=None):
-        """The peer's tick-`tick` message, latched at our beat `beat`: its diff. A message not here after `wait`
+    def receive(self, tick, beat, wait=None, lines=False):
+        """The peer's tick-`tick` message, latched at our beat `beat`: its diff (with lines=True, (diff, the lines in
+        order)). A message not here after `wait`
         seconds is one beat waited; past the budget, Stuck. A message for another image or plan is refused."""
         waited = 0
         while True:
@@ -205,8 +216,8 @@ class SocketCarrier:
                     raise TransportError("a message for image %s plan %s, not ours (%s, %s)"
                                          % (m["image"], m["plan"], self.mine["image"], self.mine["plan"]))
                 self.trace.append({"dir": "recv", "from": m["from"], "tick": m["tick"], "beat": beat,
-                                   "atoms": len([n for n in m["diff"].values() if n])})
-                return m["diff"]
+                                   "atoms": len(m["lines"])})
+                return (m["diff"], m["lines"]) if lines else m["diff"]
             if self.closed and not ok:
                 raise Stuck(self.theirs["process"] if self.theirs else "?", tick, waited)
             waited += 1

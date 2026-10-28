@@ -24,7 +24,11 @@ def test_a_message_is_the_header_signed_wire_atoms_and_a_dot():
                  "+ tick__grant(cook_a,pot) 1\n- tick__want(cook_a,pot) 1\n.\n")
     back = T.parse_message(m)
     assert back == {"image": "17fe7f088b9a", "plan": "a5c04e4d019a", "from": "b", "tick": 3,
-                    "diff": {"tick__grant(cook_a,pot)": 1, "tick__want(cook_a,pot)": -1}}
+                    "diff": {"tick__grant(cook_a,pot)": 1, "tick__want(cook_a,pot)": -1},
+                    "lines": [("tick__grant(cook_a,pot)", 1), ("tick__want(cook_a,pot)", -1)]}
+    seq = T.message("i", "p", "a", 4, {}, [("load(cook_a)", 1), ("start(cook_a)", 1), ("load(cook_a)", 1)])
+    assert seq.splitlines()[1:4] == ["+ load(cook_a) 1", "+ start(cook_a) 1", "+ load(cook_a) 1"]   # never folded
+    assert T.parse_message(seq)["lines"] == [("load(cook_a)", 1), ("start(cook_a)", 1), ("load(cook_a)", 1)]
     for bad in ("M image=x plan=y from=b tick=1\n+ p (x) 1\n.\n", "M image=x plan=y from=b\n.\n",
                 "M image=x plan=y from=b tick=1\n+ p(x) 1\n", "M image=x plan=y from=b tick=1\n* p(x) 1\n.\n"):
         with pytest.raises(T.TransportError):
