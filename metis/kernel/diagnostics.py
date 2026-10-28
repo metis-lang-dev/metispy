@@ -29,7 +29,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
-CONTEXT_CAP = 12
+CONTEXT_CAP = 32          # a long rule's closure: the corpus's largest is 23 (ALFWorld's take_open)
 
 # code -> (severity, phase). phase says WHERE a code fires:
 #   compile | kernel | admission  — from a .llp; the D2 gate requires a

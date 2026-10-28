@@ -137,3 +137,44 @@ def test_diamond_include_is_not_a_cycle(tmp_path):
         'include "b.llp".\ninclude "c.llp".\n')
     assert not any(d.code == "include-cycle"
                    for d in diagnose(tmp_path / "a.llp"))
+
+
+def test_a_long_rules_doc_missing_renders(tmp_path):
+    """policy-tuning-2 round 0: a take rule over nine preds and three types (13 context lines) raised a
+    DiagnosticDefect at the old cap of 12, so the brain read the defect, not the missing %% line."""
+    (tmp_path / "t.llp").write_text("""catalog t 1.
+layers (dyn).
+stages (act).
+type receptacle {r1}.
+type location {l1}.
+type object {o1}.
+namespace alf produce (dyn).
+pred recat(receptacle, location) : alf.
+pred pickupable(object) : alf.
+pred at(location) : alf.
+pred objat(object, location) : alf.
+pred inrecep(object, receptacle) : alf.
+pred handsfree : alf.
+pred opened(receptacle) : alf.
+pred holding : alf.
+pred holds(object) : alf.
+stage act {
+  take_plain [dyn] : $recat(R, L) * $pickupable(O) * $at(L) * objat(O, L) * inrecep(O, R) * handsfree * $opened(R) -o holding * holds(O).
+}
+""")
+    here = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        (d,) = [d for d in diagnose("t.llp") if d.code == "doc-missing"]
+    finally:
+        os.chdir(here)
+    assert len(d.context) > 12
+    text = render_text(d)
+    assert "take_plain [dyn] :" in text and "add a %% doc line above take_plain" in text
+
+
+def test_the_cap_is_metiscs_cap():
+    ml = CORPUS.parent / "src" / "diag.ml"
+    if not ml.exists():
+        pytest.skip("metis-lang beside this checkout")
+    assert re.search(r"let context_cap = (\d+)", ml.read_text()).group(1) == str(CONTEXT_CAP)
