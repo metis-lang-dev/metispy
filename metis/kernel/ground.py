@@ -8,6 +8,7 @@ and vanish from the multisets. All instances of a schema share the
 schema's prior weight — CHOICE weight W_r = Σ_θ W_rθ is preserved
 because each substitution is its own ground clause (MORPHISM §C′)."""
 
+import os
 from typing import List, Optional
 
 from .clause import Clause, Link
@@ -120,12 +121,35 @@ def _tag(names, subst) -> str:
     return ",".join(f"{v}={subst[v]}" for v in names)
 
 
+class GroundBudget(ValueError):
+    """A grounding past METIS_GROUND_BUDGET events (unset: no budget). The
+    policy loop sets it: a candidate rule whose variables range over whole
+    types (`connected(T1, T2)` read by nothing else, 167^2 terms) is refused
+    with its words, not materialised until a memory scope kills the run."""
+
+
+def ground_budget() -> Optional[int]:
+    b = os.environ.get("METIS_GROUND_BUDGET")
+    return int(b) if b else None
+
+
+def _over(schema, sig, limit):
+    sizes = ", ".join(f"{v}: {t} {len(sig.types.get(t, ()))}"
+                      for v, t in schema.vars.items())
+    return GroundBudget(
+        f"ground-budget: {schema.name} grounds more than {limit} events "
+        f"over its variables ({sizes}); bind them on the left with a fact "
+        f"the state holds, or drop the atom that reads them alone")
+
+
 def ground_schema(schema: ClauseSchema, sig: Signature,
                   horn: Optional[HornDB] = None,
-                  atoms=None) -> List[Clause]:
+                  atoms=None, limit: Optional[int] = None) -> List[Clause]:
     out = []
     for names, subst in _substitutions(schema.vars, schema.distinct,
                                        schema.guards, sig, horn):
+        if limit is not None and len(out) >= limit:
+            raise _over(schema, sig, limit)
         name = f"{schema.name}[{_tag(names, subst)}]" if names \
             else schema.name
         out.append(Clause(name,
@@ -159,8 +183,12 @@ def ground_program(stage_order, schemas, links, sig: Signature,
     ground Patterns (or a ready count dict)."""
     stages = {s: [] for s in stage_order}
     atoms = {}                        # the atom table, for this grounding only
+    budget, n = ground_budget(), 0
     for sc in schemas:
-        stages[sc.stage].extend(ground_schema(sc, sig, horn, atoms))
+        g = ground_schema(sc, sig, horn, atoms,
+                          None if budget is None else budget - n)
+        n += len(g)
+        stages[sc.stage].extend(g)
     glinks = [g for lk in links for g in ground_link(lk, sig, horn, atoms)]
     init = dict(init_atoms) if isinstance(init_atoms, dict) else \
         multiset(list(init_atoms), {})
