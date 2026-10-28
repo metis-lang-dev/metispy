@@ -150,6 +150,12 @@ class Image:
     def bundle(self, name):
         return self.dir / self.by_name[name]["bundle"]
 
+    def member_dir(self, name):
+        """The member's package directory as the link resolved it (image.lock `dir`, metis-lang 53c5eec), or None
+        from a lock before it (or a generated member's, which lives in its bundle)."""
+        d = ((self.lock.get("members") or {}).get(name) or {}).get("dir")
+        return Path(d["path"]).resolve() if isinstance(d, dict) and d.get("path") else None
+
 
 def use(img):
     """The image's generated members as packages metis.catalog.get finds (the derived director's source, which
@@ -182,14 +188,20 @@ def program_key(dom):
 
 
 def key_mismatches(img, get=None):
-    """[(member, the image's wire_key, the key of the source compiled here)] for every member whose source,
-    resolved as this process resolves it (metis.catalog.get), is not the program the image linked:
+    """[(member, the image's wire_key, the key of the source compiled here)] for every member whose package,
+    resolved as this process resolves it (metis.catalog.get), is not in the directory the image's lock names
+    (the third element then `dir <path>`), or whose source compiles to another program than the image linked:
     load-key-mismatch (spec/17 §6). Empty when they all agree."""
     if get is None:
         from metis.catalog import get
     out = []
     for m in img.members:
-        k = program_key(get(m["name"]))
+        dom = get(m["name"])
+        want = None if img.generated(m["name"]) else img.member_dir(m["name"])
+        if want is not None and Path(dom.dir).resolve() != want:
+            out.append((m["name"], str(want), "dir %s" % Path(dom.dir).resolve()))
+            continue
+        k = program_key(dom)
         if k != m.get("wire_key"):
             out.append((m["name"], m.get("wire_key"), k))
     return out

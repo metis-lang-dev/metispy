@@ -52,14 +52,15 @@ def test_a_built_image_is_read_not_derived(kitchen):
 
 def test_the_members_sources_are_the_programs_the_image_linked(kitchen, tmp_path):
     img = I.image(kitchen)
+    assert img.member_dir("cook_a") == (kitchen / "cook_a").resolve()          # the lock's dir (metis-lang 53c5eec)
     assert I.key_mismatches(img, members_of(kitchen)) == []
-    other = tmp_path / "other"                               # cook_a's source changed in another copy: its key differs
+    other = tmp_path / "other"                               # the same package elsewhere: not the image's directory
     shutil.copytree(KITCHEN, other)
-    p = other / "cook_a" / "cook_a.llp"
-    text = p.read_text()
-    assert "self(cook_a)." in text
-    p.write_text(text.replace("self(cook_a).", "self(cook_b)."))
     bad = I.key_mismatches(img, members_of(other))
+    assert sorted(m for m, _, _ in bad) == ["cook_a", "cook_b", "pot_director"] and all(k.startswith("dir ") for _, _, k in bad)
+    p = kitchen / "cook_a" / "cook_a.llp"                    # cook_a's source changed in place: its key differs
+    p.write_text(p.read_text().replace("self(cook_a).", "self(cook_b)."))
+    bad = I.key_mismatches(img, members_of(kitchen))
     assert [m for m, _, _ in bad] == ["cook_a"] and bad[0][1] == img.member("cook_a")["wire_key"]
 
 
