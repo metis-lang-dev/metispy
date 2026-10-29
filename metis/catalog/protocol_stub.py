@@ -148,7 +148,15 @@ def cancel_rules(text, member, goal_kinds, ends=(), decls="", idle="idle", names
     back = "%s(%s)" % (idle, member) if ar.get(idle) else idle
     me = "tick__cancel(%s)%s" % (member, " * " + bind if bind else "")
     mine = (ty.get(idle) or [None])[0]               # the member's type, when its idle takes the member
-    for st in sts:
+    names = ["cancel_" + "_".join(p for p in st if p != "busy") if len(st) > 1 or not has_idle else "cancel"
+             for st in sts]
+    dup = [i for i, nm in enumerate(names) if nm == "cancel"]
+    if len(dup) > 1:                                 # two one-token states (busy, and away): one rule name each — busy
+        keep = next((i for i in dup if tuple(sts[i]) == ("busy",)), dup[0])     # keeps `cancel`, the others theirs
+        for i in dup:
+            if i != keep:
+                names[i] = "cancel_" + "_".join(sts[i])
+    for st, name in zip(sts, names):
         toks, n = [], 0
         for p in st:
             k = ar.get(p, 0)
@@ -157,7 +165,6 @@ def cancel_rules(text, member, goal_kinds, ends=(), decls="", idle="idle", names
                 vs.append(member if mine is not None and t == mine else "V%d" % n)
                 n += vs[-1] != member
             toks.append("%s(%s)" % (p, ", ".join(vs)) if k else p)
-        name = "cancel_" + "_".join(p for p in st if p != "busy") if len(st) > 1 or not has_idle else "cancel"
         out += ["  %% Stopped: I drop my goal.",
                 "  %s [dyn] : %s * %s -o %s." % (name, me, " * ".join(toks), back if has_idle else "one")]
     if has_idle:

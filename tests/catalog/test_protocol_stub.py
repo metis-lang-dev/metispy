@@ -112,3 +112,29 @@ def test_a_lifted_member_binds_its_own_tokens_to_the_binder():
         "% the race: its done and the stop in one director beat (path_pop, stop_cancel: the sampled order)"]
     assert ps.refresh(ps.refresh(LIFTED, "S", idle="calm", namespace="worker", bind="$self(S)", world=["job"]),
                       "S", idle="calm", namespace="worker", bind="$self(S)", world=["job"]).count(ps.BEGIN) == 1
+
+
+TWO = """catalog guard 1.
+include "iface/protocol_domain.llp".
+layers (dyn).
+stages (act).
+namespace guard produce (dyn).
+pred alarm : guard.
+pred flee : guard.
+pred idle : guard.
+pred busy : guard.
+pred away : guard.
+stage act {
+  %% An alarm: I take the controls.
+  guard [dyn] : $alarm * idle -o busy * tick__want(guard, controls).
+  %% Too close: I take the controls to drive away.
+  guard_away [dyn] : $flee * idle -o away * tick__want(guard, controls).
+}
+"""
+
+
+def test_two_one_token_states_get_one_rule_name_each():
+    # the road responder's busy and away (wc-world s-db2f8e59 step 2c): busy keeps `cancel`, the other its own name
+    rules = [l.split(" [dyn]")[0].strip() for l in ps.cancel_rules(TWO, "guard", []) if "[dyn]" in l]
+    assert sorted(rules) == ["cancel", "cancel_away", "cancel_none"]
+    assert "  cancel [dyn] : tick__cancel(guard) * busy -o idle." in ps.cancel_rules(TWO, "guard", [])
