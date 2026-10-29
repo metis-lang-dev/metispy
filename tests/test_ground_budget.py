@@ -1,5 +1,11 @@
 """The opt-in ground budget (policy-tuning-2 s-e075f47f, the sw-s2 OOM): METIS_GROUND_BUDGET refuses a schema that
-grounds past it, with words that name the rule and its variables' types; unset, grounding is as before."""
+grounds past it, with words that name the rule and its variables' types; unset, grounding is as before.
+
+The parity half reads metis-lang's corpus/budget (the program below as a file, and budget.refused, the refusal
+metisc's gate 23 gives at 1000) from the sibling checkout, as the other parity tests read shared goldens."""
+import os
+from pathlib import Path
+
 import pytest
 
 from metis.kernel.ground import GroundBudget
@@ -22,6 +28,11 @@ stage act {
 """ % " ".join("t%d" % i for i in range(40))
 
 
+ROOT = Path(__file__).resolve().parents[1]
+LANG = Path(os.environ["METIS_LANG_DIR"]) if os.environ.get("METIS_LANG_DIR") else ROOT.parent / "metis-lang"
+CORPUS = LANG / "corpus" / "budget"
+
+
 def _ground(tmp_path):
     f = tmp_path / "t.llp"
     f.write_text(SRC)
@@ -40,3 +51,19 @@ def test_a_budget_refuses_with_the_rules_words(tmp_path, monkeypatch):
         _ground(tmp_path)
     monkeypatch.setenv("METIS_GROUND_BUDGET", "5000")
     assert sum(len(c) for c in _ground(tmp_path).stages.values()) == 3200
+
+
+@pytest.mark.skipif(not (CORPUS / "budget.refused").is_file(), reason="no metis-lang checkout beside metispy (corpus/budget)")
+def test_metiscs_gate_the_same_refusal(monkeypatch):
+    """metis-lang gate 23 on metispy: unset and 3200 ground the corpus program, 3199 and 1000 refuse it, and the
+    refusal at 1000 is budget.refused (metisc prints it after `error: `)."""
+    def ground():
+        return load_llp(str(CORPUS / "budget.llp")).catalog.ground({"here(r1)": 1})
+    for b in ("", "3200"):
+        monkeypatch.setenv("METIS_GROUND_BUDGET", b)
+        assert sum(len(c) for c in ground().stages.values()) == 3200
+    for b in ("3199", "1000"):
+        monkeypatch.setenv("METIS_GROUND_BUDGET", b)
+        with pytest.raises(GroundBudget) as e:
+            ground()
+    assert "error: %s\n" % e.value == (CORPUS / "budget.refused").read_text()
