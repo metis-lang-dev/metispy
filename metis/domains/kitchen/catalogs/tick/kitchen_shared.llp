@@ -1,0 +1,19 @@
+% The tick form (tick/kitchen.llp) of ../kitchen_shared.llp: the second cook acts at its own pace (no turn of
+% this cook's), so its load lines up with any of this cook's actions. Sibling card of kitchen_host.llp: the same kitchen with a second cook
+% working the same pot. The explanation a wrong-domain surprise needs
+% (an onion arrives in the pot that this cook never loaded) — a domain
+% card, not a pack: its rule produces the kitchen's own atoms.
+catalog kitchen_shared 1.
+provenance text "a shared kitchen: a second cook also loads onions into the pot" "2026-10-11".
+include "kitchen.llp".
+weight w_partner.
+stage task {
+  %% the second cook drops an onion into the first cook's pot.
+  %% target: kitchen
+  partner_load [task] : pot_space -o pot_onion  @w w_partner.
+}
+#init hand_free 1
+#query served
+#query cooking
+#query held_soup
+#steps 12

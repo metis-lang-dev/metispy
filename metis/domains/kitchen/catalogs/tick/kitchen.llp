@@ -1,0 +1,57 @@
+% The kitchen of kitchen.llp in the copy-semantics form (metis-lang spec/17 amendment 4): every action takes the
+% world's turn, which the host grants at its tick when none is left, so a cook acts once per tick and the next
+% action waits for the world's reading at the next tick. The watch's surprise window is then one action: the form
+% the surprise taxonomy (transient, wrong_domain, novel) and the explanation path are defined for (runtime-wire
+% steps 1-3; metis/loop/watch.py).
+catalog kitchen 1.
+provenance hand "Overcooked-AI cramped_room strategic layer" "2026-07-18".
+layers (task).
+stages (task).
+
+namespace k produce (task).
+%% a free hand
+pred hand_free : k.
+%% an onion in hand
+pred held_onion : k.
+%% a dish in hand
+pred held_dish : k.
+%% a soup in hand
+pred held_soup : k.
+%% room in the pot
+pred pot_space : k.
+%% onions in the pot
+pred pot_onion : k.
+%% a soup cooking
+pred cooking : k.
+%% a soup ready
+pred ready : k.
+%% soups served
+pred served : k.
+%% the world's turn: one action per tick
+pred turn : k.
+
+input scene.
+output intent.
+weight w_fetch_onion.
+weight w_load.
+weight w_cook.
+weight w_fetch_dish.
+weight w_plate.
+weight w_serve.
+
+stage task {
+  %% walk to a dispenser and take an onion.
+  fetch_onion [task] : turn * hand_free -o held_onion  @w w_fetch_onion.
+  %% drop the onion into pot capacity.
+  load [task] : turn * held_onion * pot_space -o hand_free * pot_onion  @w w_load.
+  %% three onions start the cook — needs a free hand to press start
+  %% (the env's interact semantics; also forces cook-before-dish).
+  cook [task] : turn * $hand_free * pot_onion * pot_onion * pot_onion
+    -o cooking  @w w_cook.
+  %% fetch a dish while the soup cooks.
+  fetch_dish [task] : turn * hand_free -o held_dish  @w w_fetch_dish.
+  %% cooked soup onto the held dish.
+  plate [task] : turn * held_dish * cooking -o held_soup  @w w_plate.
+  %% deliver.
+  serve [task] : turn * held_soup -o hand_free * served  @w w_serve.
+}

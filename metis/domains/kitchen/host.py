@@ -1,6 +1,9 @@
 """The kitchen as a scripted PortPlugin host (runtime-wire, metis-agent
 docs/INTEGRATION.md): the env the harness's runtime process serves
-`catalogs/kitchen_host.llp` against.
+`catalogs/kitchen_host.llp` against, and in the tick form (`tick_make*`,
+`turns`: a turn granted at each tick) `catalogs/tick/kitchen_host.llp`,
+one action per tick: the form the surprise taxonomy below is defined
+for (copy semantics, metis-lang spec/17 amendment 4).
 
 - bind: the six task weights — the KitchenModel base policy (dishes
   while the soup cooks, onions otherwise; small off-weights).
@@ -14,10 +17,17 @@ docs/INTEGRATION.md): the env the harness's runtime process serves
 
 Surprises come from a SCHEDULE: entries {kind, after, skip, count} — the
 entry arms at env beat `after` and fires on the (skip+1)-th matching
-intent from then on, `count` times. Four kinds (+ the recurring fifth):
+intent from then on, `count` times. Each kind is observed at the cook's
+next tick, over the window of its own events since its last consistent
+reading (the window's diff, since and steps are the beat's: one action
+in the tick form). Four kinds (+ the recurring fifth):
 
-- transient: right after a `load` the sensor misreads the pot once (one
-  onion too many); the kitchen is unchanged, the next reading agrees.
+- transient: right after a `load` the sensor misreads the pot (one
+  onion too many) until the tick; the kitchen is unchanged, the next
+  tick's reading agrees. A glitch must last to a tick to be observed at
+  all: under copy semantics a reading is taken at a tick, never
+  mid-beat, so a misread shorter than a tick is no reading (a property
+  of the semantics, not a lost case).
 - wrong_domain: right after a `load` (pot capacity left) a second cook
   drops an onion in. `kitchen` cannot derive it; the sibling card
   `kitchen_shared` (partner_load) does.
@@ -33,7 +43,7 @@ intent) — the eval's ground truth, read by the ledger.
 
 Env state mutates only in tick/on_event (the purity contract); a
 reading is a pure function of the env (the glitch is env state: set by
-the botched on_event, cleared by the next tick or on_event)."""
+the botched on_event, cleared by the next tick)."""
 
 import random
 from typing import Dict, List, Optional
@@ -98,9 +108,10 @@ class KitchenHost:
     name = "kitchen"
 
     def __init__(self, case, plan=(), orders=(0, 14),
-                 beats: Optional[int] = 30):
+                 beats: Optional[int] = 30, turns: bool = False):
         self.plan = [dict(e) for e in plan]
         self.orders = tuple(orders)     # beats at which an order arrives
+        self.turns = turns              # the tick form: a turn granted at each tick (tick/kitchen.llp)
         self.beats = beats              # the script's length (None: open)
         self.beat = 0
         self.kitchen: Dict[str, int] = {
@@ -125,12 +136,15 @@ class KitchenHost:
         if self.beat in self.orders:
             self.kitchen["pot_space"] = self.kitchen.get("pot_space", 0) + 3
             dos.append("+pot_space 3")
+        if self.turns and not counts.get("turn"):
+            dos.append("+turn 1")
         self.beat += 1
         self.glitch = False
         return dos
 
     def on_event(self, name, args):
-        self.glitch = False
+        # a transient's glitch lasts to the tick, where a reading is taken (copy semantics, metis-lang spec/17
+        # amendment 4): the tick's read sees it, the next tick's is clean
         eff = EFFECTS.get(name)
         if eff is None:
             return
@@ -262,3 +276,47 @@ def make_episode(case):
     its JSON line, from `python -m metis.domains.kitchen.eval episodes`."""
     from .eval import make_episode as _make
     return _make(case)
+
+
+# -- the tick form (catalogs/tick/: one action per world turn) ---------------
+# The fixtures above, granting the turn tick/kitchen.llp's actions take: the cook acts once per tick, so the watch's
+# window (copy semantics, metis-lang spec/17 amendment 4) is one action, as the surprise taxonomy is defined for.
+
+def _turns(host):
+    host.turns = True
+    return host
+
+
+def tick_make(case):
+    return _turns(make(case))
+
+
+def tick_make_transient(case):
+    return _turns(make_transient(case))
+
+
+def tick_make_wrong_domain(case):
+    return _turns(make_wrong_domain(case))
+
+
+def tick_make_novel(case):
+    return _turns(make_novel(case))
+
+
+def tick_make_transient_twice(case):
+    return _turns(make_transient_twice(case))
+
+
+def tick_make_partner(case):
+    return _turns(make_partner(case))
+
+
+def tick_make_hour(case):
+    """make_hour in the tick form. An order's actions now take a tick each, so the twice-misread is anchored to the
+    start of the order running at its minute: both misreads fall inside that ONE order, as the schedule means."""
+    host = _turns(make_hour(case))
+    for e in host.plan:
+        if e["kind"] == "transient_twice":
+            e["after"] = max(b for b in host.orders if b <= e["after"])
+    host._plan0 = [dict(e) for e in host.plan]
+    return host

@@ -255,6 +255,9 @@ class Day:
         b0, f0, n = w.beat, len(self.repl.fired_rows), 0
         inner = getattr(self.host, "inner", self.host)
         lock = getattr(w, "lockstep", False)
+        if not getattr(inner, "done", False):
+            for s in w.begin():                 # the beat's tick first: the world read as it stands (copy semantics)
+                out += self.signal(s)
         while not w.done:
             if getattr(inner, "done", False):
                 w.done = True

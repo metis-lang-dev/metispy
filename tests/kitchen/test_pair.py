@@ -24,7 +24,8 @@ def test_the_onion_is_an_event_on_one_tape_and_a_surprise_on_the_other():
     assert r["truth"] == [{"kind": "partner_load", "by": "kitchen_shared",
                            "order": 2, "beat": help_["beat"]}]
     # orders on both; the first cook serves all three of its orders
-    exo = {p: sum(1 for s in sigs if s["path"] == p and s.get("kind") == "exo")
+    exo = {p: sum(1 for s in sigs if s["path"] == p and s.get("kind") == "exo"   # the orders (not the turns)
+                  and "+pot_space 3" in s["ops"])
            for p in SCENES}
     assert exo == {"kitchen": 3, "kitchen_shared": 3}
     assert r["served"]["kitchen"] == 3 and r["served"]["kitchen_shared"] >= 2

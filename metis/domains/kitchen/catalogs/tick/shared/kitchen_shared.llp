@@ -1,0 +1,23 @@
+% The second cook's domain, served on its own (RACK.md §5, rack step 1):
+% the shared kitchen as the second cook sees it — its own orders, its
+% own pot recipe (kitchen.llp), and one move more: dropping an onion it
+% holds into the FIRST cook's pot (partner_load). On this tape that move
+% is an event; on the first cook's tape (catalogs/kitchen_host.llp) the
+% extra onion is a surprise, explained by the kitchen_shared card.
+% In its own folder so the first cook's cards op does not list it twice.
+% The tick form (../kitchen.llp: one action per world turn): partner_load takes this cook's turn as its other
+% actions do.
+catalog kitchen_shared 1.
+provenance text "a shared kitchen: a second cook also loads onions into the pot" "2026-10-12".
+include "../kitchen.llp".
+weight w_partner.
+stage task {
+  %% the second cook drops the onion it holds into the first cook's pot.
+  %% target: kitchen
+  partner_load [task] : turn * held_onion -o hand_free  @w w_partner.
+}
+#init hand_free 1
+#query served
+#query cooking
+#query held_soup
+#steps 12

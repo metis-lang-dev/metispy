@@ -17,9 +17,9 @@ from metis.loop.wire import INTENT_VERBS, dispatch, serve_json
 
 from metis.domains.kitchen.model import CATALOG
 
-CAT = CATALOG.parent
+CAT = CATALOG.parent / "tick"           # the tick form: one action per world turn (the window one action)
 SCENE = CAT / "kitchen_host.llp"
-HOST = "metis.domains.kitchen.host:"
+HOST = "metis.domains.kitchen.host:tick_"
 
 
 def _shell(factory="make", seed=1):
@@ -43,21 +43,21 @@ def test_clean_kitchen_streams_events_and_quiescence_in_order():
     assert all(s["path"] == "kitchen" for s in sigs)
     names = [s["name"] for s in sigs if s.get("kind") == "clause"]
     assert names.count("serve") == 2           # both orders served
-    orders = [s for s in sigs if s.get("kind") == "exo"]
-    assert [o["ops"] for o in orders] == [["+pot_space 3"]] * 2
-    # quiescence once per entry, never per idle beat
+    exo = [s for s in sigs if s.get("kind") == "exo"]
+    orders = [o for o in exo if "+pot_space 3" in o["ops"]]
+    assert len(orders) == 2
+    # the tick form: a turn at each tick the cook used its last one (one action per tick, the window one action)
+    assert all(o["ops"] in (["+turn"], ["+pot_space 3", "+turn"], ["+pot_space 3"]) for o in exo)
+    # quiescence once per entry, never per idle beat, and declared at the tick whose reading left nothing to do
+    # (copy semantics): after each soup and at the script's end. None before order 1: the first tick brought it
     qs = [s for s in sigs if s["signal"] == "quiescence"]
-    # before order 1, after each soup, the script's end
-    assert len(qs) == 4 and qs[-1]["episode_over"]
-    assert not any(q["episode_over"] for q in qs[:-1])
-    # quiet beats said nothing: 30 beats, 2 exo lines
-    assert w.beat == 30 and len(orders) == 2
-    # ... and left no row (51 rows before the fix): two soups of 9
-    # (load, fetch_onion, load, fetch_onion, load, cook, fetch_dish,
-    # plate, serve), a stray fetch_onion whenever the pot is empty (3),
-    # and the 2 orders
-    assert len(sh.fired) == len(sh.fired_rows) == 23
-    assert [r[0] for r in sh.fired_rows].count("exo") == 2
+    assert [(q["beat"], q["episode_over"]) for q in qs] == [(12, False), (25, False), (30, True)]
+    assert w.beat == 30
+    # ... and left no idle row: two soups of 10 (fetch_onion, load ×3, cook, fetch_dish, plate, serve), a stray
+    # fetch_onion at the end, one per tick, and the inputs (the orders and the turns)
+    soup = ["fetch_onion", "load"] * 3 + ["cook", "fetch_dish", "plate", "serve"]
+    assert names == soup * 2 + ["fetch_onion"]
+    assert len(sh.fired) == len(sh.fired_rows) == len(names) + len(exo)
     assert len(sh._envs) == len(sh.fired) + 1
     assert sh.counts.get("served") == 2 and not sh.loop.records
 
@@ -65,7 +65,9 @@ def test_clean_kitchen_streams_events_and_quiescence_in_order():
 @pytest.mark.parametrize("factory,diff,after", [
     ("make_transient", {"pot_onion": 1}, "load"),
     ("make_wrong_domain", {"pot_space": -1, "pot_onion": 1}, "load"),
-    ("make_novel", {"held_soup": -1, "hand_free": 1}, "plate"),
+    # the window's diff: the atoms the member's own events touched (copy semantics). plate touches no hand_free, so
+    # the spill's free hand is a reading, not part of the surprise
+    ("make_novel", {"held_soup": -1}, "plate"),
 ])
 def test_each_injected_surprise_is_one_unmodeled_record(factory, diff,
                                                         after):
@@ -101,7 +103,7 @@ def test_transient_reads_consistent_on_the_next_beat():
     sh = _shell("make_transient")
     _, sigs = _run(sh)
     k = next(i for i, s in enumerate(sigs) if s["signal"] == "surprise")
-    nxt = sigs[k + 1]
+    nxt = next(s for s in sigs[k + 1:] if s.get("kind") != "exo")     # past the tick's input row
     assert nxt["kind"] == "reading" and nxt["consistent"]
     assert nxt["beat"] == sigs[k]["beat"] + 1
     # it speaks once — repeated identical readings say nothing
@@ -139,12 +141,13 @@ def test_mirror_is_one_line_per_domain():
     rows = mirror(sh, w)
     assert len(rows) == 1
     assert set(rows[0]["beliefs"]) == {"served", "cooking", "held_soup"}
-    while not any(s["signal"] == "surprise" for s in w.step()):
+    while not (sur := [s for s in w.step() if s["signal"] == "surprise"]):
         pass
     row, = mirror(sh, w)
     assert row["status"] == "observe-only"
+    # read at the tick, before that tick's beat counts (copy semantics)
     assert row["surprise"] == {"record": 0, "kind": "unmodeled",
-                               "beat": w.beat}
+                               "beat": sur[0]["beat"]} and sur[0]["beat"] == w.beat - 1
     line = mirror_line(row)
     assert line.startswith("kitchen  stage task  observe-only  "
                            "surprise #0 unmodeled @beat ")
@@ -155,7 +158,10 @@ def test_mirror_is_one_line_per_domain():
 
 
 def test_mirror_beliefs_are_the_query_marginals_from_now():
-    sh = _shell()
+    # the chained scene: the projection runs the catalog alone, and the tick form's catalog waits for the world's
+    # turns, which no projection supplies
+    sh = Repl(CATALOG.parent / "kitchen_host.llp", seed=1, plugin="metis.domains.kitchen.host:make", host=True,
+              stdout=io.StringIO())
     w = Watch(sh, beats=30)
     while "cooking" not in sh.counts:
         w.step()
@@ -268,10 +274,11 @@ def test_script_carries_the_catalogs_own_words():
         "fetch_onion", "load", "cook", "fetch_dish", "plate", "serve"]
     fetch = k["clauses"][0]
     assert fetch["doc"] == "walk to a dispenser and take an onion."
-    assert fetch["premises"] == [{"atom": "hand_free", "n": 1,
-                                  "kept": False}]
+    turn = {"atom": "turn", "n": 1, "kept": False}            # the tick form: every action takes the world's turn
+    assert fetch["premises"] == [turn, {"atom": "hand_free", "n": 1,
+                                        "kept": False}]
     assert k["clauses"][2]["premises"] == [
-        {"atom": "hand_free", "n": 1, "kept": True},
+        turn, {"atom": "hand_free", "n": 1, "kept": True},
         {"atom": "pot_onion", "n": 3, "kept": False}]
     assert {a["name"]: a["doc"] for a in k["atoms"]}["pot_onion"] == \
         "onions in the pot"
@@ -347,7 +354,7 @@ def test_reset_is_bounded_on_the_same_surprise():
     assert "no more resets; escalate" in second["reason"]
     assert second["mined_text"] == (
         "the same misreading (pot_onion +1) recurred after a reset of "
-        "record 0 at beat 1: not a one-off")
+        "record 0 at beat 5: not a one-off")
     assert w.observe_only and w.open == 1
     # the model calls it a one-off; the record keeps the fact ahead
     dispatch(sh, "intent", "escalate 1 the reading was noise, a one-off")

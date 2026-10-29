@@ -2,7 +2,7 @@
 physical kitchen, two cooks, two domains — each a runtime serving its
 own cook's view, both hosted on the same env.
 
-- `kitchen` (catalogs/kitchen_host.llp): the first cook. It does not
+- `kitchen` (catalogs/tick/kitchen_host.llp): the first cook. It does not
   model the second cook, so an onion the second cook drops into its pot
   is a SURPRISE on this tape (unmodeled; the kitchen_shared card
   explains it).
@@ -34,8 +34,11 @@ from typing import Dict, List, Optional
 from .host import ATOMS, EFFECTS, _weights
 
 CATALOGS = Path(__file__).parent / "catalogs"
-SCENES = {"kitchen": CATALOGS / "kitchen_host.llp",
-          "kitchen_shared": CATALOGS / "shared" / "kitchen_shared.llp"}
+# the tick form (catalogs/tick/: one action per world turn): each cook reads the shared kitchen at its tick, so the
+# second cook's onion reaches the first cook's window as one action's reading (copy semantics, metis-lang spec/17
+# amendment 4), the surprise the kitchen_shared card explains
+SCENES = {"kitchen": CATALOGS / "tick" / "kitchen_host.llp",
+          "kitchen_shared": CATALOGS / "tick" / "shared" / "kitchen_shared.llp"}
 
 # the pair script: env beats at which each cook's order arrives, and the
 # first cook's order (1-based) the second cook helps with
@@ -126,6 +129,8 @@ class CookHost:
                 e.order[self.path] += 1
                 e.loads[self.path] = 0
                 dos.append("+pot_space 3")
+            if not counts.get("turn"):
+                dos.append("+turn 1")           # the cook's turn, once per tick
             e.beat[self.path] += 1
             return dos
 

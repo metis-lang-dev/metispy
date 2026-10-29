@@ -21,6 +21,37 @@ number (the order is the session's own):
               env keeps ticking and being read (observe-only by the
               host, phase 1; G-C proper is phase 2)
 
+Copy semantics (metis-lang spec/17 amendment 4, the user's ruling of
+2026-10-29): a member reads the world as a snapshot taken at the start of
+its own tick, and its own command shows in the world from its next tick.
+So a beat begins with its tick (`begin`, the beat runners call it), and
+the surprise test runs AT THE TICK, never after a firing: the reading
+against the effects the member modelled for its own commands since its
+last consistent reading — the atoms its fired events consumed or produced
+— over that WINDOW (its diff, since and steps are the beat's). Another
+member's change is the tick's input, not a surprise. A reading is never
+older than a command it is compared for: in one process the world applies
+a command at once, so the next tick's snapshot has it; across a split the
+proxy adds the pending ones (a pending effect older than the L18 budget is
+what tick__stuck names). Whether anything is left to do is known at a
+tick too, so the quiescence is declared at the tick whose reading leaves
+the member nothing to fire (once per entry, as before), not when it stops
+mid-beat.
+
+The surprise taxonomy (unmodeled, rare, a consistent or explained
+reading; the kitchen fixtures' transient, wrong_domain, novel) is
+unchanged in name; each is now stated over the window. A member that
+chains its own modelled effects within a beat (the chained kitchen scene:
+a whole soup in one beat) observes a partner's change only through its
+consequence on its own commands, so for such a member the window shows a
+belief change (fewer of its loads took), never a sibling's card; a member
+that wants partner changes explained reads the shared state as a
+world-owned reading at its tick (the tick form, catalogs/tick/: one action
+per tick, the window one action). Evidence: toolchain-units s-ddaed776
+step 3's 20-variant probe (a partner load at the tick, orders of 3-6
+onions, five injection beats: never explained by kitchen_shared on the
+chained scene).
+
 The surprise test is the kernel's, verbatim: a reading that differs
 from the session's own state is scored by surprise_record against the
 served world grounded at the last consistent checkpoint, over the
@@ -140,7 +171,8 @@ class Watch:
             sh._sample()
             out = [self._row_signal()]
             if not self.lockstep:
-                return out + self._read()
+                # copy semantics: a fired rule's world reads at the next tick (begin); follow reads row by row
+                return out + self._read() if self.follow else out
             first = sh.prog.init_stage
             if sh.stage == first and stage0 != first:
                 self.held = True        # the pass wrapped: read, then the beat
@@ -150,12 +182,45 @@ class Watch:
             return out                  # mid-pass: nothing to compare yet
         if not self.observe_only and not self.quiet and not self.held:
             self.quiet = True
+            if sh.plugin is not None and not (self.lockstep or self.follow):
+                # copy semantics: whether anything is left to do is known at the next tick, from its reading (a
+                # turn, an order); the quiescence is declared there, or not at all (_tick_rest)
+                self._quiet_due = True
+                return []
             self._task_done()
             if sh.plugin is None:
                 self.done = True
             return [self._signal("quiescence", stage=sh.stage,
                                  fired=len(sh.fired),
                                  episode_over=sh.plugin is None)]
+        return self._tick_step()
+
+    def begin(self) -> List[dict]:
+        """A beat's start (metis-lang spec/17 amendment 4, copy semantics): its tick comes first, so the member
+        reads the world as the snapshot at its tick's start, before any rule fires, and a command it fires shows
+        in the world from its next tick. Lockstep and follow keep their order (module doc); an observing session,
+        a hostless one and a done one start as before."""
+        sh = self.shell
+        if self.done or self.lockstep or self.follow or self.held or self.observe_only or sh.plugin is None:
+            return []
+        return self._tick_step()
+
+    def _tick_step(self) -> List[dict]:
+        """One env beat: the window's check, the host's tick (its do-lines one exo row), then what the beat's input
+        asks. The check (copy semantics): the reading against the effects the member modelled for its own commands
+        since the last checkpoint (the atoms its fired events consumed or produced), never against another
+        member's change, which is the tick's input. A reading is never older than a command it is compared for: in
+        one process the world applies a command at once, so this tick's snapshot has it (a split's proxy adds the
+        pending ones)."""
+        sh = self.shell
+        if sh.plugin is not None and not (self.lockstep or self.follow or self.observe_only):
+            pre = self._read(own=True)
+        else:
+            pre = []
+        return pre + self._tick_rest()
+
+    def _tick_rest(self) -> List[dict]:
+        sh = self.shell
         if sh.plugin is None or (self.beats is not None
                                  and self.beat >= self.beats):
             self.done = True
@@ -167,9 +232,12 @@ class Watch:
             out += self._operator()
         name = sh._tick(quiet_rows=False, restart=self.lockstep)
         self.held = False
+        due, self._quiet_due = self.__dict__.get("_quiet_due"), False
         if name is None:
             if sh.stage != DONE and not sh._candidates():
                 sh._latch_done()
+            if due:
+                self._task_done()
             self.done = True
             return out + [self._signal("quiescence", stage=sh.stage,
                                        fired=len(sh.fired),
@@ -193,6 +261,11 @@ class Watch:
                 # e2e-workflow s-143c3088 A5): a quiet domain is read on
                 # every beat; a consistent reading checkpoints
                 out += self._read()
+        if due and not self.observe_only and not sh._candidates():
+            # the tick's reading left nothing to do: the quiescence the last beat entered, declared now
+            self.quiet = True
+            self._task_done()
+            out.append(self._signal("quiescence", stage=sh.stage, fired=len(sh.fired), episode_over=False))
         return out
 
     # -- the surprise test -------------------------------------------------
@@ -209,7 +282,9 @@ class Watch:
         sh = self.shell
         self._cp = (sh.stage, dict(sh.counts), len(sh.fired))
 
-    def _read(self) -> List[dict]:
+    def _read(self, own=False) -> List[dict]:
+        """The surprise test on the host's reading. own=True (begin, at a tick): only the atoms the member's own
+        events since the checkpoint consumed or produced, those it modelled for its commands."""
         sh = self.shell
         observe = getattr(sh.plugin, "observe", None)
         if observe is None:
@@ -217,6 +292,22 @@ class Watch:
             return []
         reading = {a: int(n) for a, n in dict(observe(dict(sh.counts)))
                    .items()}
+        if own:
+            if len(sh.fired) == self.__dict__.get("_own_at"):
+                return []               # nothing fired since the last tick's check: nothing new to compare
+            self._own_at = len(sh.fired)
+            touched = set()
+            for kind, _, ev in sh.fired_rows[self._cp[2]:]:
+                if kind != "exo":
+                    touched |= set(ev.consume) | set(ev.produce)
+            if not touched:
+                return []               # nothing of its own to compare: the tick's input checkpoints
+            reading = {a: n for a, n in reading.items() if a in touched}
+            self._scope = touched       # an open surprise keeps being sensed on the same atoms
+        elif self.open is not None and self.__dict__.get("_scope") is not None:
+            reading = {a: n for a, n in reading.items() if a in self._scope}
+        else:
+            self._scope = None
         if not reading and (self.lockstep or self.follow):
             return []                   # nothing read (the world has not moved): the window goes on
         model = {a: sh.counts.get(a, 0) for a in reading}
@@ -659,8 +750,8 @@ def mirror(shell, watch: Optional[Watch] = None) -> List[dict]:
         status = "observe-only"
     elif shell.stage == DONE:
         status = "done"
-    elif not cands or kinds == {"link"}:
-        status = "quiescent"
+    elif (not cands or kinds == {"link"}) and (watch is None or (watch.quiet and not watch.__dict__.get("_quiet_due"))):
+        status = "quiescent"            # as the watch declared it: a member waiting for its next tick is running
     else:
         status = "running"
     if watch is not None and watch.open is not None:

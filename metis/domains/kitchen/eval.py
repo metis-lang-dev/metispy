@@ -15,7 +15,7 @@ harness serves an episode with
 
     METIS_KITCHEN_EPISODE='<one episode line>' \\
         metis --json --host metis.domains.kitchen.host:make_episode \\
-        metis/domains/kitchen/catalogs/kitchen_host.llp
+        metis/domains/kitchen/catalogs/tick/kitchen_host.llp
     {"op":"watch","arg":"every=0.5 beats=<beats> operator=<operator>
                          scope=<scope> [arm=blind]"}
     ... triage ...
@@ -46,7 +46,9 @@ from typing import Dict, List
 
 from .host import BEATS_PER_MIN, KINDS, KitchenHost, entry
 
-SCENE = Path(__file__).parent / "catalogs" / "kitchen_host.llp"
+# the tick form (catalogs/tick/: one action per world turn): the window the surprise taxonomy is defined for (copy
+# semantics, metis-lang spec/17 amendment 4; metis/loop/watch.py)
+SCENE = Path(__file__).parent / "catalogs" / "tick" / "kitchen_host.llp"
 HOST = "metis.domains.kitchen.host:make_episode"
 
 # the intended verdict per record of each kind, in order
@@ -95,7 +97,7 @@ def episodes(seed: int, n: int, kinds=("clean",) + KINDS,
 def make_episode(case):
     """The host for one episode: METIS_KITCHEN_EPISODE is its JSON line."""
     ep = json.loads(os.environ["METIS_KITCHEN_EPISODE"])
-    return KitchenHost(case, ep["plan"], ep["orders"], beats=ep["beats"])
+    return KitchenHost(case, ep["plan"], ep["orders"], beats=ep["beats"], turns=True)
 
 
 # -- in-process runs (the runtime-only baselines; and the scorer's check) ----
