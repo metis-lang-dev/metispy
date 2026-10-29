@@ -95,8 +95,8 @@ stage act {
   % ── the stop ──
   %% Stopped: {D}'s goal is cancelled.
   stop_cancel [dyn] : $tick__stop * path(D) * tick__goal(D) -o tick__cancel(D) * offpath(D).
-  %% Stopped: {R} is free.
-  stop_release [dyn] : $tick__stop * holder(D, R) * held(D, A) -o free(R) * tick__revoke(D, R).
+  %% Stopped: no ticket for {R} is left, {R} is free.
+  stop_release [dyn] : $tick__stop * holder(D, R) * held(D, A) * $serving(R, T) * $issue(R, T) -o free(R) * tick__revoke(D, R).   % after the queue is passed over (serving at issue): no waiter is granted mid-stop
   %% Stopped: {D}'s ticket for {R} is passed over.
   stop_dequeue [dyn] : $tick__stop * queued(D, R, T) -o skipped(R, T).   % skip_ticket moves serving on: [serving, issue) stays queued-or-skipped
 
