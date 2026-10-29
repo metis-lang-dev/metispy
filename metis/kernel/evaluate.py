@@ -1095,7 +1095,15 @@ class LevelHook:
         self.models = []
         for i, (model, names) in enumerate(sorted(by_model.items())):
             path = self.base / model
-            doc = compile_catalog(resolve_includes(parse_llp(path.read_text(), file=str(path)), path.parent))
+            cat = resolve_includes(parse_llp(path.read_text(), file=str(path)), path.parent)
+            if model == manifest["program"]:                   # the program with its generated level declarations
+                from metis.lang.compiler import LangError
+                from metis.lang.levels import with_levels
+                try:
+                    cat = with_levels(cat, manifest)
+                except LangError:
+                    pass                                       # the instrument refuses it (level-type)
+            doc = compile_catalog(cat)
             prog = doc.catalog.ground({})
             dirs = manifest_directives(manifest, names)
             if i:                                              # belief levels once, with the first model
@@ -1146,22 +1154,45 @@ def evaluate_groups(path: str):
     return base, init, [(os.path.join(base, m), ds) for m, ds in groups(dirs, program)]
 
 
-def evaluate_one(llp, init, dirs, brute=False) -> Result:
+def case_manifest(path) -> str:
+    """A case YAML's manifest path: its manifest: key, else its package's domain.yaml (cases/ or beside;
+    Evaluate.case_manifest)."""
+    import os
+    d = os.path.dirname(str(path))
+    m = read_yaml_block(str(path)).get("manifest")
+    if m is not None:
+        return os.path.join(d, str(m))
+    return os.path.join(os.path.dirname(d) if os.path.basename(d) == "cases" else d, "domain.yaml")
+
+
+def evaluate_one(llp, init, dirs, brute=False, manifest=None) -> Result:
+    """`manifest`: the package's, when llp is its program (its generated level declarations, spec/16 amendment 1)."""
     from pathlib import Path
     from metis.lang.compiler import compile_catalog, resolve_includes
+    from metis.lang.levels import with_levels
     from metis.lang.parser import parse as parse_llp
     llp = Path(llp)
-    doc = compile_catalog(resolve_includes(parse_llp(llp.read_text(), file=str(llp)), llp.parent))
+    from metis.lang.compiler import LangError
+    cat = resolve_includes(parse_llp(llp.read_text(), file=str(llp)), llp.parent)
+    try:
+        cat = with_levels(cat, manifest)
+    except LangError:
+        pass                    # a disagreement is the instrument's own refusal (level-type, spec/16 §4)
+    doc = compile_catalog(cat)
     prog = doc.catalog.ground(init)
     return run(doc, prog, init, dirs, brute=brute)
 
 
 def evaluate_file(path: str, brute: bool = False) -> Result:
     """metisc --evaluate FILE.llp|CASE.yaml: every world model's group run, their listings in path order. → Result."""
+    import os
     _, init, gs = evaluate_groups(path)
+    manifest = case_manifest(path) if str(path).endswith(".yaml") else None
+    program = os.path.normpath(os.path.join(os.path.dirname(manifest), str(read_yaml_block(manifest).get("program")))) \
+        if manifest else None
     lines, costs, mism = [], [], 0
     for llp, dirs in gs:
-        r = evaluate_one(llp, init, dirs, brute)
+        r = evaluate_one(llp, init, dirs, brute, manifest if os.path.normpath(llp) == program else None)
         lines += r.lines
         costs += r.costs
         mism += r.mismatches

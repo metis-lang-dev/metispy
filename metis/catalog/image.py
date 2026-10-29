@@ -186,7 +186,7 @@ def program_key(dom):
     from metis.kernel import artifact
     from metis.kernel.nets import program_key as key
     files = dom.serves()
-    doc, case, _ = artifact.served_doc(Path(files[0]), files[1:])
+    doc, case, _ = artifact.served_doc(Path(files[0]), files[1:], Path(dom.dir) / "domain.yaml")
     return key(doc.catalog.ground(dict(case["init"])))
 
 

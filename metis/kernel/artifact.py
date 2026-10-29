@@ -75,20 +75,23 @@ from typing import List, Optional, Sequence
 FORMAT = "metis-sidecar/1"
 
 
-def served_doc(program: Path, extensions: Sequence[Path] = ()):
+def served_doc(program: Path, extensions: Sequence[Path] = (), manifest=None):
     """(doc, case, text): the program compiled with its includes, every
     extension compiled against the world so far and admitted over it,
     the ports merged — the loop's gate → accept chain, structurally (the
     package's extensions were gated when they were accepted). An
-    extension that does not admit raises with its findings."""
+    extension that does not admit raises with its findings. `manifest`: the
+    package's domain.yaml (or its dict): its levels' generated declarations
+    join the program's (metis-lang spec/16 amendment 1)."""
     from metis.lang.compiler import (compile_catalog, load_llp,
                                      merge_ports, resolve_includes)
     from metis.lang.directives import embedded_case
+    from metis.lang.levels import with_levels
     from metis.lang.parser import parse
     program = Path(program)
     text = program.read_text()
-    doc = compile_catalog(resolve_includes(parse(text, file=str(program)),
-                                           program.parent))
+    doc = compile_catalog(with_levels(resolve_includes(parse(text, file=str(program)),
+                                                       program.parent), manifest))
     for p in extensions:
         ext = load_llp(str(p), base=doc)
         doc = replace(doc, catalog=doc.catalog.admit(ext.catalog),
@@ -174,7 +177,7 @@ def metisc() -> Optional[str]:
     return shutil.which("metisc")
 
 
-def wire(program: Path, extensions: Sequence[Path], doc, prog, steps):
+def wire(program: Path, extensions: Sequence[Path], doc, prog, steps, manifest=None):
     """(ground.wire text, who made it): `metisc --wire` when metisc is
     there — the compiler the bundle points at (bundle-compiler s-3985caf6);
     a metisc that fails is an error, never covered — else metispy's
@@ -187,6 +190,8 @@ def wire(program: Path, extensions: Sequence[Path], doc, prog, steps):
         cmd = [m, "--wire", str(program)]
         for e in extensions:
             cmd += ["--extension", str(e)]
+        if manifest is not None and not isinstance(manifest, dict):
+            cmd += ["--manifest", str(manifest)]
         from metis.catalog import metisc_env
         r = subprocess.run(cmd, capture_output=True, text=True, env=metisc_env())   # the same includes: metisc's own standard units
         if r.returncode != 0:
@@ -203,14 +208,14 @@ def wire(program: Path, extensions: Sequence[Path], doc, prog, steps):
 
 
 def build(program: Path, extensions: Sequence[Path] = (), with_ir=False,
-          report: Optional[dict] = None) -> dict:
+          report: Optional[dict] = None, manifest=None) -> dict:
     """{file name: text} of the bundle; report, when given, gets
     report["wire_by"] = who compiled ground.wire (not a bundle file: the
     bundle is byte-equal either way)."""
     from metis.lang.repl_api import tools_json
-    doc, case, _ = served_doc(program, extensions)
+    doc, case, _ = served_doc(program, extensions, manifest)
     prog = doc.catalog.ground(dict(case["init"]))
-    text, by = wire(program, extensions, doc, prog, case["steps"])
+    text, by = wire(program, extensions, doc, prog, case["steps"], manifest)
     if report is not None:
         report["wire_by"] = by
     files = {"ground.wire": text}
@@ -325,8 +330,9 @@ def main(argv=None) -> int:
                     help="also write program.ir (a port-free program)")
     a = ap.parse_args(argv)
     program, extensions, out = resolve(a.target, a.extension)
+    manifest = None if Path(a.target).suffix == ".llp" else _catalog().get(a.target).dir / "domain.yaml"
     rep = {}
-    files = build(program, extensions, with_ir=a.ir, report=rep)
+    files = build(program, extensions, with_ir=a.ir, report=rep, manifest=manifest)
     write(a.out or out, files)
     side = json.loads(files["sidecar.json"])
     print(f"{a.out or out}: {side['catalog']} key {side['key'][:12]}… "
