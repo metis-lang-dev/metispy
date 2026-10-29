@@ -1,7 +1,7 @@
 {
  "format": "metis-sidecar/1",
  "catalog": "kitchen",
- "key": "0b96446c6cdbf8e468b69c2db868575c5212cf5fabd0dac018b798b3aa333f5f",
+ "key": "3dedda0d8afdbfe47e95ba479082f483cdf2067b0b6a8ac1ad8075b1536d91af",
  "extensions": [],
  "init": {
   "hand_free": 1
@@ -114,6 +114,11 @@
      "doc": "walk to a dispenser and take an onion.",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": false
@@ -133,6 +138,11 @@
      "stage": "task",
      "doc": "drop the onion into pot capacity.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_onion",
        "n": 1,
@@ -164,6 +174,11 @@
      "doc": "three onions start the cook — needs a free hand to press start (the env's interact semantics; also forces cook-before-dish).",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": true
@@ -189,6 +204,11 @@
      "doc": "fetch a dish while the soup cooks.",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": false
@@ -208,6 +228,11 @@
      "stage": "task",
      "doc": "cooked soup onto the held dish.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_dish",
        "n": 1,
@@ -233,6 +258,11 @@
      "stage": "task",
      "doc": "deliver.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_soup",
        "n": 1,
@@ -290,6 +320,10 @@
     {
      "name": "served",
      "doc": "soups served"
+    },
+    {
+     "name": "turn",
+     "doc": "the world's turn: one action per tick"
     }
    ],
    "missing": {

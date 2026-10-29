@@ -65,9 +65,7 @@ def test_clean_kitchen_streams_events_and_quiescence_in_order():
 @pytest.mark.parametrize("factory,diff,after", [
     ("make_transient", {"pot_onion": 1}, "load"),
     ("make_wrong_domain", {"pot_space": -1, "pot_onion": 1}, "load"),
-    # the window's diff: the atoms the member's own events touched (copy semantics). plate touches no hand_free, so
-    # the spill's free hand is a reading, not part of the surprise
-    ("make_novel", {"held_soup": -1}, "plate"),
+    ("make_novel", {"held_soup": -1, "hand_free": 1}, "plate"),
 ])
 def test_each_injected_surprise_is_one_unmodeled_record(factory, diff,
                                                         after):

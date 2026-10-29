@@ -9,12 +9,12 @@ B weight w_load
 B weight w_partner
 B weight w_plate
 B weight w_serve
-E 0 -1 1 fetch_onion ; c hand_free 1 ; o held_onion 1 ; w w_fetch_onion 0
-E 0 -1 1 load ; c held_onion 1 pot_space 1 ; o hand_free 1 pot_onion 1 ; w w_load 0
-E 0 -1 1 cook ; c pot_onion 3 ; o cooking 1 ; p hand_free 1 ; w w_cook 0
-E 0 -1 1 fetch_dish ; c hand_free 1 ; o held_dish 1 ; w w_fetch_dish 0
-E 0 -1 1 plate ; c cooking 1 held_dish 1 ; o held_soup 1 ; w w_plate 0
-E 0 -1 1 serve ; c held_soup 1 ; o hand_free 1 served 1 ; w w_serve 0
-E 0 -1 1 partner_load ; c held_onion 1 ; o hand_free 1 ; w w_partner 0
+E 0 -1 1 fetch_onion ; c hand_free 1 turn 1 ; o held_onion 1 ; w w_fetch_onion 0
+E 0 -1 1 load ; c held_onion 1 pot_space 1 turn 1 ; o hand_free 1 pot_onion 1 ; w w_load 0
+E 0 -1 1 cook ; c pot_onion 3 turn 1 ; o cooking 1 ; p hand_free 1 ; w w_cook 0
+E 0 -1 1 fetch_dish ; c hand_free 1 turn 1 ; o held_dish 1 ; w w_fetch_dish 0
+E 0 -1 1 plate ; c cooking 1 held_dish 1 turn 1 ; o held_soup 1 ; w w_plate 0
+E 0 -1 1 serve ; c held_soup 1 turn 1 ; o hand_free 1 served 1 ; w w_serve 0
+E 0 -1 1 partner_load ; c held_onion 1 turn 1 ; o hand_free 1 ; w w_partner 0
 I hand_free 1
 S 12

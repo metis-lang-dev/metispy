@@ -255,18 +255,21 @@ class Day:
         b0, f0, n = w.beat, len(self.repl.fired_rows), 0
         inner = getattr(self.host, "inner", self.host)
         lock = getattr(w, "lockstep", False)
-        if not getattr(inner, "done", False):
-            for s in w.begin():                 # the beat's tick first: the world read as it stands (copy semantics)
-                out += self.signal(s)
+        if not getattr(inner, "done", False) and not self.__dict__.get("_cut"):
+            for s in w.begin():                 # the beat's tick first: the world read as it stands (copy semantics);
+                out += self.signal(s)           # not after a beat cut at its cap: the clock waits for it to settle
+        self._cut = False
         while not w.done:
             if getattr(inner, "done", False):
                 w.done = True
                 break
-            would_tick = w.observe_only or (w.quiet and not self.repl._candidates()) or getattr(w, "held", False)
+            would_tick = w.observe_only or (w.quiet and not self.repl._candidates()) or getattr(w, "held", False) \
+                or getattr(w, "tick_due", False)
             if would_tick and (w.beat > b0 or (lock and len(self.repl.fired_rows) > f0)):
                 break
             if n >= self.beat_steps:
                 out += self.unsettled(f0, n)
+                self._cut = True
                 break
             n += 1
             for s in w.step():

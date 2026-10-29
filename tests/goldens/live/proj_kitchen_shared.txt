@@ -8,39 +8,12 @@ B w_load const 1.0
 B w_plate const 1.0
 B w_serve const 1.0
 B w_partner const 0.1
-P task | hand_free:1 pot_space:9 | 2 | hand_free:1 pot_onion:1 pot_space:8 | 0.989010989010989
-P task | hand_free:1 pot_space:9 | 2 | hand_free:1 | 1.0
-P task | hand_free:1 pot_space:9 | 2 | hand_free:2 pot_onion:1 pot_space:8 | 0.0
-P task | hand_free:1 pot_onion:2 pot_space:7 | 3 | hand_free:0 held_onion:1 pot_onion:3 pot_space:6 | 0.14084507042253522
-P task | hand_free:1 pot_onion:2 pot_space:7 | 3 | held_onion:1 | 0.15492957746478875
-P task | hand_free:1 pot_onion:2 pot_space:7 | 3 | hand_free:0 held_onion:2 pot_onion:3 pot_space:6 | 0.0
-P task | hand_free:1 pot_onion:4 pot_space:5 | 1 | hand_free:0 held_onion:1 pot_onion:4 pot_space:5 | 0.04
-P task | hand_free:1 pot_onion:4 pot_space:5 | 1 | held_onion:1 | 0.04
-P task | hand_free:1 pot_onion:4 pot_space:5 | 1 | hand_free:0 held_onion:2 pot_onion:4 pot_space:5 | 0.0
-P task | cooking:1 held_dish:1 pot_onion:2 pot_space:4 | 2 | cooking:0 hand_free:1 held_dish:0 pot_onion:2 pot_space:4 served:1 | 1.0
-P task | cooking:1 held_dish:1 pot_onion:2 pot_space:4 | 2 | hand_free:1 | 1.0
-P task | cooking:1 held_dish:1 pot_onion:2 pot_space:4 | 2 | cooking:0 hand_free:2 held_dish:0 pot_onion:2 pot_space:4 served:1 | 0.0
-P task | hand_free:1 pot_onion:3 pot_space:3 served:1 | 3 | hand_free:0 held_soup:1 pot_onion:0 pot_space:3 served:1 | 0.8163265306122448
-P task | hand_free:1 pot_onion:3 pot_space:3 served:1 | 3 | held_soup:1 | 0.8163265306122448
-P task | hand_free:1 pot_onion:3 pot_space:3 served:1 | 3 | hand_free:0 held_soup:2 pot_onion:0 pot_space:3 served:1 | 0.0
-P task | held_dish:1 held_onion:1 pot_space:6 served:2 | 3 | hand_free:1 held_dish:1 held_onion:0 pot_onion:2 pot_space:4 served:2 | 0.9643201542912249
-P task | held_dish:1 held_onion:1 pot_space:6 served:2 | 3 | hand_free:1 | 1.0000000000000002
-P task | held_dish:1 held_onion:1 pot_space:6 served:2 | 3 | hand_free:2 held_dish:1 held_onion:0 pot_onion:2 pot_space:4 served:2 | 0.0
-P task | held_dish:1 held_onion:1 pot_onion:2 pot_space:4 served:2 | 1 | hand_free:1 held_dish:1 held_onion:0 pot_onion:3 pot_space:3 served:2 | 0.9756097560975611
-P task | held_dish:1 held_onion:1 pot_onion:2 pot_space:4 served:2 | 1 | hand_free:1 | 1.0
-P task | held_dish:1 held_onion:1 pot_onion:2 pot_space:4 served:2 | 1 | hand_free:2 held_dish:1 held_onion:0 pot_onion:3 pot_space:3 served:2 | 0.0
-P task | held_dish:1 held_soup:1 pot_space:3 served:2 | 2 | held_dish:1 held_onion:1 held_soup:0 pot_space:3 served:3 | 1.0
-P task | held_dish:1 held_soup:1 pot_space:3 served:2 | 2 | held_dish:1 | 1.0
-P task | held_dish:1 held_soup:1 pot_space:3 served:2 | 2 | held_dish:2 held_onion:1 held_soup:0 pot_space:3 served:3 | 0.0
-P task | held_dish:1 held_onion:1 pot_onion:1 pot_space:2 served:3 | 3 | hand_free:1 held_dish:1 held_onion:0 pot_onion:3 pot_space:0 served:3 | 0.8658008658008657
-P task | held_dish:1 held_onion:1 pot_onion:1 pot_space:2 served:3 | 3 | hand_free:1 | 0.9999999999999999
-P task | held_dish:1 held_onion:1 pot_onion:1 pot_space:2 served:3 | 3 | hand_free:2 held_dish:1 held_onion:0 pot_onion:3 pot_space:0 served:3 | 0.0
-P task | cooking:1 hand_free:1 held_dish:1 served:3 | 1 | cooking:1 hand_free:0 held_dish:2 served:3 | 0.48780487804878053
-P task | cooking:1 hand_free:1 held_dish:1 served:3 | 1 | cooking:1 | 0.5121951219512195
-P task | cooking:1 hand_free:1 held_dish:1 served:3 | 1 | cooking:2 hand_free:0 held_dish:2 served:3 | 0.0
-P task | held_dish:1 held_onion:1 served:4 | 2 | held_dish:1 held_onion:1 served:4 | 1.0
-P task | held_dish:1 held_onion:1 served:4 | 2 | held_dish:1 | 1.0
-P task | held_dish:1 held_onion:1 served:4 | 2 | held_dish:2 held_onion:1 served:4 | 0.0
-P task | held_dish:1 held_onion:2 served:4 | 2 | held_dish:1 held_onion:2 served:4 | 0.9090909090909091
-P task | held_dish:1 held_onion:2 served:4 | 2 | held_dish:1 | 1.0
-P task | held_dish:1 held_onion:2 served:4 | 2 | held_dish:2 held_onion:2 served:4 | 0.0
+P task | hand_free:1 pot_space:9 turn:2 | 2 | hand_free:1 pot_onion:1 pot_space:8 turn:0 | 0.989010989010989
+P task | hand_free:1 pot_space:9 turn:2 | 2 | hand_free:1 | 1.0
+P task | hand_free:1 pot_space:9 turn:2 | 2 | hand_free:2 pot_onion:1 pot_space:8 turn:0 | 0.0
+P task | cooking:1 hand_free:3 held_dish:2 held_soup:1 pot_onion:1 pot_space:26 turn:2 | 2 | cooking:0 hand_free:2 held_dish:1 held_onion:1 held_soup:2 pot_onion:1 pot_space:26 turn:0 | 0.19668542839274544
+P task | cooking:1 hand_free:3 held_dish:2 held_soup:1 pot_onion:1 pot_space:26 turn:2 | 2 | hand_free:2 | 0.43658946677739163
+P task | cooking:1 hand_free:3 held_dish:2 held_soup:1 pot_onion:1 pot_space:26 turn:2 | 2 | cooking:0 hand_free:3 held_dish:1 held_onion:1 held_soup:2 pot_onion:1 pot_space:26 turn:0 | 0.0
+P task | hand_free:8 held_dish:1 held_soup:1 pot_space:26 served:2 turn:2 | 2 | hand_free:6 held_dish:1 held_onion:2 held_soup:1 pot_space:26 served:2 turn:0 | 0.18246985988921471
+P task | hand_free:8 held_dish:1 held_soup:1 pot_space:26 served:2 turn:2 | 2 | hand_free:6 | 0.18246985988921471
+P task | hand_free:8 held_dish:1 held_soup:1 pot_space:26 served:2 turn:2 | 2 | hand_free:7 held_dish:1 held_onion:2 held_soup:1 pot_space:26 served:2 turn:0 | 0.0

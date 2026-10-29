@@ -47,7 +47,7 @@ include = ["metis*"]
 # road's object table; without them a wheel install (non-editable) cannot build them
 # (tests/test_package_data.py)
 [tool.setuptools.package-data]
-"*" = ["catalogs/*.llp", "catalogs/*/*.llp", "data/*.json", "iface/*.llp", "iface/*.yaml"]
+"*" = ["catalogs/*.llp", "catalogs/*/*.llp", "catalogs/*/*/*.llp", "data/*.json", "iface/*.llp", "iface/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

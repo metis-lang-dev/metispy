@@ -34,11 +34,14 @@ def test_an_iface_include_resolves_to_the_standard_units_without_metis_home(tmp_
     monkeypatch.setenv("METIS_CATALOG", str(tmp_path))
     from metis.lang.compiler import include_path
     assert include_path("iface/protocol_domain.llp", tmp_path) == catalog.std() / "iface/protocol_domain.llp"
-    assert [why for _, why in catalog.places()] == ["the catalog root", "the standard units"]
+    assert [why for _, why in catalog.places()] == ["the catalog root", "the standard units", "METIS_HOME"]
     with pytest.raises(FileNotFoundError, match="the standard units"):
         include_path("iface/nowhere.llp", tmp_path)
-    with pytest.raises(FileNotFoundError):
+    monkeypatch.setenv("METIS_HOME", str(tmp_path / "home"))
+    with pytest.raises(FileNotFoundError, match="METIS_HOME") as e:
         catalog.find("image.py")                        # the standard units hold iface/ only
+    assert "the standard units" not in str(e.value)     # nor are they named for another path
+    monkeypatch.delenv("METIS_HOME")
     (tmp_path / "iface").mkdir()
     (tmp_path / "iface/protocol_domain.llp").write_text("catalog mine 1.\n")
     assert include_path("iface/protocol_domain.llp", tmp_path / "x") == tmp_path / "iface/protocol_domain.llp"   # the root first

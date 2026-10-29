@@ -75,6 +75,10 @@ ORDERS = [["+pot_space 9"], [], ["+hand_free"], ["+pot_space 3", "+held_onion"],
 # mid-activity: the second cook never goes quiet (fetch_onion, partner_load)
 AT = {0: ["+pot_space 9"], 20: ["+pot_space 3", "+held_dish"], 45: ["+hand_free"],
       70: ["+pot_space 6"], 100: ["-cooking", "+hand_free"]}
+# the pair's scenes are the tick form (catalogs/tick/: every action takes the world's turn): a turn with every
+# tick and every mid-activity input, so the runs act as the pair's hosts make them
+TURN_ORDERS = [t + ["+turn"] for t in ORDERS]
+TURN_AT = {k: v + ["+turn 2"] for k, v in AT.items()}
 
 PUBLIC = {
     # two stages, a link, constant and read-scoped ports, complements; a
@@ -114,10 +118,10 @@ DOMAINS = {
                        ["+cmd_lie", "+cmd_cancel", "+cmd_stand"],
                        ["+cmd_go(window_chair)", "+cmd_find(bottle)"],
                        ["+cmd_sit 2", "+cmd_follow"], ["+cmd_cancel 2"]]),
-    "kitchen": dict(seed=13, samples=150, bindings=KITCHEN, ticks=ORDERS,
-                    at=AT),
-    "kitchen_shared": dict(seed=17, samples=150, bindings=KITCHEN, ticks=ORDERS,
-                           at=AT),
+    "kitchen": dict(seed=13, samples=150, bindings=KITCHEN, ticks=TURN_ORDERS,
+                    at=TURN_AT),
+    "kitchen_shared": dict(seed=17, samples=150, bindings=KITCHEN, ticks=TURN_ORDERS,
+                           at=TURN_AT),
 }
 
 

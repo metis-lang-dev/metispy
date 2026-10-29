@@ -259,9 +259,9 @@ def check_golden(name, files):
             "then review the diff)"
 
 
-@pytest.mark.parametrize("name, scene", [
-    ("kitchen", KITCHEN / "kitchen_host.llp"),
-    ("kitchen_shared", KITCHEN / "shared" / "kitchen_shared.llp")])
+@pytest.mark.parametrize("name, scene", [                # pair.SCENES: the tick form (one action per world turn)
+    ("kitchen", KITCHEN / "tick" / "kitchen_host.llp"),
+    ("kitchen_shared", KITCHEN / "tick" / "shared" / "kitchen_shared.llp")])
 def test_the_kitchen_pair_golden(name, scene):
     """The pair's two cooks as their domain agents serve them (metis/
     domains/kitchen/pair.py SCENES): no extensions, the weight ports in the

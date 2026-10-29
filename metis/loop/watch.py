@@ -47,7 +47,13 @@ consequence on its own commands, so for such a member the window shows a
 belief change (fewer of its loads took), never a sibling's card; a member
 that wants partner changes explained reads the shared state as a
 world-owned reading at its tick (the tick form, catalogs/tick/: one action
-per tick, the window one action). Evidence: toolchain-units s-ddaed776
+per tick, the window one action). A member whose host steps the world on
+an event (an RDDL observing world's move: the host's `world_stepped()`)
+reads that world only at its tick, so each such event takes a tick: the
+watch's `tick_due` ends the beat there. A program that chains such events
+on its own modelled state would run ahead of a world it cannot see (the
+old live read after a firing hid it: nav's planted-death test found its
+10 of 10 that way). Evidence: toolchain-units s-ddaed776
 step 3's 20-variant probe (a partner load at the tick, orders of 3-6
 onions, five injection beats: never explained by kitchen_shared on the
 chained scene).
@@ -165,14 +171,22 @@ class Watch:
         sh = self.shell
         if self.done:
             return []
+        if self.__dict__.get("_tick_due") and not self.observe_only:
+            return self._tick_step()    # the world stepped on the last event: it is read before the next
         if not self.observe_only and not self.held and sh._candidates():
             self.quiet = False
             stage0 = sh.stage
             sh._sample()
             out = [self._row_signal()]
             if not self.lockstep:
-                # copy semantics: a fired rule's world reads at the next tick (begin); follow reads row by row
-                return out + self._read() if self.follow else out
+                if self.follow:
+                    return out + self._read()   # follow reads row by row (module doc)
+                # copy semantics: a fired rule's world reads at the next tick. A host that steps its world on the
+                # event (an RDDL observing world's move) makes that event take a tick: the next one waits for it
+                inner = getattr(sh.plugin, "inner", sh.plugin)
+                if callable(getattr(inner, "world_stepped", None)) and inner.world_stepped():
+                    self._tick_due = True
+                return out
             first = sh.prog.init_stage
             if sh.stage == first and stage0 != first:
                 self.held = True        # the pass wrapped: read, then the beat
@@ -219,8 +233,15 @@ class Watch:
             pre = []
         return pre + self._tick_rest()
 
+    @property
+    def tick_due(self) -> bool:
+        """The world stepped on the last event: the beat ends here, its next one starts with the tick (the beat
+        runners break on it as on a quiet session)."""
+        return bool(self.__dict__.get("_tick_due"))
+
     def _tick_rest(self) -> List[dict]:
         sh = self.shell
+        self._tick_due = False
         if sh.plugin is None or (self.beats is not None
                                  and self.beat >= self.beats):
             self.done = True
@@ -302,8 +323,11 @@ class Watch:
                     touched |= set(ev.consume) | set(ev.produce)
             if not touched:
                 return []               # nothing of its own to compare: the tick's input checkpoints
-            reading = {a: n for a, n in reading.items() if a in touched}
-            self._scope = touched       # an open surprise keeps being sensed on the same atoms
+            if self._shared_world():
+                # a world other members change too (kitchen_pot's pot): only the effects it modelled for its own
+                # commands are compared; another member's change is the tick's input
+                reading = {a: n for a, n in reading.items() if a in touched}
+                self._scope = touched   # an open surprise keeps being sensed on the same atoms
         elif self.open is not None and self.__dict__.get("_scope") is not None:
             reading = {a: n for a, n in reading.items() if a in self._scope}
         else:
@@ -358,6 +382,13 @@ class Watch:
             out[-1]["adopted"] = self._adopt(by="reading")
             self._checkpoint()
         return out
+
+    def _shared_world(self) -> bool:
+        """The host says other members act on its world too (`shared_world = True`, on the host or the agent host's
+        inner one). Then the tick's check compares only the member's own modelled effects; in a world only this member
+        acts on, every difference the snapshot shows is its commands' doing, compared whole."""
+        p = self.shell.plugin
+        return bool(getattr(p, "shared_world", False) or getattr(getattr(p, "inner", None), "shared_world", False))
 
     def _record(self, reading: Dict[str, int]) -> dict:
         sh = self.shell

@@ -88,23 +88,18 @@ def std() -> Path:
 def places(r=None):
     """Where a catalog path is looked for, in order: [(dir, why)] — the catalog root, the standard units (an
     iface/ path only), then METIS_HOME (the compiler's include rule after the including file's own directory:
-    metis.lang.compiler include_path; metisc's include_place). A place listed twice (METIS_HOME unset is
-    metispy's own catalog, the standard units' directory) is searched once."""
-    out = []
-    for d, why in [(_r(r), "the catalog root"), (std(), STD), (home(), "METIS_HOME")]:
-        if all(d != e for e, _ in out):
-            out.append((d, why))
-    return out
+    metis.lang.compiler include_path; metisc's include_place). The standard units answer iface/ paths only
+    (find), so METIS_HOME unset (metispy's own catalog, the standard units' directory too) stays its own place
+    for every other path."""
+    return [(_r(r), "the catalog root"), (std(), STD), (home(), "METIS_HOME")]
 
 
 def find(rel, r=None, kind="file") -> Path:
     """`rel` (a file, or with kind="dir" a directory) under the first of places(): FileNotFoundError
     naming every place searched when it is in none. The standard units hold iface/ only."""
     test = Path.is_dir if kind == "dir" else Path.is_file
-    ps = places(r)
+    ps = [(d, why) for d, why in places(r) if why != STD or Path(rel).parts[:1] == ("iface",)]
     for d, why in ps:
-        if why == STD and Path(rel).parts[:1] != ("iface",):
-            continue
         if test(d / rel):
             return (d / rel).resolve()
     raise FileNotFoundError("%r: not under %s" % (str(rel), ", ".join("%s (%s)" % (d, why) for d, why in ps)))
@@ -191,7 +186,8 @@ def get(name, r=None):
         for d in _shared(r):
             if d.name == name:
                 return d
-        raise KeyError("no domain %r in %s" % (name, ", ".join("%s (%s)" % (p, why) for p, why in places()))) from None
+        raise KeyError("no domain %r in %s" % (name, ", ".join("%s (%s)" % (p, why) for p, why in places()
+                                                               if why != STD))) from None   # a domain is never a standard unit
 
 
 def index(r=None):

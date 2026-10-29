@@ -1,7 +1,7 @@
 {
  "format": "metis-sidecar/1",
  "catalog": "kitchen_shared",
- "key": "133de546d5476034d0daa06466e4f0406f711d30bc304858e9270c630081ce08",
+ "key": "3b4154269e6062d4c65027d6ac859c18232a4ab3e65aee875e19b77cf7e6af60",
  "extensions": [],
  "init": {
   "hand_free": 1
@@ -22,7 +22,7 @@
   },
   {
    "i": 1,
-   "canon": 4,
+   "canon": 3,
    "name": "load",
    "rule": "load",
    "kind": "clause",
@@ -67,7 +67,7 @@
   },
   {
    "i": 6,
-   "canon": 3,
+   "canon": 4,
    "name": "partner_load",
    "rule": "partner_load",
    "kind": "clause",
@@ -103,6 +103,11 @@
      "doc": "walk to a dispenser and take an onion.",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": false
@@ -122,6 +127,11 @@
      "stage": "task",
      "doc": "drop the onion into pot capacity.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_onion",
        "n": 1,
@@ -153,6 +163,11 @@
      "doc": "three onions start the cook — needs a free hand to press start (the env's interact semantics; also forces cook-before-dish).",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": true
@@ -178,6 +193,11 @@
      "doc": "fetch a dish while the soup cooks.",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "hand_free",
        "n": 1,
        "kept": false
@@ -197,6 +217,11 @@
      "stage": "task",
      "doc": "cooked soup onto the held dish.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_dish",
        "n": 1,
@@ -223,6 +248,11 @@
      "doc": "deliver.",
      "premises": [
       {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
+      {
        "atom": "held_soup",
        "n": 1,
        "kept": false
@@ -247,6 +277,11 @@
      "stage": "task",
      "doc": "the second cook drops the onion it holds into the first cook's pot.",
      "premises": [
+      {
+       "atom": "turn",
+       "n": 1,
+       "kept": false
+      },
       {
        "atom": "held_onion",
        "n": 1,
@@ -299,6 +334,10 @@
     {
      "name": "served",
      "doc": "soups served"
+    },
+    {
+     "name": "turn",
+     "doc": "the world's turn: one action per tick"
     }
    ],
    "missing": {
