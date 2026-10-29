@@ -289,8 +289,11 @@ class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
     def __init__(self, path, seed=1, terminal=False, plugin=None,
-                 registry=None, host=False, history=None, **kw):
+                 registry=None, host=False, history=None, manifest=None, **kw):
         super().__init__(**kw)
+        # manifest= (metis-lang spec/16 amendment 1): the package's domain.yaml, or its dict
+        # (a loop's candidate levels): its levels' generated declarations join the program's
+        self._manifest = manifest
         # history=N (watch-history s-e061fad2): a long-running watch keeps
         # the last N fired rows (fired, fired_rows, fired_how, the env
         # snapshots, the ledger and undo marks within them) as a Window
@@ -393,9 +396,11 @@ class Repl(LoopVerbs, Cmd):
     # -- catalog / session plumbing ------------------------------------
 
     def _compile(self):
+        from metis.lang.levels import with_levels
         text = self.path.read_text()
         ast = parse(text, file=str(self.path))
-        doc = compile_catalog(resolve_includes(ast, self.path.parent))
+        doc = compile_catalog(with_levels(resolve_includes(ast, self.path.parent),
+                                          self.__dict__.get("_manifest")))
         return text, doc, embedded_case(text)
 
     def _load(self, initial=False):

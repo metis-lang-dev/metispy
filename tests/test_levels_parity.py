@@ -51,3 +51,15 @@ def test_a_dict_manifest_generates_the_same(monkeypatch):
     man = yaml.safe_load((CORPUS / "alf_view/domain.yaml").read_text())
     cat = resolve_includes(parse_file(str(CORPUS / "alf.llp")), CORPUS)
     assert [decl_line(d) for d in levels.level_decls(man, cat)] == levels.lines(CORPUS / "alf_view/domain.yaml")
+
+
+def test_a_session_opens_the_level_program_with_its_manifest():
+    """The REPL (metis.repl.Repl.open, the loop's predictor and episodes) takes the manifest, a path or a dict."""
+    import yaml
+    from metis.kernel.catalog import CatalogError
+    from metis.repl import Repl
+    man = CORPUS / "alf_view/domain.yaml"
+    for m in (man, yaml.safe_load(man.read_text())):
+        assert Repl.open(CORPUS / "alf.llp", manifest=m).state()["stage"] == "act"
+    with pytest.raises(CatalogError, match="place_level"):
+        Repl.open(CORPUS / "alf.llp")
