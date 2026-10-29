@@ -681,7 +681,7 @@ def _inc_domain(root):
     d = root / "domains/inc"
     d.mkdir(parents=True)
     (d / "inc_rules.llp").write_text("% the lifted part\ncatalog inc-rules 1.\nlayers (story).\nstages (s).\n"
-                                     "namespace w produce (story).\npred a : w.\npred b : w.\nbwd near(cell).\nstage s {\n"
+                                     "types (cell).\nnamespace w produce (story).\npred a : w.\npred b : w.\nbwd near(cell).\nstage s {\n"
                                      "  %% a becomes b.\n  ab [story] : a -o b.\n}\n")
     (d / "inc.llp").write_text('% the instance: its header\ncatalog inc 1.\nprovenance hand "t" "2026-10-18".\n'
                                'type cell {c1 c2}.\ninclude "inc_rules.llp".\nnear(c1).\n#init a 1\n#steps 2\n')

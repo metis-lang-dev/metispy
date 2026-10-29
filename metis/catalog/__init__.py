@@ -7,6 +7,7 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
     from metis import catalog
     catalog.root()                  # $METIS_CATALOG, else the cwd (cd DIR && metis-loop: DIR is the catalog)
     catalog.home()                  # $METIS_HOME, else metispy's own metis/catalog: the shared packages
+    catalog.std()                   # the standard units' directory (iface/ in it): metis-lang's, vendored
     catalog.find_package("dog")     # <root>/domains/dog, else <home>/domains/dog (the include rule's order)
     catalog.shared()                # METIS_HOME's domains the root lacks: index()/listing() mark them shared
     catalog.state()                 # DIR/.metis/: the loop's own state (git-ignored when DIR is a checkout)
@@ -74,19 +75,36 @@ def home() -> Path:
     return Path(h).resolve() if h else Path(__file__).resolve().parent
 
 
+STD = "the standard units"
+
+
+def std() -> Path:
+    """The language's standard units (metis-lang spec/17 amendment 5): metis-lang's iface/, vendored byte for byte
+    in metis/catalog/iface/ (tests/catalog/test_std_units.py holds the copy to metis-lang's). The directory an
+    `iface/NAME` include resolves under, as metisc's <bindir>/../iface."""
+    return Path(__file__).resolve().parent
+
+
 def places(r=None):
-    """Where a catalog path is looked for, in order: [(dir, why)] — the catalog root, then METIS_HOME
-    (the compiler's include rule after the including file's own directory: metis.lang.compiler
-    include_path)."""
-    return [(_r(r), "the catalog root"), (home(), "METIS_HOME")]
+    """Where a catalog path is looked for, in order: [(dir, why)] — the catalog root, the standard units (an
+    iface/ path only), then METIS_HOME (the compiler's include rule after the including file's own directory:
+    metis.lang.compiler include_path; metisc's include_place). A place listed twice (METIS_HOME unset is
+    metispy's own catalog, the standard units' directory) is searched once."""
+    out = []
+    for d, why in [(_r(r), "the catalog root"), (std(), STD), (home(), "METIS_HOME")]:
+        if all(d != e for e, _ in out):
+            out.append((d, why))
+    return out
 
 
 def find(rel, r=None, kind="file") -> Path:
     """`rel` (a file, or with kind="dir" a directory) under the first of places(): FileNotFoundError
-    naming every place searched when it is in none."""
+    naming every place searched when it is in none. The standard units hold iface/ only."""
     test = Path.is_dir if kind == "dir" else Path.is_file
     ps = places(r)
-    for d, _ in ps:
+    for d, why in ps:
+        if why == STD and Path(rel).parts[:1] != ("iface",):
+            continue
         if test(d / rel):
             return (d / rel).resolve()
     raise FileNotFoundError("%r: not under %s" % (str(rel), ", ".join("%s (%s)" % (d, why) for d, why in ps)))
@@ -656,11 +674,9 @@ def metisc():
 
 
 def metisc_env():
-    """The environment for a metisc this process starts: METIS_HOME defaulted to metispy's own (metis/catalog, where
-    the shared iface/ packages are), so both toolchains resolve an include in the same three places."""
-    env = dict(os.environ)
-    env.setdefault("METIS_HOME", str(Path(__file__).resolve().parent))
-    return env
+    """The environment for a metisc this process starts: this one's. metisc finds its own standard units (spec/17
+    amendment 5), so METIS_HOME is the user's when set and absent when not, as here."""
+    return dict(os.environ)
 
 
 NO_METISC = ("no metisc to check a program's edit: set METISC or put metisc on PATH "
