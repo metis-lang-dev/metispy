@@ -25,7 +25,7 @@ def test_every_protocol_pred_has_its_nature():
     nature = yaml.safe_load(iface.path("protocol_domain.yaml").read_text())["nature"]
     assert preds == set(nature)
     assert {p for p, n in nature.items() if n == "report"} == {"tick__status", "tick__active", "tick__done", "tick__stuck",
-                                                               "tick__want", "tick__release"}
+                                                               "tick__want", "tick__release", "tick__committed", "tick__yield"}
     assert set(nature.values()) <= {"report", "signal", "resource"}
 
 

@@ -20,6 +20,8 @@ pred tick__stuck(domain) : proto.                  % D cannot go on
 
 pred tick__want(domain, resource) : proto.         % D asks for R (kept asked until granted, once per need)
 pred tick__release(domain, resource) : proto.      % D is done with R (its goal may go on: a cook releases the pot, then serves)
+pred tick__committed(domain, resource) : proto.    % D's action on R is atomic from its next command on: a stop does not revoke it (spec/15 amendment 9)
+pred tick__yield(domain, resource) : proto.        % D's atomic action on R is over
 
 % ── the grants (the director's, read by a specialist) ──
 pred tick__grant(domain, resource) : proto.        % D holds R: only the holder's commands reach the world

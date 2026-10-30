@@ -2,7 +2,7 @@
 % §3, §9; metis-lang spec/15 §4 form S). Every composition includes it and supplies only its instance: its
 % members (type domain), its resources (type resource), its priorities (priority(P, Q)), its hysteresis k and m
 % (mature_grant / young_grant, mature_status), and the start (free(R), issue(R, t0), serving(R, t0) per resource;
-% offpath, nowant, nolate, age_of(D, a0) per member). Over the protocol (iface/protocol_domain.llp): the specialists'
+% offpath, nowant, nolate, nocommit, age_of(D, a0) per member). Over the protocol (iface/protocol_domain.llp): the specialists'
 % reports in (tick__want, tick__release, tick__active, tick__done, tick__stuck, the agent's tick__status), the
 % grants out (tick__grant, tick__revoke, tick__goal, tick__cancel on the agent's tick__stop).
 %   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request takes a ticket (a bakery:
@@ -23,6 +23,9 @@
 %     the members on the path (tick__cancel(D) takes D's goal: a revoke takes the body and keeps it), popping them,
 %     frees what is held (tick__revoke) and passes over the tickets queued (skipped: a waiter re-wants on its next
 %     goal). No reload: its session stays as these rules leave it.
+%   the COMMITTED ACTION (spec/15 amendment 9): a holder's tick__committed(D, R) says its action is atomic from its next
+%     command on. A stop then cancels its goal as ever and does not revoke it; the revoke comes when it reports
+%     tick__yield(D, R). Preemption does not look at it. nocommit(D), per member in the start, is its complement.
 % A director that also routes kinds (metis-catalog's director_domain: wake / sleep) adds
 % iface/director_tree_wake.llp: the grant with the wake, the release with the sleep.
 catalog director_tree_domain 1.
@@ -64,6 +67,10 @@ pred skipped(resource, ticket) : tree.    % a ticket whose holder came first by 
 pred late(domain) : tree.                 % asleep (or released) while its grant was young: the release waits
 pred nolate(domain) : tree.
 pred late_release(domain, resource) : tree.
+pred nocommit(domain) : tree.             % D's action is not atomic now: a stop revokes it
+pred commit(domain, resource) : tree.     % D's action on R is atomic: a stop does not revoke it
+pred owing(domain, resource) : tree.      % … and a stop came: the revoke waits for its yield
+pred owed(domain, resource) : tree.       % it yielded: D holds R no longer once this is taken
 pred want(domain) : tree.                 % woken while the holder's grant is young: the grant waits
 pred nowant(domain) : tree.
 pred path(domain) : tree.                 % D is on the running branch
@@ -96,9 +103,25 @@ stage act {
   %% Stopped: {D}'s goal is cancelled.
   stop_cancel [dyn] : $tick__stop * path(D) * tick__goal(D) -o tick__cancel(D) * offpath(D).
   %% Stopped: no ticket for {R} is left, {R} is free.
-  stop_release [dyn] : $tick__stop * holder(D, R) * held(D, A) * $serving(R, T) * $issue(R, T) -o free(R) * tick__revoke(D, R).   % after the queue is passed over (serving at issue): no waiter is granted mid-stop
+  stop_release [dyn] : $tick__stop * $nocommit(D) * holder(D, R) * held(D, A) * $serving(R, T) * $issue(R, T) -o free(R) * tick__revoke(D, R).   % after the queue is passed over (serving at issue): no waiter is granted mid-stop
   %% Stopped: {D}'s ticket for {R} is passed over.
   stop_dequeue [dyn] : $tick__stop * queued(D, R, T) -o skipped(R, T).   % skip_ticket moves serving on: [serving, issue) stays queued-or-skipped
+
+  % ── the committed action ──
+  %% {D}'s action on {R} is atomic.
+  commit_on [dyn] : tick__committed(D, R) * nocommit(D) -o commit(D, R).
+  %% {D} says again that its action on {R} is atomic.
+  commit_more [dyn] : tick__committed(D, R) * $commit(D, R) -o ().
+  %% {D}'s atomic action on {R} is over.
+  commit_off [dyn] : tick__yield(D, R) * commit(D, R) -o nocommit(D).
+  %% Stopped: {D}'s action on {R} is atomic, its revoke waits.
+  stop_committed [dyn] : $tick__stop * commit(D, R) * $holder(D, R) -o owing(D, R).
+  %% {D}'s atomic action on {R} is over, and a stop came: the revoke is owed.
+  yield_owing [dyn] : tick__yield(D, R) * owing(D, R) -o nocommit(D) * owed(D, R).
+  %% The stop's revoke: {R} is free.
+  owed_release [dyn] : owed(D, R) * holder(D, R) * held(D, A) -o free(R) * tick__revoke(D, R).
+  %% Stopped again: what was owed is this stop's.
+  owed_drop [dyn] : $tick__stop * owed(D, R) -o ().
 
   % ── the ages: the grants', the statuses' ──
   %% A tick: {D}'s grant is older.
