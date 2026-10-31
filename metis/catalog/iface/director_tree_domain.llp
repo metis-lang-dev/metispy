@@ -48,7 +48,8 @@ older(a0, a1).
 older(a1, a2).
 older(a2, a3).
 top(a3).
-pred gen(resource, tick__gen) : tree.     % R's generation: its last grant's (the instance's start: gen(R, g0))
+type grant_cause {asked woken}.            % a grant from the member's own ticket, or the routing's
+pred gen(resource, tick__gen, grant_cause) : tree.   % R's generation: its last grant's, and how it came (the instance's start: gen(R, g0, woken))
 bwd gnext(tick__gen, tick__gen).
 gnext(g0, g1).
 gnext(g1, g2).
@@ -92,17 +93,19 @@ stage act {
   %% {D} asks for {R}: it takes a ticket.
   want_queue [dyn] : tick__want(D, R) * issue(R, T) * $tnext(T, T2) -o queued(D, R, T) * issue(R, T2).
   %% {R} is free and it is {D}'s turn: {D} holds it.
-  grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2) * gen(R, G2) * tick__gen(D, R, G2).
+  grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) * gen(R, G, K) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2) * gen(R, G2, asked) * tick__gen(D, R, G2).
   %% {D} comes first: it takes {R} from {X}, who takes a new ticket.
-  preempt [dyn] : queued(D, R, T) * $priority(D, X) * holder(X, R) * held(X, A) * issue(R, T3) * $tnext(T3, T4) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * skipped(R, T) * queued(X, R, T3) * issue(R, T4) * gen(R, G2) * tick__gen(D, R, G2).
+  preempt [dyn] : queued(D, R, T) * $priority(D, X) * holder(X, R) * held(X, A) * issue(R, T3) * $tnext(T3, T4) * gen(R, G, K) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * skipped(R, T) * queued(X, R, T3) * issue(R, T4) * gen(R, G2, asked) * tick__gen(D, R, G2).
   %% {D}'s turn was taken by priority: the next ticket's turn.
   skip_ticket [dyn] : skipped(R, T) * serving(R, T) * $tnext(T, T2) -o serving(R, T2).
   %% {D} gives {R} back.
-  release_on_report [dyn] : tick__released(D, R, G) * $gen(R, G) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
+  release_on_report [dyn] : tick__released(D, R, G) * $gen(R, G, K) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} gives {R} back while its grant is young: the release waits.
-  release_report_wait [dyn] : tick__released(D, R, G) * $gen(R, G) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
+  release_report_wait [dyn] : tick__released(D, R, G) * $gen(R, G, K) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
   %% {D} is done with a grant that is over, and waits with a ticket: it no longer asks for {R}.
-  release_withdraw [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 * queued(D, R, T) -o skipped(R, T).
+  release_withdraw [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 * queued(D, R, T) -o skipped(R, T).
+  %% {D} was done before it saw the grant it asked for: that grant is over too, once old enough.
+  release_crossed [dyn] : tick__released(D, R, G) * $gen(R, G2, asked) * G <> G2 * $holder(D, R) -o late_release(D, R).
   %% {D}'s release waited; {R} is free now.
   late_release_free [dyn] : late_release(D, R) * $free(R) -o ().
   %% {D}'s release waited; {X} holds {R} now.
@@ -166,7 +169,7 @@ stage act {
 qui to_settle [dyn] : act * $tick__released(D, R, G) -o settle.
 stage settle {
   %% {D} released a grant that is over: the release is stale.
-  release_old [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 -o ().
+  release_old [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 -o ().
   %% {D} released {R}, and {R} is free already: the release is stale.
   release_on_free [dyn] : tick__released(D, R, G) * $free(R) -o ().
   %% {D} released {R}, and {X} holds it: the release is stale.
