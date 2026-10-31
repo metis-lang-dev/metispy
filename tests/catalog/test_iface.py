@@ -143,3 +143,13 @@ def test_a_priority_preempts_and_its_ticket_is_skipped(tmp_path):
     assert _do(r, "+tick__released(a,pot,g2)") == ["holder(c,pot)"]   # c's t1 was serving
     _do(r, "+tick")
     assert _do(r, "+tick__released(c,pot,g3)") == ["holder(b,pot)"]   # t2 skipped, b's t3
+
+
+def test_a_request_in_one_report_with_a_release_is_not_the_ticket_withdrawn(tmp_path):
+    """The old ticket goes, the new request stands: an un-want reaches only tickets from earlier beats."""
+    r = _tree(tmp_path, priority=[("a", "b")])
+    _do(r, "+tick__want(b,pot)")                                       # b: g1
+    _do(r, "+tick__want(a,pot)")                                       # a preempts: g2, b queued again, t2
+    _do(r, "+tick__released(b,pot,g1)", "+tick__want(b,pot)")
+    queued = [k for k, n in r.counts.items() if n > 0 and k.startswith("queued(")]
+    assert queued == ["queued(b,pot,t3)"]

@@ -90,8 +90,6 @@ pred age_of(domain, age) : tree.          % how many ticks D's status has held
 
 stage act {
   % ── the requests ──
-  %% {D} asks for {R}: it takes a ticket.
-  want_queue [dyn] : tick__want(D, R) * issue(R, T) * $tnext(T, T2) -o queued(D, R, T) * issue(R, T2).
   %% {R} is free and it is {D}'s turn: {D} holds it.
   grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) * gen(R, G, K) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2) * gen(R, G2, asked) * tick__gen(D, R, G2).
   %% {D} comes first: it takes {R} from {X}, who takes a new ticket.
@@ -164,10 +162,15 @@ stage act {
   done_off [dyn] : tick__done(D) * $offpath(D) -o ().
 }
 
-% ── a release nothing above took: stale (spec/15 amendment 10), after the rest of the beat, so a ticket it withdraws goes first ──
+% ── a release nothing above took: stale (spec/15 amendment 10), after the rest of the beat, so a ticket it withdraws goes first;
+%    the requests here too, so a request in one report with a release is not the ticket that release withdraws ──
 %% A release is left over.
 qui to_settle [dyn] : act * $tick__released(D, R, G) -o settle.
+%% A request is in.
+qui to_settle_want [dyn] : act * $tick__want(D, R) -o settle.
 stage settle {
+  %% {D} asks for {R}: it takes a ticket.
+  want_queue [dyn] : tick__want(D, R) * issue(R, T) * $tnext(T, T2) -o queued(D, R, T) * issue(R, T2).
   %% {D} released a grant that is over: the release is stale.
   release_old [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 -o ().
   %% {D} released {R}, and {R} is free already: the release is stale.
