@@ -151,7 +151,7 @@ stage act {
 
 
 def test_the_release_echo_and_its_start(tmp_path):
-    """spec/15 amendment 10: a member that gives a resource back gets the echo in its generated block, and tick__gen from the start."""
+    """spec/15 amendment 10: a member that gives a resource back gets the echo; seed_lines is its instance's start."""
     assert ps.released_resources(RELEASING) == [("nav", "motion")]
     assert ps.release_rules(RELEASING, "nav") == [
         "  %% I gave {R} back: I say which grant.",
