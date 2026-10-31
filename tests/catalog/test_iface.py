@@ -113,6 +113,18 @@ def test_a_release_of_a_grant_that_is_over_changes_nothing(tmp_path):
     assert _do(r, "+tick__released(b,pot,g2)") == []                   # its own frees it
 
 
+def test_a_release_of_a_grant_that_is_over_withdraws_the_members_ticket(tmp_path):
+    """The un-want (spec/15 amendment 10): its reason passed while it waited, so its turn never comes up to sit idle."""
+    r = _tree(tmp_path, priority=[("a", "b")])
+    _do(r, "+tick__want(b,pot)")                                       # b: g1
+    assert _do(r, "+tick__want(a,pot)") == ["holder(a,pot)"]           # a preempts: g2, and b queued again
+    assert r.counts.get("queued(b,pot,t2)") == 1
+    assert _do(r, "+tick__released(b,pot,g1)") == ["holder(a,pot)"]    # b's reason passed
+    assert not [k for k, n in r.counts.items() if n > 0 and k.startswith("queued(")]
+    _do(r, "+tick")
+    assert _do(r, "+tick__released(a,pot,g2)") == []                   # free: b's turn does not come up
+
+
 def test_a_tree_member_may_ask_again_while_it_holds(tmp_path):
     """A release and a want in one report: its want stands (the rule that passes a holder's ticket over is the routing's)."""
     r = _tree(tmp_path)

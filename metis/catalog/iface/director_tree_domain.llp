@@ -32,7 +32,7 @@
 catalog director_tree_domain 1.
 provenance text "the director as a tree: requests and grants of resources with hysteresis and priority, the path, the statuses' ages" "2026-10-25".
 layers (dyn).
-stages (act).
+stages (act settle).
 include "protocol_domain.llp".
 
 namespace tree produce (dyn).
@@ -101,10 +101,8 @@ stage act {
   release_on_report [dyn] : tick__released(D, R, G) * $gen(R, G) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} gives {R} back while its grant is young: the release waits.
   release_report_wait [dyn] : tick__released(D, R, G) * $gen(R, G) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
-  %% {D} released a grant that is over: the release is stale.
-  release_old [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 -o ().
-  %% {D} released {R}, and {R} is free already: the release is stale.
-  release_on_free [dyn] : tick__released(D, R, G) * $gen(R, G) * $free(R) -o ().
+  %% {D} is done with a grant that is over, and waits with a ticket: it no longer asks for {R}.
+  release_withdraw [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 * queued(D, R, T) -o skipped(R, T).
   %% {D}'s release waited; {R} is free now.
   late_release_free [dyn] : late_release(D, R) * $free(R) -o ().
   %% {D}'s release waited; {X} holds {R} now.
@@ -162,3 +160,17 @@ stage act {
   %% {D} is done, and off the path already.
   done_off [dyn] : tick__done(D) * $offpath(D) -o ().
 }
+
+% ── a release nothing above took: stale (spec/15 amendment 10), after the rest of the beat, so a ticket it withdraws goes first ──
+%% A release is left over.
+qui to_settle [dyn] : act * $tick__released(D, R, G) -o settle.
+stage settle {
+  %% {D} released a grant that is over: the release is stale.
+  release_old [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 -o ().
+  %% {D} released {R}, and {R} is free already: the release is stale.
+  release_on_free [dyn] : tick__released(D, R, G) * $free(R) -o ().
+  %% {D} released {R}, and {X} holds it: the release is stale.
+  release_other [dyn] : tick__released(D, R, G) * $holder(X, R) * D <> X -o ().
+}
+%% Back to the beat.
+qui from_settle [dyn] : settle -o act.
