@@ -101,7 +101,7 @@ stage act {
   %% {D} gives {R} back while its grant is young: the release waits.
   release_report_wait [dyn] : tick__released(D, R, G) * $gen(R, G, K) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
   %% {D} is done with a grant that is over, and waits with a ticket: it no longer asks for {R}.
-  release_withdraw [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 * queued(D, R, T) -o skipped(R, T).
+  unwant [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 * queued(D, R, T) -o skipped(R, T).
   %% {D} was done before it saw the grant it asked for: that grant is over too, once old enough.
   release_crossed [dyn] : tick__released(D, R, G) * $gen(R, G2, asked) * G <> G2 * $holder(D, R) -o late_release(D, R).
   %% {D}'s release waited; {R} is free now.
