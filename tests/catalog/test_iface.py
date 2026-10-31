@@ -113,14 +113,13 @@ def test_a_release_of_a_grant_that_is_over_changes_nothing(tmp_path):
     assert _do(r, "+tick__released(b,pot,g2)") == []                   # its own frees it
 
 
-def test_a_holders_ticket_is_passed_over(tmp_path):
+def test_a_tree_member_may_ask_again_while_it_holds(tmp_path):
+    """A release and a want in one report: its want stands (the rule that passes a holder's ticket over is the routing's)."""
     r = _tree(tmp_path)
     _do(r, "+tick__want(b,pot)")
-    _do(r, "+tick__want(c,pot)")                                       # c: t1
-    assert _do(r, "+tick__want(b,pot)") == ["holder(b,pot)"]           # b holds and asks again: t2, passed over
-    assert r.counts.get("skipped(pot,t2)", 0) == 1
     _do(r, "+tick")
-    assert _do(r, "+tick__released(b,pot,g1)") == ["holder(c,pot)"]
+    assert _do(r, "+tick__want(b,pot)", "+tick__released(b,pot,g1)") == ["holder(b,pot)"]    # its next grant
+    assert r.counts.get("tick__gen(b,pot,g2)", 0) == 1
 
 
 def test_a_priority_preempts_and_its_ticket_is_skipped(tmp_path):

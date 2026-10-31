@@ -31,6 +31,8 @@ stage act {
   late_free [dyn] : late(D, R) * $free(R) -o nolate(D).
   %% {D}'s sleep waited; {X} holds {R} now.
   late_other [dyn] : late(D, R) * $holder(X, R) * D <> X -o nolate(D).
+  %% {D} is woken and holds {R}: the ticket it had before is passed over.
+  ticket_held [dyn] : queued(D, R, T) * $wake(D) * $holder(D, R) -o skipped(R, T).
   %% {D} is on the path.
   path_on [dyn] : $wake(D) * offpath(D) -o path(D) * tick__goal(D).
   %% {D} is off the path.

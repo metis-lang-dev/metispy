@@ -109,8 +109,6 @@ stage act {
   late_release_free [dyn] : late_release(D, R) * $free(R) -o ().
   %% {D}'s release waited; {X} holds {R} now.
   late_release_other [dyn] : late_release(D, R) * $holder(X, R) * D <> X -o ().
-  %% {D} holds {R}: its ticket is passed over.
-  ticket_held [dyn] : queued(D, R, T) * $holder(D, R) -o skipped(R, T).
   %% {D}'s grant is old enough: {R} is free.
   release_report_late [dyn] : late_release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} is stuck: {R} is free.
