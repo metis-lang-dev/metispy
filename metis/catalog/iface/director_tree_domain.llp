@@ -1,15 +1,16 @@
 % director_tree_domain — the director as a TREE, the generic base (specialist-tree s-404d001f step 3b; brief v2
 % §3, §9; metis-lang spec/15 §4 form S). Every composition includes it and supplies only its instance: its
 % members (type domain), its resources (type resource), its priorities (priority(P, Q)), its hysteresis k and m
-% (mature_grant / young_grant, mature_status), and the start (free(R), issue(R, t0), serving(R, t0) per resource;
+% (mature_grant / young_grant, mature_status), and the start (free(R), gen(R, g0), issue(R, t0), serving(R, t0) per resource;
 % offpath, nowant, nolate, nocommit, age_of(D, a0) per member). Over the protocol (iface/protocol_domain.llp): the specialists'
-% reports in (tick__want, tick__release, tick__active, tick__done, tick__stuck, the agent's tick__status), the
+% reports in (tick__want, tick__released, tick__active, tick__done, tick__stuck, the agent's tick__status), the
 % grants out (tick__grant, tick__revoke, tick__goal, tick__cancel on the agent's tick__stop).
 %   the RESOURCE: free(R), or holder(D, R) with the grant's age held(D, A). A request takes a ticket (a bakery:
 %     issue(R, T), queued(D, R, T)); a free R goes to the member whose ticket is serving(R, T): first asked, first
 %     served, never the evaluation order (requests relayed at one boundary take their tickets in the director's
-%     sampled order). A release (tick__release) frees R once the grant is old enough, else it waits (late);
-%     a stuck member frees what it holds at once.
+%     sampled order). A release (tick__released, naming its grant's generation) frees R once the grant is old
+%     enough, else it waits (late); a stale one, of a grant that is over, is consumed and nothing else (spec/15
+%     amendment 10); a stuck member frees what it holds at once.
 %   PREEMPTION, the one exception to the grant's hysteresis: by a declared priority(P, Q) (a strict order: no
 %     preempt-back), a queued P takes R from its holder Q whatever the age, out of turn (its ticket is skipped when
 %     its turn comes); Q takes a new ticket — queued again behind those already waiting, never dropped; P's grant
@@ -47,6 +48,12 @@ older(a0, a1).
 older(a1, a2).
 older(a2, a3).
 top(a3).
+pred gen(resource, tick__gen) : tree.     % R's generation: its last grant's (the instance's start: gen(R, g0))
+bwd gnext(tick__gen, tick__gen).
+gnext(g0, g1).
+gnext(g1, g2).
+gnext(g2, g3).
+gnext(g3, g0).
 pred free(resource) : tree.               % the resource, free
 pred holder(domain, resource) : tree.     % … or held
 pred held(domain, age) : tree.            % the holder's grant, its age in ticks
@@ -64,7 +71,7 @@ pred issue(resource, ticket) : tree.      % R's next ticket to hand out (the ins
 pred serving(resource, ticket) : tree.    % … and the ticket whose turn it is (serving(R, t0))
 pred queued(domain, resource, ticket) : tree.   % D asked for R and waits with its ticket
 pred skipped(resource, ticket) : tree.    % a ticket whose holder came first by priority: its turn is passed over
-pred late(domain) : tree.                 % asleep (or released) while its grant was young: the release waits
+pred late(domain, resource) : tree.       % asleep (or released) while its grant was young: the release waits
 pred nolate(domain) : tree.
 pred late_release(domain, resource) : tree.
 pred nocommit(domain) : tree.             % D's action is not atomic now: a stop revokes it
@@ -85,15 +92,25 @@ stage act {
   %% {D} asks for {R}: it takes a ticket.
   want_queue [dyn] : tick__want(D, R) * issue(R, T) * $tnext(T, T2) -o queued(D, R, T) * issue(R, T2).
   %% {R} is free and it is {D}'s turn: {D} holds it.
-  grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2).
+  grant_on_want [dyn] : queued(D, R, T) * serving(R, T) * free(R) * $tnext(T, T2) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * serving(R, T2) * gen(R, G2) * tick__gen(D, R, G2).
   %% {D} comes first: it takes {R} from {X}, who takes a new ticket.
-  preempt [dyn] : queued(D, R, T) * $priority(D, X) * holder(X, R) * held(X, A) * issue(R, T3) * $tnext(T3, T4) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * skipped(R, T) * queued(X, R, T3) * issue(R, T4).
+  preempt [dyn] : queued(D, R, T) * $priority(D, X) * holder(X, R) * held(X, A) * issue(R, T3) * $tnext(T3, T4) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * skipped(R, T) * queued(X, R, T3) * issue(R, T4) * gen(R, G2) * tick__gen(D, R, G2).
   %% {D}'s turn was taken by priority: the next ticket's turn.
   skip_ticket [dyn] : skipped(R, T) * serving(R, T) * $tnext(T, T2) -o serving(R, T2).
   %% {D} gives {R} back.
-  release_on_report [dyn] : tick__release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
+  release_on_report [dyn] : tick__released(D, R, G) * $gen(R, G) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} gives {R} back while its grant is young: the release waits.
-  release_report_wait [dyn] : tick__release(D, R) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
+  release_report_wait [dyn] : tick__released(D, R, G) * $gen(R, G) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late_release(D, R).
+  %% {D} released a grant that is over: the release is stale.
+  release_old [dyn] : tick__released(D, R, G) * $gen(R, G2) * G <> G2 -o ().
+  %% {D} released {R}, and {R} is free already: the release is stale.
+  release_on_free [dyn] : tick__released(D, R, G) * $gen(R, G) * $free(R) -o ().
+  %% {D}'s release waited; {R} is free now.
+  late_release_free [dyn] : late_release(D, R) * $free(R) -o ().
+  %% {D}'s release waited; {X} holds {R} now.
+  late_release_other [dyn] : late_release(D, R) * $holder(X, R) * D <> X -o ().
+  %% {D} holds {R}: its ticket is passed over.
+  ticket_held [dyn] : queued(D, R, T) * $holder(D, R) -o skipped(R, T).
   %% {D}'s grant is old enough: {R} is free.
   release_report_late [dyn] : late_release(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} is stuck: {R} is free.

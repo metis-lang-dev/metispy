@@ -12,21 +12,25 @@ provenance text "the tree's grants and path with a routing director's wake and s
 
 stage act {
   %% {D} is woken: it holds {R}.
-  grant_free [dyn] : $wake(D) * free(R) -o holder(D, R) * held(D, a0) * tick__grant(D, R).
+  grant_free [dyn] : $wake(D) * free(R) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__grant(D, R) * gen(R, G2) * tick__gen(D, R, G2).
   %% {D} is woken: it takes {R} from {X}.
-  grant_from [dyn] : $wake(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R).
+  grant_from [dyn] : $wake(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * tick__revoke(X, R) * tick__grant(D, R) * gen(R, G2) * tick__gen(D, R, G2).
   %% {D} is woken; {X}'s grant is young: {D} waits for it.
   grant_wait [dyn] : $wake(D) * nowant(D) * $holder(X, R) * $held(X, A) * $young_grant(A) * D <> X -o want(D).
   %% {X}'s grant is old enough: {D} takes {R}.
-  grant_late [dyn] : want(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X -o holder(D, R) * held(D, a0) * nowant(D) * tick__revoke(X, R) * tick__grant(D, R).
+  grant_late [dyn] : want(D) * holder(X, R) * held(X, A) * $mature_grant(A) * D <> X * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * nowant(D) * tick__revoke(X, R) * tick__grant(D, R) * gen(R, G2) * tick__gen(D, R, G2).
   %% {R} is free: {D} takes it.
-  grant_late_free [dyn] : want(D) * free(R) -o holder(D, R) * held(D, a0) * nowant(D) * tick__grant(D, R).
+  grant_late_free [dyn] : want(D) * free(R) * gen(R, G) * $gnext(G, G2) -o holder(D, R) * held(D, a0) * nowant(D) * tick__grant(D, R) * gen(R, G2) * tick__gen(D, R, G2).
   %% {D} sleeps: {R} is free.
   release [dyn] : $sleep(D) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * tick__revoke(D, R).
   %% {D} sleeps; its grant is young: the release waits.
-  release_wait [dyn] : $sleep(D) * nolate(D) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late(D).
+  release_wait [dyn] : $sleep(D) * nolate(D) * $holder(D, R) * $held(D, A) * $young_grant(A) -o late(D, R).
   %% {D}'s grant is old enough: {R} is free.
-  release_late [dyn] : late(D) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * nolate(D) * tick__revoke(D, R).
+  release_late [dyn] : late(D, R) * holder(D, R) * held(D, A) * $mature_grant(A) -o free(R) * nolate(D) * tick__revoke(D, R).
+  %% {D}'s sleep waited; {R} is free now.
+  late_free [dyn] : late(D, R) * $free(R) -o nolate(D).
+  %% {D}'s sleep waited; {X} holds {R} now.
+  late_other [dyn] : late(D, R) * $holder(X, R) * D <> X -o nolate(D).
   %% {D} is on the path.
   path_on [dyn] : $wake(D) * offpath(D) -o path(D) * tick__goal(D).
   %% {D} is off the path.
