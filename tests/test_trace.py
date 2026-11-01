@@ -2,6 +2,7 @@
 trace: its rules to quiescence, the checkpoints held, the first divergence named. The worlds' own traces are tested where
 they run: metis-agent (the Live reader), metis-wheelchair (the goldens' fired column), metis-worlds (the road)."""
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -368,6 +369,65 @@ def test_a_consumer_runs_its_familys_cases_too(tmp_path, monkeypatch):
     monkeypatch.setenv("METIS_HOME", str(tmp_path / "family"))
     assert [f.name for f in T.golden_files(d)] == ["from_the_family.yaml"]
     assert [x["file"] for x in T.goldens(d, seeds=(1,))[1]] == ["from_the_family.yaml"]
+
+
+def family_setup(tmp_path, monkeypatch, cases):
+    from metis.catalog import manifests
+    pkg = tmp_path / "root" / "domains" / "small"
+    pkg.mkdir(parents=True)
+    (pkg / "small.llp").write_text(PROGRAM)
+    (pkg / "domain.yaml").write_text("program: small.llp\ndisplay: small\nline: a small program\n")
+    fam = tmp_path / "family" / "small" / "cases"
+    fam.mkdir(parents=True)
+    for name, c in cases.items():
+        (fam / name).write_text(yaml.safe_dump(c))
+    monkeypatch.setenv("METIS_HOME", str(tmp_path / "family"))
+    return next(x for x in manifests.domains(tmp_path / "root") if x.name == "small")
+
+
+def test_a_family_case_is_keyed_to_the_rule_it_expects(tmp_path, monkeypatch):
+    d = family_setup(tmp_path, monkeypatch, {
+        "of_a_rule_it_lacks.yaml": {"boundaries": [{"expect": {"fired": ["change"]}}]},
+        "of_a_kind_it_lacks.yaml": {"boundaries": [{"expect": {"out": [{"kind": "yield_*"}]}}]},
+        "of_a_unit_it_lacks.yaml": {"units": ["change.llp"], "boundaries": [{"expect": {"after": ["nothing_here"]}}]},
+        "its_own_but_wrong.yaml": {"boundaries": [{"expect": {"fired": ["a_to_b"]}}]},
+        "its_own_and_right.yaml": {"boundaries": [{"expect": {"after": ["c"]}}]}})
+    skips = T.family_skips(d)
+    assert [x["file"] for x in skips] == ["of_a_kind_it_lacks.yaml", "of_a_rule_it_lacks.yaml", "of_a_unit_it_lacks.yaml"]
+    assert "change, which this program does not have" in skips[1]["why"] and "change.llp, which this program does not include" in skips[2]["why"]
+    ok, failed = T.goldens(d, seeds=(1,))
+    assert [x["file"] for x in failed] == ["its_own_but_wrong.yaml"], "skipped, not failing; and a rule it has that does not fire so is a failure"
+    assert {f.name for f in T.golden_files(d, [x["file"] for x in skips])} == {"its_own_but_wrong.yaml", "its_own_and_right.yaml"}
+
+
+def test_a_unit_it_includes_is_its_case(tmp_path, monkeypatch):
+    d = family_setup(tmp_path, monkeypatch, {"c.yaml": {"units": ["tick_types.llp"], "boundaries": [{"expect": {"after": ["c"]}}]}})
+    (tmp_path / "family" / "tick_types.llp").write_text('catalog tick_types 1.\nprovenance text "nothing here" "2026-11-01".\n')
+    Path(d.program).write_text(PROGRAM.replace("layers (dyn).", 'include "tick_types.llp".\nlayers (dyn).'))
+    assert T.family_skips(d) == [] and T.goldens(d, seeds=(1,)) == (True, [])
+
+
+def test_a_packages_own_case_naming_a_rule_it_lacks_is_a_failure_not_a_skip(tmp_path, monkeypatch):
+    d = family_setup(tmp_path, monkeypatch, {})
+    (Path(d.dir) / "cases").mkdir()
+    (Path(d.dir) / "cases" / "mine.yaml").write_text(yaml.safe_dump({"boundaries": [{"expect": {"fired": ["gone"]}}]}))
+    assert T.family_skips(d) == [] and [x["file"] for x in T.goldens(d, seeds=(1,))[1]] == ["mine.yaml"]
+
+
+def test_a_candidate_that_drops_a_rule_is_not_excused_by_the_skip(tmp_path, monkeypatch):
+    """The skip is read on the program as it is, and handed to the candidate's run: a rule the pack takes out still has its case."""
+    d = family_setup(tmp_path, monkeypatch, {"wants_b_to_c.yaml": {"boundaries": [{"expect": {"fired": ["a_to_b", "b_to_c"]}}]}})
+    skip = [x["file"] for x in T.family_skips(d)]
+    assert skip == [] and T.goldens(d, seeds=(1,), skip=skip) == (True, [])
+    Path(d.program).write_text(T.apply_pack(PROGRAM, "drop b_to_c\n")[0])
+    assert [x["file"] for x in T.goldens(d, seeds=(1,), skip=skip)[1]] == ["wants_b_to_c.yaml"]
+    assert [x["file"] for x in T.family_skips(d)] == ["wants_b_to_c.yaml"], "read now it would be excused: which is why it is read before"
+
+
+def test_a_case_carries_its_units(tmp_path, program):
+    d = write(tmp_path, program, GOOD)
+    assert yaml.safe_load(T.case(d, "m", 2, after=["a"], units=["signals.llp"]))["units"] == ["signals.llp"]
+    assert "units" not in yaml.safe_load(T.case(d, "m", 2, after=["a"]))
 
 
 def test_new_rules_are_those_added_or_changed():

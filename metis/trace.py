@@ -393,7 +393,7 @@ def _segment_of(segs, k, k0=None):
     return seg
 
 
-def case(path, member, k, after=(), out=(), k0=None, note=None):
+def case(path, member, k, after=(), out=(), k0=None, note=None, units=()):
     """The window to tick K of MEMBER as a case: the checkpoint its segment starts from, one boundary per beat or take, and at K the
     observed outcome the rules did not produce: `after` (what the world did) and `out` (the command kinds a norm requires). No rule is
     named, so the case survives the rule that passes it. → the YAML's text; it fails in the package's harness until a rule passes it.
@@ -435,7 +435,7 @@ def case(path, member, k, after=(), out=(), k0=None, note=None):
     if out:
         last["expect"]["out"] = list(out)
     doc = {"case": "surprise at tick %d: %s" % (k, member), "note": note or "written by metis.trace case from a trace; it fails until a rule passes it",
-           "member": member, "at": k, "seed": start.header["members"][member].get("seed", 1), "rng": st["rng"], "stage": st["stage"],
+           **({"units": list(units)} if units else {}), "member": member, "at": k, "seed": start.header["members"][member].get("seed", 1), "rng": st["rng"], "stage": st["stage"],
            "init": ["%s %d" % (a, n) if n != 1 else a for a, n in sorted(st["counts"].items())], "boundaries": bounds}
     return yaml.safe_dump(doc, sort_keys=False, width=200)
 
@@ -498,21 +498,74 @@ def blame(path, member, k, atoms, program=None):
 
 
 # ── the goldens: a refusal names them ──
-def golden_files(domain):
-    """The package's cases, and those of the family package of its name under METIS_HOME (spec/18: a consumer runs its family's cases on its own program)."""
-    from metis.catalog import stub
-    own = list(stub.cases_of(domain))
+def family_files(domain):
+    """The cases of the family package of DOMAIN's name under METIS_HOME."""
     home = os.environ.get("METIS_HOME")
     family = Path(home) / Path(domain.dir).name / "cases" if home else None
-    return own + (sorted(family.glob("*.yaml")) if family and family.is_dir() and family.resolve() != (Path(domain.dir) / "cases").resolve() else [])
+    return sorted(family.glob("*.yaml")) if family and family.is_dir() and family.resolve() != (Path(domain.dir) / "cases").resolve() else []
 
 
-def goldens(domain, seeds=(1, 2, 3)):
-    """Every case of the package (golden_files), on each of SEEDS (one sampler's draw moves when a clause is merely enabled). → (ok, failed): failed names
-    each case, its seed, and what it says: a person may overrule a golden, so the refusal has to say which."""
+def golden_files(domain, skip=()):
+    """The package's cases, and those of its family (spec/18: a consumer runs its family's cases on its own program), but those named in SKIP."""
+    from metis.catalog import stub
+    return list(stub.cases_of(domain)) + [f for f in family_files(domain) if f.name not in set(skip)]
+
+
+def _included(program):
+    """The unit names PROGRAM includes, through its includes, wherever they resolve (its directory, then METIS_HOME)."""
+    import re
+    home, seen, todo = os.environ.get("METIS_HOME"), set(), [Path(program)]
+    while todo:
+        f = todo.pop()
+        for name in re.findall(r'^include "([^"]+)"', f.read_text(), re.M):
+            if name in seen:
+                continue
+            seen.add(name)
+            for d in [f.parent] + ([Path(home)] if home else []):
+                if (d / name).is_file():
+                    todo.append(d / name)
+                    break
+    return {Path(n).name for n in seen}
+
+
+def family_skips(domain):
+    """The family's cases that are not this consumer's: [{"file", "why"}]. A family case is keyed to the unit it exercises, and no case says for whom: a case whose expected rule
+    (expect.fired, an expect.out kind) is not in the consumer's program, or that lists `units` its program does not include, is skipped by name and listed, never counted as failing.
+    Only a family's: a package's own case naming a rule it lacks is a real failure. Read on the program as it is: a candidate that drops a rule does not excuse the case that wants it."""
+    import fnmatch
+    from metis.catalog import stub
+    files = family_files(domain)
+    if not files:
+        return []
+    rules = {ev.name.split("[")[0] for _, _, ev in open_session(domain.program).events_tbl}
+    units, out = _included(domain.program), []
+    for f in files:
+        c = stub.load_case(f)
+        why = None
+        missing = sorted(set(c.get("units") or ()) - units)
+        if missing:
+            why = "it exercises %s, which this program does not include" % ", ".join(missing)
+        for b in c["boundaries"]:
+            e = (b or {}).get("expect") or {}
+            for r in e.get("fired") or ():
+                why = why or (None if r in rules else "it expects %s, which this program does not have" % r)
+            for x in e.get("out") or ():
+                if isinstance(x, dict) and x.get("kind"):
+                    why = why or (None if any(fnmatch.fnmatchcase(r, x["kind"]) for r in rules) else "it expects a command of kind %s, which this program does not have" % x["kind"])
+        if why:
+            out.append({"file": f.name, "why": why})
+    return out
+
+
+def goldens(domain, seeds=(1, 2, 3), skip=None):
+    """Every case of the package (golden_files), on each of SEEDS (one sampler's draw moves when a clause is merely enabled), but the family's that are not this consumer's
+    (SKIP: their file names; default family_skips on the program as it is). → (ok, failed): failed names each case, its seed, and what it says: a person may overrule a golden, so
+    the refusal has to say which."""
     from metis.catalog import stub
     failed = []
-    for f in golden_files(domain):
+    if skip is None:
+        skip = [x["file"] for x in family_skips(domain)]
+    for f in golden_files(domain, skip):
         c = stub.load_case(f)
         for seed in ([c.get("seed", 1)] if c.get("rng") is not None else seeds):
             r = stub.run_case(domain, f, seed=seed)
@@ -595,6 +648,7 @@ def main(argv=None):
     c.add_argument("--after", action="append", default=[])
     c.add_argument("--out", action="append", default=[], help="an atom, or kind:PATTERN, not:PATTERN")
     c.add_argument("--note")
+    c.add_argument("--unit", action="append", default=[], help="a family's case: a unit it exercises (a consumer without it skips the case)")
     c.add_argument("--into", help="the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout")
     a = ap.parse_args(argv)
     if a.verb == "replay":
@@ -602,7 +656,7 @@ def main(argv=None):
         print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence}))
         return 0 if res.ok else 1
     out = [{x.split(":", 1)[0]: x.split(":", 1)[1]} if x.split(":", 1)[0] in ("kind", "not") else x for x in a.out]
-    text = case(a.trace, a.member, a.at, after=a.after, out=out, k0=a.k0, note=a.note)
+    text = case(a.trace, a.member, a.at, after=a.after, out=out, k0=a.k0, note=a.note, units=a.unit)
     if a.into:
         f = Path(a.into) / ("surprise-%s-%d.yaml" % (a.member, a.at))
         f.parent.mkdir(parents=True, exist_ok=True)
