@@ -9,6 +9,7 @@ provenance text "the tick's protocol: reports in, grants out, over abstract spec
 layers (dyn).
 types (domain resource).
 type tick__status {running success failure idle}.
+type tick__gen {g0 g1 g2 g3}.                     % a grant's generation, wrapping: a stale report lives one tick
 
 namespace proto produce (dyn).
 
@@ -19,12 +20,16 @@ pred tick__done(domain) : proto.                   % D's goal is met
 pred tick__stuck(domain) : proto.                  % D cannot go on
 
 pred tick__want(domain, resource) : proto.         % D asks for R (kept asked until granted, once per need)
-pred tick__release(domain, resource) : proto.      % D is done with R (its goal may go on: a cook releases the pot, then serves)
+pred tick__released(domain, resource, tick__gen) : proto.   % D is done with the grant G of R (spec/15 amendment 10): the stub's echo of its tick__release
 pred tick__committed(domain, resource) : proto.    % D's action on R is atomic from its next command on: a stop does not revoke it (spec/15 amendment 9)
 pred tick__yield(domain, resource) : proto.        % D's atomic action on R is over
 
+% ── the member's own: not a report, nor anyone else's (the generated stub echoes it as tick__released) ──
+pred tick__release(domain, resource) : proto.      % D is done with R (its goal may go on: a cook releases the pot, then serves)
+
 % ── the grants (the director's, read by a specialist) ──
 pred tick__grant(domain, resource) : proto.        % D holds R: only the holder's commands reach the world
+pred tick__gen(domain, resource, tick__gen) : proto.  % the generation of D's last grant of R; it stays after a revoke (the agent replaces it at the next grant)
 pred tick__goal(domain) : proto.                   % D has a goal from the director (the path's running branch)
 pred tick__revoke(domain, resource) : proto.       % the director's: D no longer holds R (the agent retracts the grant)
 pred tick__stop : proto.                           % the agent's, a one-tick world signal: the person said stop (asserted

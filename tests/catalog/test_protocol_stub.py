@@ -138,3 +138,26 @@ def test_two_one_token_states_get_one_rule_name_each():
     rules = [l.split(" [dyn]")[0].strip() for l in ps.cancel_rules(TWO, "guard", []) if "[dyn]" in l]
     assert sorted(rules) == ["cancel", "cancel_away", "cancel_none"]
     assert "  cancel [dyn] : tick__cancel(guard) * busy -o idle." in ps.cancel_rules(TWO, "guard", [])
+
+
+RELEASING = """catalog m 1.
+pred idle : m.
+pred busy : m.
+stage act {
+  begin [dyn] : idle -o busy.
+  stand_down [dyn] : busy -o idle * tick__release(nav, motion).
+}
+"""
+
+
+def test_the_release_echo_and_its_start(tmp_path):
+    """spec/15 amendment 10: a member that gives a resource back gets the echo; seed_lines is its instance's start."""
+    assert ps.released_resources(RELEASING) == [("nav", "motion")]
+    assert ps.release_rules(RELEASING, "nav") == [
+        "  %% I gave {R} back: I say which grant.",
+        "  released [dyn] : tick__release(nav, R) * $tick__gen(nav, R, G) -o tick__released(nav, R, G)."]
+    assert ps.seed_lines(RELEASING, "nav") == ["#init tick__gen(nav, motion, g0) 1"]
+    assert ps.release_rules(RELEASING.replace("tick__release(nav, motion)", "one"), "nav") == []
+    lifted = RELEASING.replace("tick__release(nav, motion)", "tick__release(S, pot)")
+    assert "tick__release(S, R) * $self(S) * $tick__gen(S, R, G)" in ps.release_rules(lifted, "S", bind="$self(S)")[1]
+

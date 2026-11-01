@@ -23,9 +23,9 @@ def test_a_source_includes_the_protocol_from_metis_home(tmp_path):
 def test_every_protocol_pred_has_its_nature():
     preds = set(re.findall(r"^pred (tick__\w+)\b", iface.path().read_text(), re.M))
     nature = yaml.safe_load(iface.path("protocol_domain.yaml").read_text())["nature"]
-    assert preds == set(nature)
+    assert preds - {"tick__release"} == set(nature)                  # the member's own (spec/15 amendment 10): the report is tick__released
     assert {p for p, n in nature.items() if n == "report"} == {"tick__status", "tick__active", "tick__done", "tick__stuck",
-                                                               "tick__want", "tick__release", "tick__committed", "tick__yield"}
+                                                               "tick__want", "tick__released", "tick__committed", "tick__yield"}
     assert set(nature.values()) <= {"report", "signal", "resource"}
 
 
@@ -74,7 +74,7 @@ def _tree(tmp_path, priority=()):
                             "type domain {a b c}.", "type resource {pot}.", "mature_grant(a1).", "mature_grant(a2).",
                             "mature_grant(a3).", "young_grant(a0).", "mature_status(a1).", "mature_status(a2).",
                             "mature_status(a3)."] + ["priority(%s, %s)." % pq for pq in priority]
-                           + ["#init free(pot) 1", "#init issue(pot,t0) 1", "#init serving(pot,t0) 1"]) + "\n")
+                           + ["#init free(pot) 1", "#init gen(pot,g0,woken) 1", "#init issue(pot,t0) 1", "#init serving(pot,t0) 1"]) + "\n")
     r = Repl(str(p), seed=1)
     r.stdout = io.StringIO()
     return r
@@ -94,9 +94,43 @@ def test_the_tree_serves_requests_first_asked_first_served(tmp_path):
     assert _do(r, "+tick__want(c,pot)") == ["holder(b,pot)"]          # c waits with ticket t1
     assert _do(r, "+tick__want(a,pot)") == ["holder(b,pot)"]          # a with t2, behind c
     assert _do(r, "+tick") == ["holder(b,pot)"]                        # b's grant ages a tick (hysteresis k = 1)
-    assert _do(r, "+tick__release(b,pot)") == ["holder(c,pot)"]       # c's turn, not a's
+    assert _do(r, "+tick__released(b,pot,g1)") == ["holder(c,pot)"]   # c's turn, not a's
     _do(r, "+tick")
-    assert _do(r, "+tick__release(c,pot)") == ["holder(a,pot)"]
+    assert _do(r, "+tick__released(c,pot,g2)") == ["holder(a,pot)"]
+
+
+def test_a_release_of_a_grant_that_is_over(tmp_path):
+    """spec/15 amendment 10: on a free pot it is consumed; crossing a grant the member asked for, it ends that grant, once
+    old enough (its reason passed before it saw the grant). A grant by the routing it cannot touch: corpus/release."""
+    r = _tree(tmp_path)
+    _do(r, "+tick__want(b,pot)")                                       # b: g1
+    _do(r, "+tick")
+    assert _do(r, "+tick__released(b,pot,g1)") == []
+    assert _do(r, "+tick__released(b,pot,g1)") == [] and r.counts.get("tick__released(b,pot,g1)", 0) == 0   # on a free pot
+    _do(r, "+tick__want(b,pot)")                                       # b again: g2, asked
+    assert _do(r, "+tick__released(b,pot,g1)") == ["holder(b,pot)"] and r.counts.get("late_release(b,pot)") == 1    # young: it waits
+    assert _do(r, "+tick") == []                                       # old enough: over
+
+
+def test_a_release_of_a_grant_that_is_over_withdraws_the_members_ticket(tmp_path):
+    """The un-want (spec/15 amendment 10): its reason passed while it waited, so its turn never comes up to sit idle."""
+    r = _tree(tmp_path, priority=[("a", "b")])
+    _do(r, "+tick__want(b,pot)")                                       # b: g1
+    assert _do(r, "+tick__want(a,pot)") == ["holder(a,pot)"]           # a preempts: g2, and b queued again
+    assert r.counts.get("queued(b,pot,t2)") == 1
+    assert _do(r, "+tick__released(b,pot,g1)") == ["holder(a,pot)"]    # b's reason passed
+    assert not [k for k, n in r.counts.items() if n > 0 and k.startswith("queued(")]
+    _do(r, "+tick")
+    assert _do(r, "+tick__released(a,pot,g2)") == []                   # free: b's turn does not come up
+
+
+def test_a_tree_member_may_ask_again_while_it_holds(tmp_path):
+    """A release and a want in one report: its want stands (the rule that passes a holder's ticket over is the routing's)."""
+    r = _tree(tmp_path)
+    _do(r, "+tick__want(b,pot)")
+    _do(r, "+tick")
+    assert _do(r, "+tick__want(b,pot)", "+tick__released(b,pot,g1)") == ["holder(b,pot)"]    # its next grant
+    assert r.counts.get("tick__gen(b,pot,g2)", 0) == 1
 
 
 def test_a_priority_preempts_and_its_ticket_is_skipped(tmp_path):
@@ -106,6 +140,16 @@ def test_a_priority_preempts_and_its_ticket_is_skipped(tmp_path):
     assert _do(r, "+tick__want(a,pot)") == ["holder(a,pot)"]          # a: t2, preempts b (a young grant: the exception)
     assert r.counts.get("queued(b,pot,t3)") == 1 and r.counts.get("skipped(pot,t2)") == 1
     _do(r, "+tick")
-    assert _do(r, "+tick__release(a,pot)") == ["holder(c,pot)"]       # c's t1 was serving
+    assert _do(r, "+tick__released(a,pot,g2)") == ["holder(c,pot)"]   # c's t1 was serving
     _do(r, "+tick")
-    assert _do(r, "+tick__release(c,pot)") == ["holder(b,pot)"]       # t2 skipped, b's t3
+    assert _do(r, "+tick__released(c,pot,g3)") == ["holder(b,pot)"]   # t2 skipped, b's t3
+
+
+def test_a_request_in_one_report_with_a_release_is_not_the_ticket_withdrawn(tmp_path):
+    """The old ticket goes, the new request stands: an un-want reaches only tickets from earlier beats."""
+    r = _tree(tmp_path, priority=[("a", "b")])
+    _do(r, "+tick__want(b,pot)")                                       # b: g1
+    _do(r, "+tick__want(a,pot)")                                       # a preempts: g2, b queued again, t2
+    _do(r, "+tick__released(b,pot,g1)", "+tick__want(b,pot)")
+    queued = [k for k, n in r.counts.items() if n > 0 and k.startswith("queued(")]
+    assert queued == ["queued(b,pot,t3)"]

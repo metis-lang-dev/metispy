@@ -14,7 +14,7 @@
 catalog director_domain 1.
 provenance text "the director: domain activation from the observed kinds, routing, detour and escalation as rules" "2026-10-22".
 layers (dyn).
-stages (act).
+stages (act settle).   % settle: the tree's (director_tree_domain), a stale release after the beat
 types (domain kind).   % completed by the instance that includes this file (spec 12)
 
 namespace dir produce (dyn).
