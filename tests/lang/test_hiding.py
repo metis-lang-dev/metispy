@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from corpus import build_program, parse_manifest
+from langpath import LANG
 from metis.kernel import program_key
 from metis.kernel.artifact import metisc
 from metis.kernel.diagnostics import render_text
@@ -16,7 +17,7 @@ from metis.lang import ast, compile_catalog, load_llp, parse
 from metis.lang.compiler import diagnose, resolve_includes
 from metis.lang.directives import embedded_case, render_run
 
-CORPUS = Path(__file__).resolve().parents[3] / "metis-lang/corpus"
+CORPUS = LANG / "corpus"
 HIDING = CORPUS / "hiding"
 
 REFUSED = {"link": "hiding-unknown", "head": "hiding-unknown", "inner": "hiding-unknown",
