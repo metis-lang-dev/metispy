@@ -12,7 +12,8 @@ A package's cases are YAML files in its `cases/` directory. A case:
     units: [change.llp]                           # a family's case asserting only `after`: the units it exercises; a consumer whose program does not
                                                   #   include them skips it (metis.trace.family_skips). With a rule in expect, the rule says it
     member: planner                               # a surprise's: the member and the tick of its trace, where a composition's
-    at: 120                                       #   replay holds the same expectation (metis_agent.trace.judge)
+    at: 120                                       #   replay holds the same expectation (metis_agent.trace.judge); `at` is the TRACE's k, not a world log's own
+                                                  #   tick (the road's: one behind; write it from the log row's k field)
     init: [at(lhere)]                             # the state before the first boundary: it REPLACES the program's
                                                   #   #init (absent: the program's #init stands)
     steps: 100                                    # the most events a boundary runs to quiescence (default 100)

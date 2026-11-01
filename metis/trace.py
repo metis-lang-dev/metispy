@@ -394,7 +394,7 @@ def _segment_of(segs, k, k0=None):
 
 
 def case(path, member, k, after=(), out=(), k0=None, note=None, units=()):
-    """The window to tick K of MEMBER as a case: the checkpoint its segment starts from, one boundary per beat or take, and at K the
+    """The window to tick K (the trace's k, as `at` is: a world log's own tick may be behind it) of MEMBER as a case: the checkpoint its segment starts from, one boundary per beat or take, and at K the
     observed outcome the rules did not produce: `after` (what the world did) and `out` (the command kinds a norm requires). No rule is
     named, so the case survives the rule that passes it. → the YAML's text; it fails in the package's harness until a rule passes it.
     Out's kinds match RULE names, with globs: the law is written in rules, and a host's rendered kind is the world's accounting (rulecheck). A case runs one
