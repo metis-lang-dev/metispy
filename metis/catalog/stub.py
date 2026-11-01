@@ -6,6 +6,9 @@ A package's cases are YAML files in its `cases/` directory. A case:
 
     case: nav goes to a receptacle elsewhere      # its name (default: the file's stem)
     seed: 1                                       # the session's RNG seed (default 1)
+    rng: "1234"                                   # a window of a trace (metis.trace case): the RNG's state at its start, and
+    stage: act                                    #   the stage; over the seed (decimal: it is past 2^53)
+    note: what the case is of                     # one paragraph, not read
     init: [at(lhere)]                             # the state before the first boundary: it REPLACES the program's
                                                   #   #init (absent: the program's #init stands)
     steps: 100                                    # the most events a boundary runs to quiescence (default 100)
@@ -27,6 +30,12 @@ A package's cases are YAML files in its `cases/` directory. A case:
           out: [reached(target)]                  #   the out atoms collected at this boundary (exactly)
           status: success                         #   running | success | failure | idle
           fired: [go]                             #   the rules fired, in order (short names)
+          after: [at(l1), holding 0]              #   atoms in the session after the boundary (`atom n`; `atom 0`: gone): what
+                                                  #   the world did, the assertion of a surprise's case: it names no rule, so
+                                                  #   it survives the rule that passes it
+                                                  # out's entries may also be {kind: yield_*} (a rule fired here whose name
+                                                  #   matches: a command a norm requires, where a yield and an accel leave the
+                                                  #   same tokens) and {not: accel*} (none matches); the strings stay exact
           held: false                             #   intents fired without the resource held (a host-gated member's;
                                                   #   gating: program never holds: its rules read the grant)
 
@@ -52,6 +61,7 @@ Per boundary the stub:
 
     python -m metis.catalog cases NAME [--json]     (exit 1 when a case fails)"""
 import contextlib
+import fnmatch
 import io
 import math
 import re
@@ -279,12 +289,31 @@ class Stub:
                               intents, status)
 
 
-def _score(res, expect):
+def _score(res, expect, counts=None):
     fails = []
     if "out" in expect:
-        want = sorted(a for a, n in _atoms(expect["out"]) for _ in range(n))
-        if sorted(res.outs) != want:
-            fails.append("out %s, expected %s" % (sorted(res.outs), want))
+        entries = list(expect["out"] or ())
+        kinds = [e for e in entries if isinstance(e, dict)]
+        strs = [e for e in entries if not isinstance(e, dict)]
+        if strs or not kinds:
+            want = sorted(a for a, n in _atoms(strs) for _ in range(n))
+            if sorted(res.outs) != want:
+                fails.append("out %s, expected %s" % (sorted(res.outs), want))
+        rules = [f["rule"] for f in res.fired]
+        for e in kinds:
+            for key, pattern in e.items():
+                hit = [r for r in rules if fnmatch.fnmatchcase(r, pattern)]
+                if key == "kind" and not hit:
+                    fails.append("no command of kind %s (fired %s)" % (pattern, rules))
+                elif key == "not" and hit:
+                    fails.append("a command of kind %s the norm forbids: %s" % (pattern, hit))
+                elif key not in ("kind", "not"):
+                    raise CaseError("expect.out: %r: an entry is an atom, {kind: pattern} or {not: pattern}" % (e,))
+    if "after" in expect:
+        for a, n in _atoms(expect["after"]):
+            have = (counts or {}).get(a, 0)
+            if have != n:
+                fails.append("after: %s is %d, the world made it %d" % (a, have, n))
     if "status" in expect:
         if expect["status"] not in STATUSES:
             raise CaseError("status %r: one of %s" % (expect["status"], ", ".join(STATUSES)))
@@ -305,7 +334,7 @@ def load_case(path):
     c = yaml.safe_load(Path(path).read_text()) or {}
     if not isinstance(c, dict) or not isinstance(c.get("boundaries"), list):
         raise CaseError("%s: a case is a mapping with boundaries: [...]" % path)
-    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "ports", "boundaries"})
+    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "ports", "boundaries", "rng", "stage", "note"})
     if unknown:
         raise CaseError("%s: unknown key%s %s" % (path, "s" if len(unknown) > 1 else "", ", ".join(unknown)))
     ports = c.get("ports")
@@ -322,21 +351,25 @@ def load_case(path):
     return c
 
 
-def run_case(domain, case_path):
-    """Run one case file against DOMAIN (a manifests.Domain, or (program path, manifest dict)). → CaseResult."""
+def run_case(domain, case_path, seed=None):
+    """Run one case file against DOMAIN (a manifests.Domain, or (program path, manifest dict)); SEED over the case's. → CaseResult."""
     program, manifest = (domain.program, domain.manifest) if hasattr(domain, "manifest") else domain
     c = load_case(case_path)
-    s = Stub(program, manifest, seed=c.get("seed", 1), ports=c.get("ports"))
+    s = Stub(program, manifest, seed=seed if seed is not None else c.get("seed", 1), ports=c.get("ports"))
     if "init" in c:                                    # the case's state replaces the program's #init
         for a, n in sorted(s.repl.counts.items()):
             if n > 0:
                 s._do("-%s %d" % (a, n))
     for atom, n in _atoms(c.get("init")):
         s._do("+%s %d" % (atom, n))
+    if c.get("rng") is not None:
+        s.repl.rng.state = int(c["rng"])
+    if c.get("stage"):
+        s.repl.stage = c["stage"]
     out = []
     for i, b in enumerate(c["boundaries"]):
         r = s.boundary(i, b or {}, steps=c.get("steps", 100))
-        r.failures = _score(r, (b or {}).get("expect") or {})
+        r.failures = _score(r, (b or {}).get("expect") or {}, dict(s.repl.counts))
         out.append(r)
     return CaseResult(c.get("case") or Path(case_path).stem, str(case_path), out)
 

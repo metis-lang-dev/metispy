@@ -36,6 +36,13 @@ acting episode replays by `replay_firings`: its session's start, its seed, {name
     tr = read(dir)                                       the segments still there, oldest first
     replay(dir, "planner", "planner.llp")               one member: → Replay(.ok, .ticks, .beats, .rules, .divergence)
     replay_firings("nh.llp", start, seed, firings)       an acting episode: → Replay
+    case(dir, "planner", k, after=[...], out=[...])      the surprise at tick k as a case of the package (the stub's YAML): → its text
+    blame(dir, "planner", k, atoms)                      who last moved what is missing or stale: the member's rule, the world, or a take
+    goldens(domain, seeds=(1, 2, 3))                     the package's cases on several seeds: → (ok, [the cases that fail, named])
+
+    python -m metis.trace replay DIR MEMBER PROGRAM
+    python -m metis.trace case DIR MEMBER --at K [--after ATOM ...] [--out ATOM ...] [--into CASES_DIR]
+    (the composition's replay and the fired diff are metis_agent.trace's: they run the agent's own relay code)
 """
 import hashlib
 import io
@@ -372,3 +379,181 @@ def replay_firings(program, start, seed, firings, member=""):
             _, sh.counts = exo_event(list(f["lines"]), sh.counts)
             r.inputs += 1
     return r
+
+
+# ── a surprise as a case of the package ──
+def _segment_of(segs, k, k0=None):
+    """The segment the window starts in: holding K0, else the one holding K."""
+    at = k if k0 is None else k0
+    seg = next((x for x in reversed(segs) if x.k0 <= at), None)
+    if seg is None:
+        raise TraceError("tick %d is before the trace (it starts at %d: the ring)" % (at, segs[0].k0))
+    return seg
+
+
+def case(path, member, k, after=(), out=(), k0=None, note=None):
+    """The window to tick K of MEMBER as a case: the checkpoint its segment starts from, one boundary per beat or take, and at K the
+    observed outcome the rules did not produce: `after` (what the world did) and `out` (the command kinds a norm requires). No rule is
+    named, so the case survives the rule that passes it. → the YAML's text; it fails in the package's harness until a rule passes it."""
+    import yaml
+    if not after and not out:
+        raise TraceError("a case asserts something: --after (what the world did) or --out (the command a norm requires)")
+    segs = read(path)
+    start = _segment_of(segs, k, k0)
+    st = start.checkpoint["sessions"].get(member)
+    if st is None:
+        raise TraceError("no member %r in the trace" % member)
+    bounds, last = [], None
+    for seg in segs:
+        if seg.k0 < start.k0:
+            continue
+        for t in seg.ticks:
+            if t["k"] > k:
+                break
+            if k0 is not None and t["k"] < k0:
+                continue
+            e = t["members"].get(member) or {}
+            seq = e.get("seq")
+            if seq is None and "why" in e:
+                seq = [{"beat": []}]
+            for item in seq or ():
+                if "take" in item:
+                    bounds.append({"lines": list(item["take"]), "run": False})
+                elif "beat" in item:
+                    bounds.append({"lines": list(item["beat"])})
+                    last = bounds[-1]
+    if last is None:
+        raise TraceError("%s did not beat in the window to tick %d" % (member, k))
+    # what the window's last beat must show, the takes after it being what brought the member there
+    last.setdefault("expect", {})
+    if after:
+        last["expect"]["after"] = list(after)
+    if out:
+        last["expect"]["out"] = list(out)
+    doc = {"case": "surprise at tick %d: %s" % (k, member), "note": note or "written by metis.trace case from a trace; it fails until a rule passes it",
+           "seed": start.header["members"][member].get("seed", 1), "rng": st["rng"], "stage": st["stage"],
+           "init": ["%s %d" % (a, n) if n != 1 else a for a, n in sorted(st["counts"].items())], "boundaries": bounds}
+    return yaml.safe_dump(doc, sort_keys=False, width=200)
+
+
+# ── whose is it: on the baseline, before any candidate ──
+def blame(path, member, k, atoms, program=None):
+    """At tick K, who last moved each of ATOMS (`atom`: it should hold; `atom 0`: it should not) in MEMBER's session: a rule of the member,
+    its world (`beat`), or a take (relay, deliver: the director's, carried by the agent). → {"atoms": [{atom, want, have, last: {k, by, what}}],
+    "verdict": "this package's" | "not this package's"}: not this package's when what is missing or stale was last moved by a take, or never
+    arrived on an in-port. A person's to read, never the loop's to fix."""
+    from metis.fw.plugin import parse_do_line
+    segs = read(path)
+    seg0 = _segment_of(segs, k)
+    m = seg0.header["members"].get(member)
+    if m is None:
+        raise TraceError("no member %r in the trace" % member)
+    counts, last = dict(seg0.checkpoint["sessions"][member]["counts"]), {}
+    events = {}
+    if program:
+        events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
+
+    def op(line, tick, by):
+        sign, a, n = parse_do_line(line)
+        counts[a] = counts.get(a, 0) + n if sign == "+" else max(0, counts.get(a, 0) - n)
+        last[a] = {"k": tick, "by": by, "what": line}
+
+    for seg in segs:
+        if seg.k0 < seg0.k0:
+            continue
+        for t in seg.ticks:
+            if t["k"] > k:
+                break
+            for item in (t["members"].get(member) or {}).get("seq") or ():
+                for line in item.get("take", ()):
+                    op(line, t["k"], item.get("by") or "take")
+                for line in item.get("beat", ()):
+                    op(line, t["k"], "world")
+                for name in list(item.get("fired") or ()) + list(item.get("step") or ()):
+                    ev = events.get(name)
+                    if ev is None:
+                        continue
+                    for a, n in ev.consume.items():
+                        counts[a] = max(0, counts.get(a, 0) - n)
+                        last[a] = {"k": t["k"], "by": "rule", "what": name}
+                    for a, n in ev.produce.items():
+                        counts[a] = counts.get(a, 0) + n
+                        last[a] = {"k": t["k"], "by": "rule", "what": name}
+    in_preds, out, others = set(m.get("in") or ()), [], False
+    for spec in atoms:
+        a, _, n = str(spec).strip().partition(" ")
+        want = int(n) if n else 1
+        have = counts.get(a, 0)
+        row = {"atom": a, "want": want, "have": have, "last": last.get(a)}
+        out.append(row)
+        if have != want:
+            mover = (last.get(a) or {}).get("by")
+            if mover in ("relay", "deliver") or (mover is None and pred_of(a) in in_preds):
+                others = True
+    return {"atoms": out, "verdict": "not this package's" if others else "this package's"}
+
+
+# ── the goldens: a refusal names them ──
+def goldens(domain, seeds=(1, 2, 3)):
+    """Every case of the package, on each of SEEDS (one sampler's draw moves when a clause is merely enabled). → (ok, failed): failed names
+    each case, its seed, and what it says: a person may overrule a golden, so the refusal has to say which."""
+    from metis.catalog import stub
+    failed = []
+    for f in stub.cases_of(domain):
+        c = stub.load_case(f)
+        for seed in ([c.get("seed", 1)] if c.get("rng") is not None else seeds):
+            r = stub.run_case(domain, f, seed=seed)
+            if not r.passed:
+                failed.append({"case": r.name, "file": Path(f).name, "seed": seed,
+                               "failures": [x for b in r.boundaries for x in b.failures][:4]})
+    return not failed, failed
+
+
+def rules_of(text):
+    """{rule: its statement}: what `new_rules` compares."""
+    import re
+    return {m.group(1): " ".join(m.group(0).split()) for m in re.finditer(r"^\s*([a-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\])?\s*:[^.]*?-o[^.]*\.", text, re.M)}
+
+
+def new_rules(candidate, current):
+    """The rules CANDIDATE has that CURRENT has not, or has otherwise."""
+    a, b = rules_of(candidate), rules_of(current)
+    return sorted(r for r, x in a.items() if b.get(r) != x)
+
+
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m metis.trace", description="a composition's trace: one member's replay, a surprise as a case")
+    sub = ap.add_subparsers(dest="verb", required=True)
+    r = sub.add_parser("replay", help="one member alone over the trace, no world")
+    r.add_argument("trace")
+    r.add_argument("member")
+    r.add_argument("program")
+    c = sub.add_parser("case", help="the window to tick K as a case of the member's package")
+    c.add_argument("trace")
+    c.add_argument("member")
+    c.add_argument("--at", type=int, required=True)
+    c.add_argument("--from", dest="k0", type=int)
+    c.add_argument("--after", action="append", default=[])
+    c.add_argument("--out", action="append", default=[], help="an atom, or kind:PATTERN, not:PATTERN")
+    c.add_argument("--note")
+    c.add_argument("--into", help="the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout")
+    a = ap.parse_args(argv)
+    if a.verb == "replay":
+        res = replay(a.trace, a.member, a.program)
+        print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence}))
+        return 0 if res.ok else 1
+    out = [{x.split(":", 1)[0]: x.split(":", 1)[1]} if x.split(":", 1)[0] in ("kind", "not") else x for x in a.out]
+    text = case(a.trace, a.member, a.at, after=a.after, out=out, k0=a.k0, note=a.note)
+    if a.into:
+        f = Path(a.into) / ("surprise-%s-%d.yaml" % (a.member, a.at))
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+        print(f)
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

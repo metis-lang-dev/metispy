@@ -4,6 +4,7 @@ they run: metis-agent (the Live reader), metis-wheelchair (the goldens' fired co
 import json
 
 import pytest
+import yaml
 
 from metis import trace as T
 from metis.kernel.ground import GroundBudget
@@ -249,6 +250,122 @@ def test_an_acting_episode_replays_by_its_seed_and_lines(program):
     bad = [dict(firings[0], name="b_to_c")] + firings[1:]
     assert T.replay_firings(program, start, 5, bad).divergence["k"] == 0
     assert T.replay_firings(program, {"stage": "main", "counts": {}}, 5, firings).divergence["got"] == []
+
+
+MANIFEST = {"shared": {"a": "world-private", "b": "in", "c": "world-private", "out_b": "out"}, "status": {"success": [], "failure": []}, "gating": "program"}
+
+
+def as_case(tmp_path, text):
+    f = tmp_path / "surprise.yaml"
+    f.write_text(text)
+    return f
+
+
+def run_it(program, f, **kw):
+    from metis.catalog import stub
+    return stub.run_case((program, MANIFEST), f, **kw)
+
+
+def test_a_surprise_is_a_case_that_fails_until_a_rule_passes_it(tmp_path, program):
+    d = write(tmp_path, program, GOOD)
+    # the world left two b's: the program's b_to_c takes them on to c
+    f = as_case(tmp_path, T.case(d, "m", 2, after=["b 2"], note="the world kept b"))
+    r = run_it(program, f)
+    assert not r.passed and "after: b is 0, the world made it 2" in r.boundaries[-1].failures
+    better = tmp_path / "better.llp"
+    better.write_text(PROGRAM.replace("b_to_c [dyn] : b -o c.", "b_to_c [dyn] : c -o b."))
+    assert run_it(better, f).passed
+
+
+def test_a_case_names_no_rule_and_carries_its_window(tmp_path, program):
+    d = write(tmp_path, program, GOOD)
+    c = yaml.safe_load(T.case(d, "m", 2, after=["c 2"]))
+    assert "fired" not in json.dumps(c) and c["rng"] and c["stage"] == "main" and c["init"] == ["a"]
+    assert [b.get("run", True) for b in c["boundaries"]] == [True, False, True]
+    assert c["boundaries"][-1]["expect"] == {"after": ["c 2"]} and c["boundaries"][1]["lines"] == ["+a"]
+    with pytest.raises(T.TraceError, match="asserts something"):
+        T.case(d, "m", 2)
+
+
+def test_a_case_may_assert_the_command_kind_a_norm_requires(tmp_path, program):
+    d = write(tmp_path, program, GOOD)
+    ok = as_case(tmp_path, T.case(d, "m", 2, out=[{"kind": "a_to_*"}, {"not": "keep*"}]))
+    assert run_it(program, ok).passed
+    bad = as_case(tmp_path, T.case(d, "m", 2, out=[{"kind": "yield_*"}]))
+    assert "no command of kind yield_*" in " ".join(x for b in run_it(program, bad).boundaries for x in b.failures)
+    no = as_case(tmp_path, T.case(d, "m", 2, out=[{"not": "a_to*"}]))
+    assert "the norm forbids" in " ".join(x for b in run_it(program, no).boundaries for x in b.failures)
+
+
+def test_a_cases_start_holds_the_rng_and_the_stage(tmp_path, program):
+    from metis.catalog import stub
+    f = tmp_path / "c.yaml"
+    f.write_text(yaml.safe_dump({"rng": "12345", "stage": "main", "init": ["a"], "boundaries": [{"expect": {"after": ["c"]}}]}))
+    assert stub.load_case(f)["rng"] == "12345" and run_it(program, f).passed
+    assert not stub.load_case(f).get("nope")
+
+
+def test_blame_says_whose_is_what_is_missing(tmp_path, program):
+    ticks = [tick(0, {"beat": [], "fired": ["a_to_b", "b_to_c"]}, out=["out_b"]),
+             tick(1, {"take": ["+b"], "by": "relay"}),
+             tick(2, {"beat": ["+a"], "fired": ["a_to_b", "b_to_c", "b_to_c"]}, out=["out_b"]),
+             tick(3, {"take": ["-c 3"], "by": "relay"})]
+    d = write(tmp_path, program, ticks)
+    f = d / "seg-0.jsonl"
+    rows = [json.loads(x) for x in f.read_text().splitlines()]
+    rows[0]["members"]["m"]["in"] = ["b"]
+    f.write_text("\n".join(json.dumps(x) for x in rows) + "\n")
+    # gone because a take took it: not this package's
+    r = T.blame(d, "m", 3, ["c"], program)
+    assert r["verdict"] == "not this package's" and r["atoms"][0]["last"] == {"k": 3, "by": "relay", "what": "-c 3"}
+    # a rule of the member made it, the world did not want it: this package's
+    r = T.blame(d, "m", 2, ["c 0"], program)
+    assert r["verdict"] == "this package's" and r["atoms"][0]["last"]["by"] == "rule" and r["atoms"][0]["have"] == 3
+    # holding as it should: no verdict against anyone
+    assert T.blame(d, "m", 2, ["c 3"], program)["verdict"] == "this package's"
+    # on an in-port and never there at the start: never delivered
+    r = T.blame(d, "m", 0, ["b 5"], program)
+    assert r["verdict"] == "this package's" and r["atoms"][0]["last"]["by"] == "rule"
+
+
+def test_an_in_port_never_delivered_is_not_this_packages(tmp_path, program):
+    d = write(tmp_path, program, [{"k": 0, "members": {"m": {"why": "clock"}}}])
+    f = d / "seg-0.jsonl"
+    rows = [json.loads(x) for x in f.read_text().splitlines()]
+    rows[0]["members"]["m"]["in"] = ["tick__grant"]
+    f.write_text("\n".join(json.dumps(x) for x in rows) + "\n")
+    r = T.blame(d, "m", 0, ["tick__grant(m,r)"], program)
+    assert r["verdict"] == "not this package's" and r["atoms"][0]["last"] is None
+
+
+def test_goldens_name_the_case_that_refuses(tmp_path, program):
+    from metis.catalog import manifests
+    pkg = tmp_path / "root" / "domains" / "small"
+    (pkg / "cases").mkdir(parents=True)
+    (pkg / "small.llp").write_text(PROGRAM)
+    (pkg / "domain.yaml").write_text("program: small.llp\ndisplay: small\nline: a small program\n")
+    (pkg / "cases" / "good.yaml").write_text(yaml.safe_dump({"case": "good", "boundaries": [{"expect": {"after": ["c"]}}]}))
+    d = next(x for x in manifests.domains(tmp_path / "root") if x.name == "small")
+    assert T.goldens(d) == (True, [])
+    (pkg / "cases" / "bad.yaml").write_text(yaml.safe_dump({"case": "the golden that says no", "boundaries": [{"expect": {"after": ["a"]}}]}))
+    ok, failed = T.goldens(d, seeds=(1, 2))
+    assert not ok and [(x["case"], x["file"], x["seed"]) for x in failed] == [("the golden that says no", "bad.yaml", 1), ("the golden that says no", "bad.yaml", 2)]
+    assert "after: a is 0" in failed[0]["failures"][0]
+
+
+def test_new_rules_are_those_added_or_changed():
+    other = PROGRAM.replace("b_to_c [dyn] : b -o c.", "b_to_c [dyn] : b -o c * a.\n  %% New.\n  c_to_a [dyn] : c -o a.")
+    assert T.new_rules(other, PROGRAM) == ["b_to_c", "c_to_a"] and T.new_rules(PROGRAM, PROGRAM) == []
+
+
+def test_the_cli_writes_the_case_and_replays(tmp_path, program, capsys):
+    d = write(tmp_path, program, GOOD)
+    assert T.main(["replay", str(d), "m", str(program)]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"]
+    assert T.main(["case", str(d), "m", "--at", "2", "--after", "a", "--out", "kind:yield_*", "--into", str(tmp_path / "cases")]) == 0
+    f = tmp_path / "cases" / "surprise-m-2.yaml"
+    c = yaml.safe_load(f.read_text())
+    assert f.is_file() and c["boundaries"][-1]["expect"] == {"after": ["a"], "out": [{"kind": "yield_*"}]}
 
 
 def test_no_segment_is_said(tmp_path):
