@@ -9,6 +9,8 @@ A package's cases are YAML files in its `cases/` directory. A case:
     rng: "1234"                                   # a window of a trace (metis.trace case): the RNG's state at its start, and
     stage: act                                    #   the stage; over the seed (decimal: it is past 2^53)
     note: what the case is of                     # one paragraph, not read
+    member: planner                               # a surprise's: the member and the tick of its trace, where a composition's
+    at: 120                                       #   replay holds the same expectation (metis_agent.trace.judge)
     init: [at(lhere)]                             # the state before the first boundary: it REPLACES the program's
                                                   #   #init (absent: the program's #init stands)
     steps: 100                                    # the most events a boundary runs to quiescence (default 100)
@@ -334,7 +336,7 @@ def load_case(path):
     c = yaml.safe_load(Path(path).read_text()) or {}
     if not isinstance(c, dict) or not isinstance(c.get("boundaries"), list):
         raise CaseError("%s: a case is a mapping with boundaries: [...]" % path)
-    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "ports", "boundaries", "rng", "stage", "note"})
+    unknown = sorted(set(c) - {"case", "seed", "init", "steps", "ports", "boundaries", "rng", "stage", "note", "member", "at"})
     if unknown:
         raise CaseError("%s: unknown key%s %s" % (path, "s" if len(unknown) > 1 else "", ", ".join(unknown)))
     ports = c.get("ports")

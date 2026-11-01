@@ -39,6 +39,8 @@ acting episode replays by `replay_firings`: its session's start, its seed, {name
     case(dir, "planner", k, after=[...], out=[...])      the surprise at tick k as a case of the package (the stub's YAML): → its text
     blame(dir, "planner", k, atoms)                      who last moved what is missing or stale: the member's rule, the world, or a take
     goldens(domain, seeds=(1, 2, 3))                     the package's cases on several seeds: → (ok, [the cases that fail, named])
+    apply_pack(unit, pack)                               a hand-written pack on a unit: → (the unit's new text, {added, dropped, whole})
+    duplicates(pack, texts)                              a pack's rules that repeat one already there, by name or by its premises and effects
 
     python -m metis.trace replay DIR MEMBER PROGRAM
     python -m metis.trace case DIR MEMBER --at K [--after ATOM ...] [--out ATOM ...] [--into CASES_DIR]
@@ -394,7 +396,9 @@ def _segment_of(segs, k, k0=None):
 def case(path, member, k, after=(), out=(), k0=None, note=None):
     """The window to tick K of MEMBER as a case: the checkpoint its segment starts from, one boundary per beat or take, and at K the
     observed outcome the rules did not produce: `after` (what the world did) and `out` (the command kinds a norm requires). No rule is
-    named, so the case survives the rule that passes it. → the YAML's text; it fails in the package's harness until a rule passes it."""
+    named, so the case survives the rule that passes it. → the YAML's text; it fails in the package's harness until a rule passes it.
+    Out's kinds match RULE names, with globs: the law is written in rules, and a host's rendered kind is the world's accounting (rulecheck). A case runs one
+    member alone on recorded takes: a golden; the composition's judgement is metis_agent.trace.judge, which holds the same expectation at the tick."""
     import yaml
     if not after and not out:
         raise TraceError("a case asserts something: --after (what the world did) or --out (the command a norm requires)")
@@ -431,7 +435,7 @@ def case(path, member, k, after=(), out=(), k0=None, note=None):
     if out:
         last["expect"]["out"] = list(out)
     doc = {"case": "surprise at tick %d: %s" % (k, member), "note": note or "written by metis.trace case from a trace; it fails until a rule passes it",
-           "seed": start.header["members"][member].get("seed", 1), "rng": st["rng"], "stage": st["stage"],
+           "member": member, "at": k, "seed": start.header["members"][member].get("seed", 1), "rng": st["rng"], "stage": st["stage"],
            "init": ["%s %d" % (a, n) if n != 1 else a for a, n in sorted(st["counts"].items())], "boundaries": bounds}
     return yaml.safe_dump(doc, sort_keys=False, width=200)
 
@@ -494,12 +498,21 @@ def blame(path, member, k, atoms, program=None):
 
 
 # ── the goldens: a refusal names them ──
+def golden_files(domain):
+    """The package's cases, and those of the family package of its name under METIS_HOME (spec/18: a consumer runs its family's cases on its own program)."""
+    from metis.catalog import stub
+    own = list(stub.cases_of(domain))
+    home = os.environ.get("METIS_HOME")
+    family = Path(home) / Path(domain.dir).name / "cases" if home else None
+    return own + (sorted(family.glob("*.yaml")) if family and family.is_dir() and family.resolve() != (Path(domain.dir) / "cases").resolve() else [])
+
+
 def goldens(domain, seeds=(1, 2, 3)):
-    """Every case of the package, on each of SEEDS (one sampler's draw moves when a clause is merely enabled). → (ok, failed): failed names
+    """Every case of the package (golden_files), on each of SEEDS (one sampler's draw moves when a clause is merely enabled). → (ok, failed): failed names
     each case, its seed, and what it says: a person may overrule a golden, so the refusal has to say which."""
     from metis.catalog import stub
     failed = []
-    for f in stub.cases_of(domain):
+    for f in golden_files(domain):
         c = stub.load_case(f)
         for seed in ([c.get("seed", 1)] if c.get("rng") is not None else seeds):
             r = stub.run_case(domain, f, seed=seed)
@@ -507,6 +520,51 @@ def goldens(domain, seeds=(1, 2, 3)):
                 failed.append({"case": r.name, "file": Path(f).name, "seed": seed,
                                "failures": [x for b in r.boundaries for x in b.failures][:4]})
     return not failed, failed
+
+
+def apply_pack(unit, pack):
+    """A hand-written PACK on a unit's TEXT: a whole program (it has `catalog`) replaces it; else its `drop NAME` lines take rules out and the rest is
+    appended: its `pred` lines and `stage S { … }` blocks as written. → (text, {"whole", "added", "dropped"}). A drop of a rule the unit has not is said."""
+    import re
+    if re.search(r"^catalog\s", pack, re.M):
+        return pack, {"whole": True, "added": sorted(rules_of(pack)), "dropped": sorted(set(rules_of(unit)) - set(rules_of(pack)))}
+    lines, drops = [], []
+    for line in pack.splitlines():
+        m = re.match(r"^\s*drop\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?\s*$", line)
+        if m:
+            drops.append(m.group(1))
+        else:
+            lines.append(line)
+    text = unit
+    for name in drops:
+        new = re.sub(r"(^[ \t]*%%[^\n]*\n)*^[ \t]*" + re.escape(name) + r"\s*(?:\[[^\]]*\])?\s*:[^.]*?-o[^.]*\.[^\n]*\n?", "", text, count=1, flags=re.M)
+        if new == text:
+            raise TraceError("the pack drops %s, which this unit does not have" % name)
+        text = new
+    body = "\n".join(lines).strip()
+    return text.rstrip("\n") + "\n\n" + body + "\n" if body else text, {"whole": False, "added": sorted(rules_of(body)), "dropped": drops}
+
+
+def duplicates(pack, texts):
+    """The rules of PACK that repeat one of TEXTS' ({where: text}): [{rule, where, other, how}]: by name, or by the same premises and effects under another name."""
+    def body(statement):
+        return statement.split(":", 1)[1].strip().rstrip(".")
+    out, mine = [], rules_of(pack)
+    for name, st in mine.items():
+        for where, text in texts.items():
+            for other, o in rules_of(text).items():
+                if other == name and body(o) != body(st):
+                    continue                   # the same name otherwise: the compiler's to say (or a replacement the pack drops)
+                if other == name or body(o) == body(st):
+                    out.append({"rule": name, "where": where, "other": other, "how": "the same rule" if other == name else "the same premises and effects"})
+    return out
+
+
+def holds(expect, counts, fired, outs=()):
+    """A case's expectation at a tick of a replay: its failures. The stub's own `after` and `out` entries, on a session's COUNTS and the rules FIRED there."""
+    from metis.catalog import stub
+    res = stub.BoundaryResult(0, [], [], [], [{"event": x, "rule": x.split("[")[0], "p": None} for x in fired], list(outs), [], "running")
+    return stub._score(res, {k: v for k, v in expect.items() if k in ("after", "out")}, counts)
 
 
 def rules_of(text):

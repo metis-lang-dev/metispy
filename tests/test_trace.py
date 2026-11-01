@@ -353,6 +353,23 @@ def test_goldens_name_the_case_that_refuses(tmp_path, program):
     assert "after: a is 0" in failed[0]["failures"][0]
 
 
+def test_a_consumer_runs_its_familys_cases_too(tmp_path, monkeypatch):
+    from metis.catalog import manifests
+    pkg = tmp_path / "root" / "domains" / "small"
+    pkg.mkdir(parents=True)
+    (pkg / "small.llp").write_text(PROGRAM)
+    (pkg / "domain.yaml").write_text("program: small.llp\ndisplay: small\nline: a small program\n")
+    fam = tmp_path / "family" / "small" / "cases"
+    fam.mkdir(parents=True)
+    (fam / "from_the_family.yaml").write_text(yaml.safe_dump({"case": "the family's", "boundaries": [{"expect": {"after": ["a"]}}]}))
+    d = next(x for x in manifests.domains(tmp_path / "root") if x.name == "small")
+    monkeypatch.delenv("METIS_HOME", raising=False)
+    assert T.golden_files(d) == [] and T.goldens(d) == (True, [])
+    monkeypatch.setenv("METIS_HOME", str(tmp_path / "family"))
+    assert [f.name for f in T.golden_files(d)] == ["from_the_family.yaml"]
+    assert [x["file"] for x in T.goldens(d, seeds=(1,))[1]] == ["from_the_family.yaml"]
+
+
 def test_new_rules_are_those_added_or_changed():
     other = PROGRAM.replace("b_to_c [dyn] : b -o c.", "b_to_c [dyn] : b -o c * a.\n  %% New.\n  c_to_a [dyn] : c -o a.")
     assert T.new_rules(other, PROGRAM) == ["b_to_c", "c_to_a"] and T.new_rules(PROGRAM, PROGRAM) == []
@@ -366,6 +383,32 @@ def test_the_cli_writes_the_case_and_replays(tmp_path, program, capsys):
     f = tmp_path / "cases" / "surprise-m-2.yaml"
     c = yaml.safe_load(f.read_text())
     assert f.is_file() and c["boundaries"][-1]["expect"] == {"after": ["a"], "out": [{"kind": "yield_*"}]}
+
+
+def test_a_pack_is_appended_and_its_drops_taken_out():
+    pack = "drop b_to_c\npred d : small.\nstage main {\n  %% C becomes d.\n  c_to_d [dyn] : c -o d.\n}\n"
+    text, info = T.apply_pack(PROGRAM, pack)
+    assert info == {"whole": False, "added": ["c_to_d"], "dropped": ["b_to_c"]} and "B becomes c" not in text and "c_to_d" in text and "a_to_b" in text
+    assert sorted(T.rules_of(text)) == ["a_to_b", "c_to_d"]
+    whole, info = T.apply_pack(PROGRAM, PROGRAM.replace("b_to_c", "b_on"))
+    assert info["whole"] and info["dropped"] == ["b_to_c"] and "b_on" in whole
+    with pytest.raises(T.TraceError, match="drops nope"):
+        T.apply_pack(PROGRAM, "drop nope\n")
+
+
+def test_a_pack_that_repeats_a_rule_is_found_by_name_or_by_its_body():
+    same = "stage main {\n  %% Again.\n  b_to_c [dyn] : b -o c.\n}\n"
+    assert T.duplicates(same, {"small.llp": PROGRAM}) == [{"rule": "b_to_c", "where": "small.llp", "other": "b_to_c", "how": "the same rule"}]
+    renamed = "stage main {\n  %% Again.\n  b_again [dyn] : b -o c.\n}\n"
+    assert T.duplicates(renamed, {"small.llp": PROGRAM})[0] == {"rule": "b_again", "where": "small.llp", "other": "b_to_c", "how": "the same premises and effects"}
+    assert T.duplicates("stage main {\n  %% New.\n  c_to_a [dyn] : c -o a.\n}\n", {"small.llp": PROGRAM}) == []
+
+
+def test_an_expectation_holds_on_a_replays_session():
+    assert T.holds({"after": ["a", "b 0"]}, {"a": 1}, []) == []
+    assert "after: b is 1" in " ".join(T.holds({"after": ["b 0"]}, {"b": 1}, []))
+    assert T.holds({"out": [{"kind": "yield_*"}]}, {}, ["yield_red[Z=z1]"]) == []
+    assert "no command of kind accel*" in " ".join(T.holds({"out": [{"kind": "accel*"}]}, {}, ["yield_red[Z=z1]"]))
 
 
 def test_no_segment_is_said(tmp_path):
