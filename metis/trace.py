@@ -20,8 +20,8 @@ semantics, its inputs are all it had.
                 deliver: regenerated in a composition's replay, the agent carries them; world, intent, tool: its inputs);
                 {"step": [rules], "by": origin} (fired out of any beat); {"reload": true} (a new session: the segment ends with this tick)
                 A member that beat with nothing in or fired, and took nothing, has its `why` and no seq. `out` is every
-                out port the tick's rules said (outputs below), so a candidate's first differing output is the first
-                real divergence.
+                out port the tick's rules said (outputs below): the out atoms, and each world command as {"rule", "kind",
+                "args"}, so a candidate's first differing output is the first real divergence.
     checkpoint  {"k": 0, "sessions": {member: {"stage", "quiet", "rng": "<decimal>", "counts": {atom: n}}},
                  "copies": {member: {atom: n}}, "world": <the world's own reference>}
 
@@ -95,15 +95,30 @@ def pred_of(atom):
     return atom.split("(")[0]
 
 
-def outputs(ev, commands, out_preds):
+def command_entry(name, said=None):
+    """A world command as `out` holds it: {"rule": the event, "kind", "args"}. A case may assert the KIND a norm requires
+    (expect.out): a yield and an accel leave the same tokens. SAID: the host's (kind, args) for it, as its restrictor emits
+    them; else the rule's own name and bindings."""
+    base, _, rest = name.partition("[")
+    if said is not None:
+        return {"rule": name, "kind": said[0], "args": [a for a in said[1:] if a is not None]}
+    return {"rule": name, "kind": base, "args": [b.split("=", 1)[-1] for b in rest.rstrip("]").split(",") if b]}
+
+
+def outputs(ev, commands, out_preds, said=None):
     """What the fired event EV says outside its member: the world commands of its rule (a rule named P or P_…, or P in
-    its head) and the atoms it produced of the member's out preds."""
+    its head; command_entry, SAID(name) its host's words) and the atoms it produced of the member's out preds."""
     base, out = ev.name.split("[")[0], []
     heads = {pred_of(a) for a in ev.produce}
     if any(base == p or base.startswith(p + "_") or p in heads for p in commands):
-        out.append(ev.name)
+        out.append(command_entry(ev.name, said(ev.name) if said else None))
     out += sorted(a for a in ev.produce if pred_of(a) in out_preds)
     return out
+
+
+def out_name(x):
+    """An output as a replay compares it: a host's words on a command are not the model's to reproduce."""
+    return x["rule"] if isinstance(x, dict) else x
 
 
 # ── the writer: segments on disk, the ring ──
@@ -303,8 +318,9 @@ def replay_segment(seg, member, program, r, check_key=True):
             ev = events.get(name)
             if ev is not None:
                 out += outputs(ev, commands, out_preds)
-        if out != (e.get("out") or []):
-            return stop(k, "out", e.get("out") or [], out)
+        want_out = [out_name(x) for x in e.get("out") or []]
+        if [out_name(x) for x in out] != want_out:
+            return stop(k, "out", want_out, [out_name(x) for x in out])
         if fired:
             r.fired[k] = fired
         if out:

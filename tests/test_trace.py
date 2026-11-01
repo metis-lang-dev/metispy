@@ -108,6 +108,23 @@ def test_an_output_that_differs_is_a_divergence(tmp_path, program):
     assert r.divergence["what"] == "out" and r.divergence["got"] == ["out_b"]
 
 
+def test_a_command_says_its_kind_and_args_the_hosts_words_over_the_rules(tmp_path, program):
+    sh = Shell(str(program), seed=1)
+    ev = next(ev for _, _, ev in sh.events_tbl if ev.name == "a_to_b")
+    assert T.outputs(ev, ["a_to_b"], {"out_b"}) == [{"rule": "a_to_b", "kind": "a_to_b", "args": []}, "out_b"]
+    assert T.outputs(ev, ["a_to_b"], (), lambda name: ("brake", "brake_min")) == [{"rule": "a_to_b", "kind": "brake", "args": ["brake_min"]}]
+    assert T.outputs(ev, ["a_to_b"], (), lambda name: ("keep", None))[0]["args"] == []
+    assert T.command_entry("reach[D=d0,E=e1]") == {"rule": "reach[D=d0,E=e1]", "kind": "reach", "args": ["d0", "e1"]}
+    # the replay compares the rule: the host's words are not the model's
+    d = write(tmp_path, program, [{"k": 0, "members": {"m": {"why": "change", "seq": [{"beat": [], "fired": ["a_to_b", "b_to_c"]}], "out": ["out_b"]}}}])
+    f = d / "seg-0.jsonl"
+    rows = [json.loads(x) for x in f.read_text().splitlines()]
+    rows[0]["commands"] = ["a_to_b"]
+    rows[1]["members"]["m"]["out"] = [{"rule": "a_to_b", "kind": "brake", "args": []}, "out_b"]
+    f.write_text("\n".join(json.dumps(x) for x in rows) + "\n")
+    assert T.replay(d, "m", program).ok
+
+
 def test_another_program_is_refused_unless_asked(tmp_path, program):
     d = write(tmp_path, program, GOOD)
     other = tmp_path / "other.llp"
