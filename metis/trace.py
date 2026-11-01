@@ -442,17 +442,20 @@ def case(path, member, k, after=(), out=(), k0=None, note=None, units=()):
 
 # ── whose is it: on the baseline, before any candidate ──
 def blame(path, member, k, atoms, program=None):
-    """At tick K, who last moved each of ATOMS (`atom`: it should hold; `atom 0`: it should not) in MEMBER's session: a rule of the member,
-    its world (`beat`), or a take (relay, deliver: the director's, carried by the agent). → {"atoms": [{atom, want, have, last: {k, by, what}}],
-    "verdict": "this package's" | "not this package's"}: not this package's when what is missing or stale was last moved by a take, or never
-    arrived on an in-port. A person's to read, never the loop's to fix."""
+    """At tick K, who last moved each of ATOMS (`atom`: it should hold; `atom 0`: it should not) in MEMBER's session, over all the trace holds: a rule of the member, its world
+    (`beat`), or a take (relay, deliver: the director's, carried by the agent). → {"atoms": [{atom, want, have, last: {k, by, what}, whose}], "verdict": "this package's" | "not this
+    package's"}. Not this package's when what is missing or stale was last moved by a take or by the world, or never moved and its pred is an in-port or a world reading: no rule of
+    the member left it so (a projection's lie, a protocol's stale token). `whose` says which: a person's to read, never the loop's to fix."""
     from metis.fw.plugin import parse_do_line
     segs = read(path)
-    seg0 = _segment_of(segs, k)
-    m = seg0.header["members"].get(member)
+    if k < segs[0].k0:
+        raise TraceError("tick %d is before the trace (it starts at %d: the ring)" % (k, segs[0].k0))
+    start = next((x for x in reversed(segs) if x.k0 <= k and "cut" in x.header), segs[0])     # a new session's state follows from no row
+    m = start.header["members"].get(member)
     if m is None:
         raise TraceError("no member %r in the trace" % member)
-    counts, last = dict(seg0.checkpoint["sessions"][member]["counts"]), {}
+    counts, last = dict(start.checkpoint["sessions"][member]["counts"]), {}
+    world_preds = {pred_of(a) for a in (start.checkpoint.get("copies") or {}).get(member, ())}
     events = {}
     if program:
         events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
@@ -463,12 +466,15 @@ def blame(path, member, k, atoms, program=None):
         last[a] = {"k": tick, "by": by, "what": line}
 
     for seg in segs:
-        if seg.k0 < seg0.k0:
+        if seg.k0 < start.k0:
             continue
         for t in seg.ticks:
             if t["k"] > k:
                 break
-            for item in (t["members"].get(member) or {}).get("seq") or ():
+            e = t["members"].get(member) or {}
+            copied = e.get("copy") or {}
+            world_preds |= {pred_of(a) for a in list(copied.get("+", ())) + list(copied.get("-", ()))}
+            for item in e.get("seq") or ():
                 for line in item.get("take", ()):
                     op(line, t["k"], item.get("by") or "take")
                 for line in item.get("beat", ()):
@@ -488,12 +494,21 @@ def blame(path, member, k, atoms, program=None):
         a, _, n = str(spec).strip().partition(" ")
         want = int(n) if n else 1
         have = counts.get(a, 0)
-        row = {"atom": a, "want": want, "have": have, "last": last.get(a)}
-        out.append(row)
+        row = {"atom": a, "want": want, "have": have, "last": last.get(a), "whose": None}
         if have != want:
             mover = (last.get(a) or {}).get("by")
-            if mover in ("relay", "deliver") or (mover is None and pred_of(a) in in_preds):
-                others = True
+            if mover == "rule":
+                row["whose"] = "the member's rule"
+            elif mover == "world" or (mover is None and pred_of(a) in world_preds):
+                row["whose"] = "the world's reading"
+            elif mover in ("relay", "deliver", "take") or (mover is None and pred_of(a) in in_preds):
+                row["whose"] = "a take from the director"
+            elif mover is not None:
+                row["whose"] = "from outside: %s" % mover
+            else:
+                row["whose"] = "the member's: nothing ever moved it"
+            others = others or row["whose"] in ("the world's reading", "a take from the director")
+        out.append(row)
     return {"atoms": out, "verdict": "not this package's" if others else "this package's"}
 
 

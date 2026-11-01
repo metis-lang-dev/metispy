@@ -339,6 +339,43 @@ def test_an_in_port_never_delivered_is_not_this_packages(tmp_path, program):
     assert r["verdict"] == "not this package's" and r["atoms"][0]["last"] is None
 
 
+def test_a_stale_world_reading_is_not_this_packages(tmp_path, program):
+    """A projection's lie: nobody's rule left it so. Unmoved in the whole trace, or moved by the world's own line."""
+    w = T.Segments(tmp_path / "t", every=0)
+    sh = Shell(str(program), seed=1)
+    w.open_segment(0, {"members": {"m": {"seed": 1, "weights": [], "out": ["out_b"], "in": []}}}, {"sessions": {"m": T.session_state(sh)}, "copies": {"m": {"held(x)": 1}}})
+    w.line(tick(0, {"beat": [], "fired": ["a_to_b", "b_to_c"]}, out=["out_b"]))
+    w.line({"k": 1, "members": {"m": {"why": "change", "seq": [{"beat": ["+seen(y)"], "fired": []}], "copy": {"+": ["seen(y)"], "-": []}}}})
+    w.close()
+    r = T.blame(tmp_path / "t", "m", 1, ["held(z)"], program)
+    assert r["verdict"] == "not this package's" and r["atoms"][0]["last"] is None and r["atoms"][0]["whose"] == "the world's reading"
+    r = T.blame(tmp_path / "t", "m", 1, ["seen(y) 0"], program)
+    assert r["verdict"] == "not this package's" and r["atoms"][0]["last"]["by"] == "world" and r["atoms"][0]["whose"] == "the world's reading"
+    # the member's own token, nothing ever moved it: its own
+    r = T.blame(tmp_path / "t", "m", 1, ["never_made"], program)
+    assert r["verdict"] == "this package's" and r["atoms"][0]["whose"] == "the member's: nothing ever moved it"
+    # a rule left it so: its own, whatever else is wrong
+    r = T.blame(tmp_path / "t", "m", 1, ["c 0"], program)
+    assert r["verdict"] == "this package's" and r["atoms"][0]["whose"] == "the member's rule"
+    # what holds as it should: nobody's
+    r = T.blame(tmp_path / "t", "m", 1, ["c"], program)
+    assert r["verdict"] == "this package's" and r["atoms"][0]["whose"] is None
+
+
+def test_blame_reads_the_whole_trace_not_only_the_last_segment(tmp_path, program):
+    w = T.Segments(tmp_path / "t", every=2)
+    sh = Shell(str(program), seed=1)
+    head = {"members": {"m": {"seed": 1, "weights": [], "out": [], "in": []}}}
+    w.open_segment(0, head, {"sessions": {"m": T.session_state(sh)}, "copies": {"m": {}}})
+    w.line({"k": 0, "members": {"m": {"why": "change", "seq": [{"beat": ["-a"], "fired": []}]}}})
+    w.line({"k": 1, "members": {}})
+    w.open_segment(2, head, {"sessions": {"m": dict(T.session_state(sh), counts={})}, "copies": {"m": {}}})
+    w.line({"k": 2, "members": {}})
+    w.close()
+    r = T.blame(tmp_path / "t", "m", 2, ["a"], program)
+    assert r["atoms"][0]["last"] == {"k": 0, "by": "world", "what": "-a"} and r["verdict"] == "not this package's"
+
+
 def test_goldens_name_the_case_that_refuses(tmp_path, program):
     from metis.catalog import manifests
     pkg = tmp_path / "root" / "domains" / "small"
