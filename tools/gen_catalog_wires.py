@@ -38,7 +38,7 @@ from gen_smoke_fixtures import commit, sans_commit  # noqa: E402
 GEN = "tools/gen_catalog_wires.py"
 PACKAGES = ["dog", "plant", "kitchen", "kitchen_shared"]
 SYNTHETIC = {"wire_ports": "corpus/wire_ports.llp"}   # relative to LANG
-INCLUDE = re.compile(r'^\s*include\s+"([^"]+)"\s*\.', re.M)
+INCLUDE = re.compile(r'^\s*include\s+"([^"]+)"\s*(?:hiding\s*\([^)]*\)\s*)?\.', re.M)
 
 
 def sources(program: Path, extensions) -> list:

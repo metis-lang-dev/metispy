@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 _CATALOG = re.compile(r"^\s*catalog\s+(\w+)", re.M)
 _TEXT = re.compile(r'^\s*provenance\s+text\s+"([^"]*)"', re.M)
 _EXTENDS = re.compile(r"^\s*extends\s+(\w+)\s*\.", re.M)
-_INCLUDE = re.compile(r'^\s*include\s+"([^"]+)"\s*\.', re.M)
+_INCLUDE = re.compile(r'^\s*include\s+"([^"]+)"\s*(?:hiding\s*\([^)]*\)\s*)?\.', re.M)
 _TYPE = re.compile(r"^\s*type\s+(\w+)", re.M)
 
 

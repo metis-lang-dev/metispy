@@ -174,6 +174,7 @@ class IncludeDecl:
     line: int = field(default=0, compare=False, repr=False)
     col: int = field(default=0, compare=False, repr=False)
     file: str = field(default="", compare=False, repr=False)
+    hiding: Tuple[str, ...] = ()   # spec/18 §3: rule names, sorted, each once
 
 
 @dataclass(frozen=True)
@@ -232,11 +233,21 @@ def rule_line(r: Rule) -> str:
             f"{_head(r.head)}{w}.")
 
 
+def hiding_str(names) -> str:
+    return f" hiding ({' '.join(names)})" if names else ""
+
+
+def rule_base(name: str) -> str:
+    """The rule an alternative head belongs to: `turn-1` is `turn`'s."""
+    base, dash, k = name.rpartition("-")
+    return base if dash and base and k and all("0" <= c <= "9" for c in k) else name
+
+
 def decl_line(d) -> str:
     """One top-level declaration on one canonical line, no doc (stages
     are multi-line: use rule_line per clause)."""
     if isinstance(d, IncludeDecl):
-        return f'include "{d.path}".'
+        return f'include "{d.path}"{hiding_str(d.hiding)}.'
     if isinstance(d, TypeDecl):
         return f"type {d.name} {{{' '.join(d.consts)}}}."
     if isinstance(d, TypesDecl):

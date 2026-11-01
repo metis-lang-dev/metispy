@@ -248,6 +248,19 @@ class _P:
         """(line, col) of the current token; (0, 0) at end of input."""
         return self.pos[self.i] if self.i < len(self.pos) else (0, 0)
 
+    def hiding_names(self) -> Tuple[str, ...]:
+        """`hiding (a b)`'s names: a set, sorted, each once (spec/18 §3)."""
+        self.next()
+        self.punct("(")
+        names = []
+        while True:
+            k, v = self.next()
+            if k == "punct" and v == ")":
+                return tuple(sorted(set(names)))
+            if k != "ident":
+                self.err("expected a rule name or ')' in hiding")
+            names.append(v)
+
     def rule(self) -> List[ast.Rule]:
         """One or more clauses: the alternative-head sugar
         '-o ( head @w w | head @w w ... )' expands here (spec 07 P1),
@@ -382,8 +395,9 @@ def _parse(text: str) -> ast.Catalog:
             p.next()
             at = p._here()
             path = p.expect("string")
+            hiding = p.hiding_names() if p.peek() == ("ident", "hiding") else ()
             p.punct(".")
-            decls.append(ast.IncludeDecl(path, *at))
+            decls.append(ast.IncludeDecl(path, *at, hiding=hiding))
         elif v == "extends":
             p.next()
             extends = p.expect("ident")

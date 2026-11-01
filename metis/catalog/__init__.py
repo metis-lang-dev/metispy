@@ -948,7 +948,7 @@ def intents_status(name, r=None):
             + f" Its check: `python3 tools/intents.py check {name}`.")
 
 
-INCLUDE = r'^\s*include\s+"([^"]+)"\s*\.'
+INCLUDE = r'^\s*include\s+"([^"]+)"\s*(?:hiding\s*\([^)]*\)\s*)?\.'
 
 
 def includes(d, files):

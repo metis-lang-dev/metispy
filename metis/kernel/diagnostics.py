@@ -69,6 +69,8 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "reads-guard-not-bwd": ("error", "compile"),
     "reads-var-unbound": ("error", "compile"),
     "include-cycle": ("error", "compile"),
+    "hiding-unknown": ("error", "compile"),
+    "hiding-shadow": ("error", "compile"),
     "extends-no-base": ("error", "compile"),
     "decl-duplicate": ("error", "compile"),
     # spec 12: a signature naming a type nobody declared (it replaces
@@ -181,6 +183,12 @@ HINTS: Dict[str, str] = {
         "guard",
     "include-cycle":
         "break the include cycle at {path}",
+    "hiding-unknown":
+        "hide a rule of {unit} by its name, or take {name} out of the "
+        "list: a link or one alternative head is not a rule here",
+    "hiding-shadow":
+        "give {name} another name, or do not hide it from {unit}: a rule "
+        "is hidden or kept, never replaced",
     "extends-no-base":
         "compile this pack against its base catalog {base}",
     "decl-duplicate":

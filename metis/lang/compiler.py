@@ -269,12 +269,46 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
     provenance; layers/stages are ADOPTED from an included file when
     the includer omits them — that is the RDDL-style lifting split: a
     static DOMAIN file (rules, preds, ports, stages) included by a
-    generated INSTANCE file (types, facts)."""
+    generated INSTANCE file (types, facts). `hiding` (spec/18 §3) drops
+    the rules named from the splice; links are not rules here, and a
+    rule name takes all its alternative heads."""
     from pathlib import Path
+
+    def refuse(code, text, d, name):
+        from metis.kernel.diagnostics import Loc, Source, make
+        raise LangError([text], [make(
+            code, text,
+            Source(Loc(d.file, d.line, d.col, f"include/{d.path}"),
+                   (ast.decl_line(d),), ()),
+            (("unit", d.path), ("name", name)))])
+
+    def hide_rules(d, inc):
+        names = [ast.rule_base(r.name) for s in inc.decls
+                 if isinstance(s, ast.Stage) for r in s.rules]
+        for n in d.hiding:
+            if n not in names:
+                refuse("hiding-unknown",
+                       f"`hiding` names no rule of '{d.path}': '{n}'; the "
+                       f"unit's rules are {' '.join(sorted(set(names)))}", d, n)
+        return [ast.Stage(s.name, tuple(r for r in s.rules
+                                        if ast.rule_base(r.name) not in d.hiding))
+                if isinstance(s, ast.Stage) else s for s in inc.decls]
+
+    def check_shadow(decls, d, hidden):
+        """A hidden rule named again beside its include is the override
+        spec/18 §4 rejects."""
+        for s in decls:
+            if isinstance(s, ast.Stage):
+                for r in s.rules:
+                    n = ast.rule_base(r.name)
+                    if n in hidden:
+                        refuse("hiding-shadow",
+                               f"rule {n} is hidden from '{d.path}' and named "
+                               f"again: a rule is not replaced", d, n)
 
     def resolve(c, base, seen):
         layers, stages = c.layers, c.stages
-        decls = []
+        decls, hid = [], []
         for d in c.decls:
             if not isinstance(d, ast.IncludeDecl):
                 decls.append(d)
@@ -293,15 +327,19 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
             # resolve_in): a diamond — one file included by two
             # siblings — is not a cycle
             inc = parse_file(path)
-            inc = resolve(inc, path.parent, seen | {str(path)})
-            decls.extend(inc.decls)
+            inc, inner = resolve(inc, path.parent, seen | {str(path)})
+            hid.append((d, tuple(d.hiding) + inner))
+            decls.extend(hide_rules(d, inc))
             layers = layers or inc.layers
             stages = stages or inc.stages
-        return ast.Catalog(c.name, c.version, c.provenance, layers,
-                           stages, extends=c.extends,
-                           decls=tuple(decls))
+        for d, hidden in hid:
+            check_shadow(decls, d, hidden)
+        return (ast.Catalog(c.name, c.version, c.provenance, layers,
+                            stages, extends=c.extends,
+                            decls=tuple(decls)),
+                tuple(n for _, h in hid for n in h))
 
-    return resolve(cat, base_dir, frozenset())
+    return resolve(cat, base_dir, frozenset())[0]
 
 
 def compile_catalog(cat: ast.Catalog,
