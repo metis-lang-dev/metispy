@@ -49,8 +49,12 @@ acting episode replays by `replay_firings`: its session's start, its seed, {name
 import hashlib
 import io
 import json
+import contextlib
 import os
 import shutil
+import signal
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -62,6 +66,37 @@ GROUND_BUDGET = 1000000             # a session's events unless METIS_GROUND_BUD
 
 class TraceError(ValueError):
     pass
+
+
+class OutOfTime(BaseException):
+    """A judgement past its time budget: not an `except Exception`'s to swallow on the way out, and not a verdict: "not judged"."""
+
+    def __init__(self, label="", seconds=None):
+        super().__init__("%s: past its budget of %s s" % (label, seconds))
+        self.label, self.seconds = label, seconds
+
+
+@contextlib.contextmanager
+def deadline(seconds, label=""):
+    """OutOfTime in the body after SECONDS of wall clock (None or 0: no limit; off the main thread: no limit, SIGALRM is the main thread's). An outer deadline still holds: the
+    nearer one fires, and the outer goes on counting after."""
+    if not seconds or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def fire(_sig, _frame):
+        raise OutOfTime(label, seconds)
+    outer_handler = signal.signal(signal.SIGALRM, fire)
+    outer_left = signal.getitimer(signal.ITIMER_REAL)[0]
+    t0 = time.monotonic()
+    signal.setitimer(signal.ITIMER_REAL, min(seconds, outer_left) if outer_left else seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, outer_handler)
+        if outer_left:
+            signal.setitimer(signal.ITIMER_REAL, max(0.001, outer_left - (time.monotonic() - t0)))
 
 
 # ── a session as a checkpoint holds it ──
@@ -572,18 +607,29 @@ def family_skips(domain):
     return out
 
 
-def goldens(domain, seeds=(1, 2, 3), skip=None):
+def goldens(domain, seeds=(1, 2, 3), skip=None, budget=None):
     """Every case of the package (golden_files), on each of SEEDS (one sampler's draw moves when a clause is merely enabled), but the family's that are not this consumer's
-    (SKIP: their file names; default family_skips on the program as it is). → (ok, failed): failed names each case, its seed, and what it says: a person may overrule a golden, so
-    the refusal has to say which."""
+    (SKIP: their file names; default family_skips on the program as it is). BUDGET: seconds a run of one case may take. → (ok, failed): failed names each case, its seed, and what it
+    says: a person may overrule a golden, so the refusal has to say which. A run past its budget says "not_judged": true: it neither passed nor failed."""
     from metis.catalog import stub
     failed = []
     if skip is None:
         skip = [x["file"] for x in family_skips(domain)]
+    session, start = None, None
     for f in golden_files(domain, skip):
         c = stub.load_case(f)
         for seed in ([c.get("seed", 1)] if c.get("rng") is not None else seeds):
-            r = stub.run_case(domain, f, seed=seed)
+            try:
+                with deadline(budget, Path(f).name):
+                    if session is None and not c.get("ports"):     # one compile for the package: a big grounding takes seconds, and there are seeds times cases
+                        session = stub.Stub(domain.program, domain.manifest).repl
+                        start = session_state(session)
+                    if session is not None:
+                        restore_session(session, start)
+                    r = stub.run_case(domain, f, seed=seed, session=session)
+            except OutOfTime as x:
+                failed.append({"case": c.get("case") or Path(f).stem, "file": Path(f).name, "seed": seed, "not_judged": True, "failures": [str(x)]})
+                continue
             if not r.passed:
                 failed.append({"case": r.name, "file": Path(f).name, "seed": seed,
                                "failures": [x for b in r.boundaries for x in b.failures][:4]})

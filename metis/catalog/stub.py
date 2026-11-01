@@ -172,10 +172,18 @@ class CaseResult:
 class Stub:
     """One specialist's session, driven boundary by boundary."""
 
-    def __init__(self, program, manifest, seed=1, ports=None):
+    def __init__(self, program, manifest, seed=1, ports=None, session=None):
+        """SESSION: an open Repl of PROGRAM, at its start, to use instead of compiling it again (the caller keeps what it needs: its state is replaced)."""
         from metis.fw.registry import PortError, Registry
         from metis.lang.repl import Repl
+        from metis.kernel.refsample import SplitMix64
         self.iface = Interface.of(manifest)
+        if session is not None:
+            self.repl = session
+            self.repl.rng = SplitMix64(seed)
+            self.preds = set(self.repl.doc.catalog.preds) | set(self.repl.doc.catalog.bwd)
+            self.holding = set()
+            return
         # the case's weight ports, each a constant: the session's registry (an embedding host's in-process bindings,
         # no operator code imported)
         reg = Registry()
@@ -356,11 +364,11 @@ def load_case(path):
     return c
 
 
-def run_case(domain, case_path, seed=None):
-    """Run one case file against DOMAIN (a manifests.Domain, or (program path, manifest dict)); SEED over the case's. → CaseResult."""
+def run_case(domain, case_path, seed=None, session=None):
+    """Run one case file against DOMAIN (a manifests.Domain, or (program path, manifest dict)); SEED over the case's; SESSION: an open Repl of the program, at its start. → CaseResult."""
     program, manifest = (domain.program, domain.manifest) if hasattr(domain, "manifest") else domain
     c = load_case(case_path)
-    s = Stub(program, manifest, seed=seed if seed is not None else c.get("seed", 1), ports=c.get("ports"))
+    s = Stub(program, manifest, seed=seed if seed is not None else c.get("seed", 1), ports=c.get("ports"), session=None if c.get("ports") else session)
     if "init" in c:                                    # the case's state replaces the program's #init
         for a, n in sorted(s.repl.counts.items()):
             if n > 0:

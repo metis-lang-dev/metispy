@@ -508,6 +508,45 @@ def test_an_expectation_holds_on_a_replays_session():
     assert "no command of kind accel*" in " ".join(T.holds({"out": [{"kind": "accel*"}]}, {}, ["yield_red[Z=z1]"]))
 
 
+def test_a_deadline_fires_in_the_body_and_keeps_the_outer_one():
+    import time
+    with pytest.raises(T.OutOfTime, match="spin: past its budget"):
+        with T.deadline(0.05, "spin"):
+            time.sleep(2)
+    with T.deadline(5, "outer"):
+        with pytest.raises(T.OutOfTime):
+            with T.deadline(0.05, "inner"):
+                time.sleep(2)
+        import signal
+        left = signal.getitimer(signal.ITIMER_REAL)[0]
+        assert 0 < left <= 5, "the outer goes on counting"
+    assert __import__("signal").getitimer(__import__("signal").ITIMER_REAL)[0] == 0
+    with T.deadline(None):
+        pass
+
+
+def test_a_golden_past_its_budget_is_not_judged_not_failed(tmp_path, monkeypatch):
+    import time
+    from metis.catalog import stub
+    d = family_setup(tmp_path, monkeypatch, {"slow.yaml": {"case": "the slow one", "boundaries": [{"expect": {"after": ["c"]}}]}})
+    monkeypatch.setattr(stub, "run_case", lambda *a, **k: time.sleep(5))
+    ok, failed = T.goldens(d, seeds=(1, 2), budget=0.05)
+    assert not ok and [(x["file"], x["seed"], x.get("not_judged")) for x in failed] == [("slow.yaml", 1, True), ("slow.yaml", 2, True)]
+    assert "past its budget of 0.05" in failed[0]["failures"][0]
+
+
+def test_one_session_for_the_goldens_says_what_a_fresh_one_says(tmp_path, monkeypatch):
+    from metis.catalog import stub
+    d = family_setup(tmp_path, monkeypatch, {
+        "good.yaml": {"boundaries": [{"expect": {"after": ["c"]}}]},
+        "bad.yaml": {"boundaries": [{"expect": {"after": ["a"]}}]},
+        "order.yaml": {"init": ["a"], "boundaries": [{"expect": {"fired": ["a_to_b", "b_to_c"]}}, {"lines": ["+a"], "run": False}, {"expect": {"fired": ["a_to_b", "b_to_c"]}}]},
+        "good_after.yaml": {"boundaries": [{"expect": {"after": ["c", "a 0"]}}]}})
+    shared = T.goldens(d, seeds=(1, 2))
+    fresh = [(f.name, s) for f in T.golden_files(d) for s in (1, 2) if not stub.run_case(d, f, seed=s).passed]
+    assert sorted((x["file"], x["seed"]) for x in shared[1]) == sorted(fresh) == [("bad.yaml", 1), ("bad.yaml", 2)]
+
+
 def test_no_segment_is_said(tmp_path):
     (tmp_path / "t").mkdir()
     with pytest.raises(T.TraceError, match="no segment"):
