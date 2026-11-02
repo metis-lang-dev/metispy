@@ -197,6 +197,8 @@ invariant mode (idle busy) : 1.
 stage act {
   %% Go: idle becomes busy.
   start [dyn] : $go * idle -o busy.
+  %% Stop: busy becomes idle.
+  stop [dyn] : busy -o idle.
 }
 #init idle 1
 #init go 1
