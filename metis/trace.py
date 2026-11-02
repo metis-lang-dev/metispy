@@ -45,6 +45,19 @@ acting episode replays by `replay_firings`: its session's start, its seed, {name
     python -m metis.trace replay DIR MEMBER PROGRAM
     python -m metis.trace case DIR MEMBER --at K [--after ATOM ...] [--out ATOM ...] [--into CASES_DIR]
     (the composition's replay and the fired diff are metis_agent.trace's: they run the agent's own relay code)
+
+The instruments (metis-loop patterns/CHECKS.md §5), each from the trace alone, each printing rows a ruling can quote
+(its notes, a header line, one row a line). A tick row carries no counts: `timeline` reconstructs a member's state from
+each segment's checkpoint through the do-lines applied and, with --program, the rules' consume/produce (blame's accounting).
+
+    timeline(dir, member, program=None)                  → ([Tick(k, counts, fired, made)], exact)
+    python -m metis.trace blame DIR --member M --k K --atoms a,b [--program P]       who last moved what (Blame first)
+    python -m metis.trace count DIR ATOM [--by ATOM ...] [--member M]                 the cross-tab (Measure the class first)
+    python -m metis.trace families DIR [--family p,q,r ...] [--program P]             exactly-one per tick, and the flicker (Exclusive family; Steady reading)
+    python -m metis.trace holds DIR ATOM --max N [--member M]                         windows held past N ticks, the rules within (Bounded yield)
+    python -m metis.trace diff DIR_A DIR_B [--member M]                               the first tick the fired rows or the state differ (Sim race in the log)
+    python -m metis.trace outcomes DIR --commit A --done B --cancel C [--member M]    each commitment window's end (Time to spare; Committed action)
+    python -m metis.trace fired DIR RULE --seeds N --program P --member M             the seeds the rule fires on (Search the seeds for a firing)
 """
 import hashlib
 import io
@@ -693,9 +706,333 @@ def new_rules(candidate, current):
     return sorted(r for r, x in a.items() if b.get(r) != x)
 
 
+# ── the trace instruments (metis-loop patterns/CHECKS.md §5): rows a ruling can quote ──
+@dataclass
+class Table:
+    """Rows to print: NOTES (summary lines) first, then the HEADER line, then one row a line, columns padded. A cell that is a
+    list, set or tuple is comma-joined, an empty one or None is `-`, a bool is yes/no."""
+    header: List[str]
+    rows: List[list] = field(default_factory=list)
+    notes: List[str] = field(default_factory=list)
+
+    @staticmethod
+    def cell(v):
+        if v is None:
+            return "-"
+        if isinstance(v, bool):
+            return "yes" if v else "no"
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return ",".join(str(x) for x in (sorted(v) if isinstance(v, (set, frozenset)) else v)) or "-"
+        return str(v)
+
+    def lines(self):
+        grid = [[str(h) for h in self.header]] + [[self.cell(v) for v in r] for r in self.rows]
+        widths = [max(len(r[i]) for r in grid if i < len(r)) for i in range(max(len(r) for r in grid))]
+        out = list(self.notes)
+        for r in grid:
+            out.append("  ".join(c.ljust(widths[i]) if i < len(r) - 1 else c for i, c in enumerate(r)).rstrip())
+        return out
+
+    def __str__(self):
+        return "\n".join(self.lines())
+
+
+@dataclass
+class Tick:
+    """One tick of a member as `timeline` reconstructs it: its COUNTS after the tick, the rules FIRED at it (full names, in order), and MADE: the atoms that went up during it
+    (a take or beat's `+`, a rule's produce), so an atom consumed again within the tick is still seen to have appeared."""
+    k: int
+    counts: dict
+    fired: list = field(default_factory=list)
+    made: set = field(default_factory=set)
+
+
+def timeline(path, member, program=None):
+    """MEMBER's state at every tick of the trace at PATH, reconstructed: a tick row carries no counts (only each segment's checkpoint does), so the counts are replayed from
+    the segment's checkpoint through the do-lines applied (takes, beats) and, when PROGRAM is given, the consume/produce of each rule fired (blame's accounting; without a
+    program the rules' effects are unknown and the state is exact only at each segment's start). The counts are re-synced at every segment's checkpoint. A row repeating a
+    tick's k (`between`) merges into it. → (ticks: [Tick], exact: whether the rules' effects were applied)."""
+    from metis.fw.plugin import parse_do_line
+    segs = read(path)
+    m = segs[0].header["members"].get(member)
+    if m is None:
+        raise TraceError("no member %r in the trace (it has: %s)" % (member, ", ".join(sorted(segs[0].header["members"]))))
+    events = {}
+    if program:
+        events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
+    ticks = []
+    for seg in segs:
+        counts = dict((seg.checkpoint.get("sessions") or {}).get(member, {}).get("counts") or {})
+        for t in seg.ticks:
+            k = t["k"]
+            if ticks and ticks[-1].k == k:
+                cur = ticks[-1]
+            else:
+                cur = Tick(k, {})
+                ticks.append(cur)
+            e = t["members"].get(member) or {}
+            for item in e.get("seq") or ():
+                for line in list(item.get("take", ())) + list(item.get("beat", ())):
+                    sign, a, n = parse_do_line(line)
+                    if sign == "+":
+                        counts[a] = counts.get(a, 0) + n
+                        cur.made.add(a)
+                    else:
+                        counts[a] = max(0, counts.get(a, 0) - n)
+                for name in list(item.get("fired") or ()) + list(item.get("step") or ()):
+                    cur.fired.append(name)
+                    ev = events.get(name)
+                    if ev is None:
+                        continue
+                    for a, n in ev.consume.items():
+                        counts[a] = max(0, counts.get(a, 0) - n)
+                    for a, n in ev.produce.items():
+                        counts[a] = counts.get(a, 0) + n
+                        cur.made.add(a)
+            cur.counts = {a: n for a, n in counts.items() if n > 0}
+    return ticks, bool(program)
+
+
+def held(spec, counts):
+    """The ground instances of SPEC present in COUNTS: SPEC with parentheses is one exact atom; a bare name is a pred, every instance of it."""
+    if "(" in spec:
+        return [spec] if counts.get(spec, 0) > 0 else []
+    return sorted(a for a, n in counts.items() if n > 0 and pred_of(a) == spec)
+
+
+def _windows(ticks, spec):
+    """The maximal runs of consecutive ticks on which SPEC holds: [(first index, last index)]."""
+    out, start = [], None
+    for i, t in enumerate(ticks):
+        if held(spec, t.counts):
+            if start is None:
+                start = i
+        elif start is not None:
+            out.append((start, i - 1))
+            start = None
+    if start is not None:
+        out.append((start, len(ticks) - 1))
+    return out
+
+
+def _toggles(labels, least=4):
+    """The runs of indices where LABELS alternate with period <= 2 (a-b-a-b: each differs from the one before and equals the one two back) over more than LEAST ticks:
+    [(first, last)]."""
+    out, start = [], 0
+    for i in range(1, len(labels) + 1):
+        alternating = i < len(labels) and labels[i] != labels[i - 1] and (i - start < 2 or labels[i] == labels[i - 2])
+        if not alternating:
+            if i - start > least:
+                out.append((start, i - 1))
+            start = i if i >= len(labels) or labels[i] == labels[i - 1] else i - 1      # a b c: the run b c b c may start at b
+    return out
+
+
+def _note_state(exact):
+    return "state: from each segment's checkpoint through the do-lines and the rules' effects" if exact else \
+        "state: from each segment's checkpoint through the do-lines only (no --program: the rules' effects are not applied)"
+
+
+def blame_rows(path, member, k, atoms, program=None):
+    """Blame first: the CLI of `blame`, its result as rows (whose / atom / want / have / last mover) under the verdict line, nothing new in the logic. → Table."""
+    r = blame(path, member, k, atoms, program)
+    t = Table(["whose", "atom", "want", "have", "last_k", "last_by", "last_what"], notes=["verdict: %s" % r["verdict"]])
+    for row in r["atoms"]:
+        last = row["last"] or {}
+        t.rows.append([row["whose"] or "nobody's: it holds as it should", row["atom"], row["want"], row["have"], last.get("k"), last.get("by"), last.get("what")])
+    return t
+
+
+def count(path, atom, by=(), member=None, program=None):
+    """Measure the class first; A norm with its domain: the cross-tab of the ticks on which ATOM holds (count > 0: any instance of a pred name, or one exact ground atom) by
+    the value of each BY atom at the same tick (an exact atom: holds / absent; a pred name: the instances present, or absent). The notes say the ticks and those with ATOM;
+    one row per by-combination, with the ticks with and without ATOM in it, most first. → Table."""
+    ticks, exact = timeline(path, member or _only_member(path), program)
+    table = {}
+    for t in ticks:
+        key = tuple(_value(b, t.counts) for b in by)
+        with_, without = table.get(key, (0, 0))
+        table[key] = (with_ + 1, without) if held(atom, t.counts) else (with_, without + 1)
+    total = len(ticks)
+    n = sum(w for w, _ in table.values())
+    out = Table(list(by) + ["with_%s" % atom, "without"], notes=["ticks: %d" % total, "ticks with %s: %d" % (atom, n), _note_state(exact)])
+    for key, (w, wo) in sorted(table.items(), key=lambda kv: (-kv[1][0], kv[0])):
+        out.rows.append(list(key) + [w, wo])
+    return out
+
+
+def _value(spec, counts):
+    inst = held(spec, counts)
+    if not inst:
+        return "absent"
+    return "holds" if inst == [spec] else ",".join(inst)
+
+
+def _only_member(path):
+    """The member when none is named: the trace's one member, else a refusal naming them."""
+    members = sorted(read(path)[0].header["members"])
+    if len(members) != 1:
+        raise TraceError("--member: the trace has %s" % ", ".join(members))
+    return members[0]
+
+
+def families(path, fams=(), member=None, program=None):
+    """Exclusive family + Steady reading: for each family (a set of pred names, from --family and from the program's declared `families` when it has them) whether EXACTLY ONE
+    member holds at every tick: a summary row per family (ticks ok / zero / two_or_more), one row per violating tick with what held; then the flicker rows: a family whose
+    held member, or a rule that fired, alternates with period <= 2 for more than 4 consecutive ticks (a-b-a-b), one row per run with its first and last tick and the pair.
+    → [Table summary, Table violations, Table flicker]."""
+    member = member or _only_member(path)
+    ticks, exact = timeline(path, member, program)
+    fams = [("+".join(f), list(f)) for f in fams]
+    if program:
+        doc = getattr(open_session(program), "doc", None)
+        for name, members in getattr(doc, "families", None) or ():
+            fams.append((str(getattr(name, "name", name)), [str(getattr(x, "name", x)) for x in members]))
+    summary = Table(["family", "members", "ticks", "ok", "zero", "two_or_more"], notes=["ticks: %d" % len(ticks), _note_state(exact)])
+    bad = Table(["family", "k", "held"])
+    flicker = Table(["what", "name", "first_k", "last_k", "ticks", "pair"])
+    for name, members in fams:
+        ok = zero = many = 0
+        labels = []
+        for t in ticks:
+            present = [m for m in members if held(m, t.counts)]
+            labels.append(tuple(present))
+            if len(present) == 1:
+                ok += 1
+            elif not present:
+                zero += 1
+                bad.rows.append([name, t.k, "none"])
+            else:
+                many += 1
+                bad.rows.append([name, t.k, present])
+        summary.rows.append([name, members, len(ticks), ok, zero, many])
+        for a, b in _toggles(labels):
+            pair = sorted({labels[a], labels[a + 1]}, key=str)
+            flicker.rows.append(["family", name, ticks[a].k, ticks[b].k, b - a + 1, " <-> ".join("+".join(p) or "none" for p in pair)])
+    names = sorted({pred_of(x) for t in ticks for x in t.fired})
+    fired = {n: [any(pred_of(x) == n for x in t.fired) for t in ticks] for n in names}
+    for n in names:
+        for a, b in _toggles(fired[n]):
+            other = next((o for o in names if o != n and all(fired[o][i] != fired[n][i] for i in range(a, b + 1))), None)
+            if other and other < n and (a, b) in _toggles(fired[other]):
+                continue                                  # the same run, already told from its partner
+            flicker.rows.append(["rule", n, ticks[a].k, ticks[b].k, b - a + 1, "%s <-> %s" % (n, other or "idle")])
+    return [summary, bad, flicker]
+
+
+def holds_windows(path, atom, max_ticks, member=None, program=None):
+    """Bounded yield: every window where ATOM is held (count > 0) for more than MAX_TICKS consecutive ticks; one row per window with its first and last tick, its length and the
+    rules (names) that fired on the member within it, so a reader sees whether a release ever fired. → Table."""
+    ticks, exact = timeline(path, member or _only_member(path), program)
+    out = Table(["first_k", "last_k", "ticks", "rules_fired"], notes=["ticks: %d" % len(ticks), "windows of %s past %d ticks:" % (atom, max_ticks), _note_state(exact)])
+    for a, b in _windows(ticks, atom):
+        if b - a + 1 > max_ticks:
+            out.rows.append([ticks[a].k, ticks[b].k, b - a + 1, sorted({pred_of(x) for t in ticks[a:b + 1] for x in t.fired})])
+    out.notes[1] = "windows of %s past %d ticks: %d" % (atom, max_ticks, len(out.rows))
+    return out
+
+
+def diff(path_a, path_b, member=None, program=None):
+    """Sim race in the log: two runs of the same command, tick by tick: the first tick where the fired rules differ and the first where the state atoms differ, both sides'
+    rows at that tick (for the state, the atoms one side has and the other has not); identical: said, with the tick count. Every member, or MEMBER. → [Table fired, Table state]."""
+    members = [member] if member else sorted(read(path_a)[0].header["members"])
+    fired = Table(["side", "k", "member", "fired"])
+    state = Table(["side", "k", "member", "atoms_only_here"])
+    tl = {m: (timeline(path_a, m, program)[0], timeline(path_b, m, program)[0]) for m in members}
+    n = min(len(a) for a, _ in tl.values()), min(len(b) for _, b in tl.values())
+    for table, what in ((fired, "fired"), (state, "state")):
+        found = None
+        for i in range(min(n)):
+            for m in members:
+                a, b = tl[m][0][i], tl[m][1][i]
+                if (a.fired != b.fired) if what == "fired" else (a.counts != b.counts):
+                    found = (i, m)
+                    break
+            if found:
+                i, m = found
+                a, b = tl[m][0][i], tl[m][1][i]
+                table.notes.append("%s differ first at tick %s (%s)" % (what, a.k, m))
+                if what == "fired":
+                    table.rows += [["A", a.k, m, a.fired], ["B", b.k, m, b.fired]]
+                else:
+                    only = lambda x, y: sorted(set(x.counts.items()) - set(y.counts.items()))
+                    table.rows += [["A", a.k, m, ["%s %d" % kv for kv in only(a, b)]], ["B", b.k, m, ["%s %d" % kv for kv in only(b, a)]]]
+                break
+        if not found:
+            table.notes.append("%s identical over %d ticks" % (what, min(n)) + ("" if n[0] == n[1] else " (A has %d ticks, B has %d)" % n))
+    return [fired, state]
+
+
+def outcomes(path, commit, done, cancel, member=None, program=None):
+    """Time to spare / Committed action: for a commitment atom COMMIT (held while an action runs), its windows and how each ended: with DONE appearing (at the window's last tick
+    or the one after), with CANCEL appearing, or with neither (the trace ended on it, or it was released otherwise: the row says which). Three counts in the notes, one row per
+    window. → Table."""
+    ticks, exact = timeline(path, member or _only_member(path), program)
+    out = Table(["first_k", "last_k", "ticks", "ended"], notes=[_note_state(exact)])
+    tally = {"done": 0, "cancel": 0, "neither": 0}
+    for a, b in _windows(ticks, commit):
+        end = ticks[b:b + 2]
+        seen = lambda spec: any(held(spec, t.counts) or any(pred_of(x) == spec or x == spec for x in t.made) for t in end)
+        if seen(done):
+            how = "done"
+        elif seen(cancel):
+            how = "cancel"
+        else:
+            how = "neither: the trace ended" if b == len(ticks) - 1 else "neither"
+        tally[how.split(":")[0]] += 1
+        out.rows.append([ticks[a].k, ticks[b].k, b - a + 1, how])
+    out.notes[:0] = ["windows of %s: %d" % (commit, len(out.rows)), "done: %d" % tally["done"], "cancel: %d" % tally["cancel"], "neither: %d" % tally["neither"]]
+    return out
+
+
+def fired_on_seeds(path, rule, seeds, program, member):
+    """Search the seeds for a firing: MEMBER replayed over the trace on PROGRAM once per seed 1..SEEDS (the session opened on that seed, its counts and stage from the checkpoint,
+    not its rng), the recorded inputs applied beat by beat and the rules fired to quiescence as `replay` fires them, without holding the run to the recorded firings: a seed
+    moves the sampler, so the run may leave the recorded one. One row per seed: whether RULE (a rule's name, or one firing with its bindings) fired, and the first tick. The
+    program's key is not checked: a candidate's rule is what one searches for. → Table."""
+    segs = read(path)
+    m = segs[0].header["members"].get(member)
+    if m is None:
+        raise TraceError("no member %r in the trace (it has: %s)" % (member, ", ".join(sorted(segs[0].header["members"]))))
+    out = Table(["seed", "fired", "first_k"])
+    for seed in range(1, seeds + 1):
+        sh, first = None, None
+        for seg in segs:
+            if sh is None or "cut" in seg.header:
+                sh = open_session(program, seed)
+                st = seg.checkpoint["sessions"][member]
+                sh.stage, sh.counts = st["stage"], dict(st["counts"])
+            for t in seg.ticks:
+                e = t["members"].get(member)
+                if e is None or first is not None:
+                    continue
+                seq = e.get("seq")
+                if seq is None:
+                    seq = [{"beat": [], "fired": []}] if "why" in e else []
+                for item in seq:
+                    if "take" in item:
+                        _apply(sh, item["take"])
+                        got = []
+                    elif "beat" in item:
+                        if item["beat"]:
+                            _apply(sh, item["beat"])
+                        got = _fire_all(sh, item.get("fired") or [], item.get("left"))
+                    elif "step" in item:
+                        got = [sh._sample() for _ in item["step"]]
+                    else:
+                        got = []
+                    if any(x and (x == rule or pred_of(x) == rule) for x in got):
+                        first = t["k"]
+                        break
+        out.rows.append([seed, first is not None, first])
+    out.notes.append("%s fired on %d of %d seeds" % (rule, sum(1 for r in out.rows if r[1]), seeds))
+    return out
+
+
 def main(argv=None):
     import argparse
-    ap = argparse.ArgumentParser(prog="python -m metis.trace", description="a composition's trace: one member's replay, a surprise as a case")
+    ap = argparse.ArgumentParser(prog="python -m metis.trace", description="a composition's trace: one member's replay, a surprise as a case, and the instruments "
+                                 "(blame, count, families, holds, diff, outcomes, fired): rows a ruling can quote, from the trace alone")
     sub = ap.add_subparsers(dest="verb", required=True)
     r = sub.add_parser("replay", help="one member alone over the trace, no world")
     r.add_argument("trace")
@@ -711,11 +1048,72 @@ def main(argv=None):
     c.add_argument("--note")
     c.add_argument("--unit", action="append", default=[], help="a family's case: a unit it exercises (a consumer without it skips the case)")
     c.add_argument("--into", help="the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout")
+    # the instruments (CHECKS.md §5): each prints its notes, a header line, then one row a line
+    state_help = "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint"
+    b = sub.add_parser("blame", help="who last moved what is missing or stale at tick K: the member's rule, the world, or a take (Blame first)")
+    b.add_argument("trace")
+    b.add_argument("--member", required=True)
+    b.add_argument("--k", type=int, required=True)
+    b.add_argument("--atoms", required=True, help="comma-separated: `atom` should hold, `atom 0` should not, `atom 3` should hold thrice")
+    b.add_argument("--program", help=state_help)
+    n = sub.add_parser("count", help="the cross-tab: the ticks on which ATOM holds, by the value of each --by atom at the same tick (Measure the class first; A norm with its domain)")
+    n.add_argument("trace")
+    n.add_argument("atom", help="a pred name (any instance), or one ground atom with its parentheses")
+    n.add_argument("--by", action="append", default=[], help="an atom to tabulate by: holds / absent, or a pred's instances present")
+    n.add_argument("--member", help="the member whose state is read (the trace's one member when it has one)")
+    n.add_argument("--program", help=state_help)
+    f = sub.add_parser("families", help="exactly one of each family holds at every tick, and the flicker: a family or a rule toggling a-b-a-b (Exclusive family; Steady reading)")
+    f.add_argument("trace")
+    f.add_argument("--family", action="append", default=[], help="p,q,r: pred names of which exactly one holds; the program's declared families are read too")
+    f.add_argument("--member")
+    f.add_argument("--program", help=state_help)
+    h = sub.add_parser("holds", help="every window where ATOM is held past N consecutive ticks, with the rules that fired within it (Bounded yield)")
+    h.add_argument("trace")
+    h.add_argument("atom")
+    h.add_argument("--max", type=int, required=True, help="the ticks a hold may last")
+    h.add_argument("--member")
+    h.add_argument("--program", help=state_help)
+    d = sub.add_parser("diff", help="two runs of the same command: the first tick where the fired rules differ, and where the state differs (Sim race in the log)")
+    d.add_argument("trace_a")
+    d.add_argument("trace_b")
+    d.add_argument("--member", help="one member; else every member of the trace")
+    d.add_argument("--program", help=state_help)
+    o = sub.add_parser("outcomes", help="the windows of a commitment atom and how each ended: done, cancel, or neither (Time to spare; Committed action)")
+    o.add_argument("trace")
+    o.add_argument("--commit", required=True, help="the atom held while the action runs")
+    o.add_argument("--done", required=True)
+    o.add_argument("--cancel", required=True)
+    o.add_argument("--member")
+    o.add_argument("--program", help=state_help)
+    s = sub.add_parser("fired", help="how many of seeds 1..N the rule fires on when the member is replayed over the trace's inputs (Search the seeds for a firing)")
+    s.add_argument("trace")
+    s.add_argument("rule", help="a rule's name, or one firing with its bindings: rule[X=a]")
+    s.add_argument("--seeds", type=int, required=True)
+    s.add_argument("--program", required=True)
+    s.add_argument("--member", required=True)
     a = ap.parse_args(argv)
     if a.verb == "replay":
         res = replay(a.trace, a.member, a.program)
         print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence}))
         return 0 if res.ok else 1
+    tables = None
+    if a.verb == "blame":
+        tables = [blame_rows(a.trace, a.member, a.k, [x.strip() for x in a.atoms.split(",") if x.strip()], a.program)]
+    elif a.verb == "count":
+        tables = [count(a.trace, a.atom, a.by, a.member, a.program)]
+    elif a.verb == "families":
+        tables = families(a.trace, [[x.strip() for x in fam.split(",") if x.strip()] for fam in a.family], a.member, a.program)
+    elif a.verb == "holds":
+        tables = [holds_windows(a.trace, a.atom, a.max, a.member, a.program)]
+    elif a.verb == "diff":
+        tables = diff(a.trace_a, a.trace_b, a.member, a.program)
+    elif a.verb == "outcomes":
+        tables = [outcomes(a.trace, a.commit, a.done, a.cancel, a.member, a.program)]
+    elif a.verb == "fired":
+        tables = [fired_on_seeds(a.trace, a.rule, a.seeds, a.program, a.member)]
+    if tables is not None:
+        print("\n\n".join(str(t) for t in tables))
+        return 0
     out = [{x.split(":", 1)[0]: x.split(":", 1)[1]} if x.split(":", 1)[0] in ("kind", "not") else x for x in a.out]
     text = case(a.trace, a.member, a.at, after=a.after, out=out, k0=a.k0, note=a.note, units=a.unit)
     if a.into:
