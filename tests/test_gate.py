@@ -14,6 +14,8 @@ from catalogs import installed_catalog
 from metis import catalog, gate
 
 CAT = installed_catalog()
+if CAT is None or not (CAT / "domains" / "plant").is_dir():
+    pytest.skip(f"no metis-catalog plant at {CAT} (METIS_CATALOG)", allow_module_level=True)
 LAMP = "% lamp — a lamp\ncatalog lamp 1.\nlayers (dyn).\nstages (main).\nnamespace lamp produce (dyn).\n" \
        "pred off : lamp.\npred on : lamp.\npred cmd_on : lamp.\nstage main {\n  %% I switch it on.\n" \
        "  on [dyn] : cmd_on * off -o on.\n}\n#init off 1\n"

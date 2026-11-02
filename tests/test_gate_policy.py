@@ -14,6 +14,8 @@ from catalogs import installed_catalog
 from metis import gate
 
 CAT = installed_catalog()
+if CAT is None or not (CAT / "domains" / "plant").is_dir():
+    pytest.skip(f"no metis-catalog plant at {CAT} (METIS_CATALOG)", allow_module_level=True)
 EXT = "% an extension\n"
 
 

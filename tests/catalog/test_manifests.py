@@ -8,7 +8,8 @@ import pytest
 
 from catalogs import installed_catalog  # noqa: E402
 ROOT = installed_catalog()
-pytestmark = pytest.mark.skipif(ROOT is None, reason="no metis-catalog installed (its domains)")
+if ROOT is None or not (ROOT / "domains").is_dir():
+    pytest.skip(f"no metis-catalog domains at {ROOT} (METIS_CATALOG)", allow_module_level=True)
 sys.path.insert(0, str(ROOT))
 from metis.catalog import manifests as mc  # noqa: E402
 
