@@ -87,8 +87,17 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ocaml-nox g++
           make -C metis-lang metisc
-      - name: Install metispy (with the slow gates' RDDL)
-        run: pip install -e './metispy[test]'
+      - name: Checkout metis-catalog@master (public sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          ref: master
+          path: metis-catalog
+      - name: Install metispy (with the slow gates' RDDL) and the catalog
+        run: |
+          pip install -e './metispy[test]'
+          pip install -e ./metis-catalog
+          echo "METIS_CATALOG=$PWD/metis-catalog" >> "$GITHUB_ENV"
       - name: The slow parity gates
         working-directory: metispy
         run: |

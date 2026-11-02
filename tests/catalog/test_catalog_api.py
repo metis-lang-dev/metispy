@@ -20,7 +20,7 @@ from metis import catalog
 from catalogs import installed_catalog
 
 CAT = installed_catalog()
-if not (CAT / "domains").is_dir():
+if CAT is None or not (CAT / "domains").is_dir():
     pytest.skip(f"no metis-catalog domains at {CAT} (METIS_CATALOG)", allow_module_level=True)
 
 

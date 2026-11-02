@@ -13,7 +13,7 @@ import pytest
 from catalogs import installed_catalog
 
 CAT = installed_catalog()
-if not (CAT / "domains" / "plant").is_dir():
+if CAT is None or not (CAT / "domains" / "plant").is_dir():
     pytest.skip(f"no metis-catalog plant at {CAT} (METIS_CATALOG)", allow_module_level=True)
 
 DAY = [{"ports": {}, "id": "p0"}, {"clock": "beat"}, {"id": "c1", "domain": "plant", "verb": "CHECK", "args": {}},
