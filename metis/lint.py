@@ -252,9 +252,11 @@ def init_counts(text: str) -> Dict[str, int]:
     """`#init ATOM [N]` lines as counts (the last assignment wins)."""
     counts: Dict[str, int] = {}
     for ln in text.splitlines():
-        m = re.match(r"^\s*#init\s+(\S+)(?:\s+(\d+))?\s*$", ln)
+        m = re.match(r"^\s*#init\s+(.+?)(?:\s+(\d+))?\s*$", ln)
         if m:
-            counts[m.group(1)] = int(m.group(2) or 1)
+            # an atom written with inner spaces (`at(e0, f0)`) is the
+            # same atom the shell squashes
+            counts[m.group(1).replace(" ", "")] = int(m.group(2) or 1)
     return counts
 
 

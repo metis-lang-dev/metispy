@@ -865,7 +865,9 @@ def compile_catalog(cat: ast.Catalog,
                          f"{inv.name} by {delta:+d}",
                          (("rule", node.name), ("invariant", inv.name),
                           ("delta", f"{delta:+d}")))
-    for d in families:
+    # family-unread: the unit's own families only; a pack is judged on
+    # its own rules, and the base's readers are not here to count
+    for d in [d for d in cat.decls if isinstance(d, ast.FamilyDecl)]:
         if not any(read_by.get(m) for m in d.members):
             emitter(vocab.decl_source(d, f"family/{d.name}"))(
                 "family-unread",

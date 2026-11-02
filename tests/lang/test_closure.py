@@ -106,6 +106,22 @@ def test_pack_rules_are_held_to_the_base_invariant():
     assert [d.code for d in e.value.diagnostics] == ["invariant-broken"]
 
 
+def test_pack_is_not_blamed_for_the_base_readers():
+    base = _compile("""\
+        %% go
+        start [dyn] : $go * idle -o busy.
+        """, "family way (go halt).\n")
+    pack = parser.parse("catalog p 1.\nextends t.\nstage act {\n"
+                        "  %% back\n  back [dyn] : busy -o idle.\n}\n")
+    doc = compile_catalog(pack, base=base)
+    assert doc.warnings == [] and doc.families == [("way", ("go", "halt"))]
+
+
+def test_init_counts_squash_inner_spaces():
+    assert init_counts("#init at(e0, f0) 2\n#init idle\n") == {"at(e0,f0)": 2,
+                                                              "idle": 1}
+
+
 def test_fixture_rows_one_per_code():
     here = os.getcwd()
     os.chdir(CLOSURE.parent)
