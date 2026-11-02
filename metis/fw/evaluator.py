@@ -67,8 +67,12 @@ class Evaluator:
         """Compile+admit+revalidate, then swap. Raises (LangError /
         CatalogError / PortError) WITHOUT touching the serving catalog
         on any failure."""
-        ast = parse_file(source) if not hasattr(source, "decls") \
-            else source
+        if hasattr(source, "decls"):
+            ast = source
+        else:                                   # a file: its includes resolve beside it
+            from pathlib import Path
+            from metis.lang.compiler import resolve_includes
+            ast = resolve_includes(parse_file(source), Path(source).parent)
         pack = compile_catalog(ast, base=self.doc)
         merged_cat = self.doc.catalog.admit(pack.catalog)
         merged = CatalogDoc(merged_cat,
