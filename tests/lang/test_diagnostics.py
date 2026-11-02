@@ -22,7 +22,7 @@ RUNS = (("diag_compile.llp", None), ("diag_kernel.llp", None),
         ("diag_cycle_a.llp", None), ("diag_hiding_unknown.llp", None),
         ("diag_hiding_shadow.llp", None), ("diag_rule_duplicate.llp", None),
         ("diag_extends.llp", None),
-        ("diag_abstract.llp", None))
+        ("diag_abstract.llp", None), ("diag_closure.llp", None))
 
 
 def _diags():

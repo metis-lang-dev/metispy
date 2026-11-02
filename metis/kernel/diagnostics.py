@@ -74,6 +74,13 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "rule-duplicate": ("error", "compile"),
     "extends-no-base": ("error", "compile"),
     "decl-duplicate": ("error", "compile"),
+    # the closure declarations (patterns CHECKS.md §4): a host family
+    # is read, never written; an invariant is a sum every rule keeps
+    "family-member-unknown": ("error", "compile"),
+    "family-produced": ("error", "compile"),
+    "family-unread": ("warning", "compile"),
+    "invariant-member-unknown": ("error", "compile"),
+    "invariant-broken": ("error", "compile"),
     # spec 12: a signature naming a type nobody declared (it replaces
     # var-type-unknown, which reported it per rule variable, later);
     # an abstract type the unit leaves abstract (advisory)
@@ -109,6 +116,17 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "state-budget": ("note", "runtime"),
     "horn-nonground": ("error", "runtime"),
     "exact-unreachable": ("note", "runtime"),
+    # the init half of an invariant: the session's state against the
+    # declared sum (the rules are checked at compile; this is `#init`)
+    "invariant-init": ("error", "runtime"),
+    # lint (patterns CHECKS.md §3): shape findings over a program that
+    # compiles, never gating, `metisc --lint` / `python -m metis.lint` /
+    # the REPL's `lint`
+    "state-dead-end": ("warning", "lint"),
+    "state-unproduced": ("warning", "lint"),
+    "rules-twin-body": ("warning", "lint"),
+    "report-ungated": ("warning", "lint"),
+    "stages-twice": ("warning", "lint"),
     "llm-endpoint": ("note", "runtime"),
     # internal (defensive invariants, unreachable from source)
     "guard-not-bwd": ("error", "internal"),
@@ -195,6 +213,41 @@ HINTS: Dict[str, str] = {
         "blocks and includes, and alternative heads reserve <name>-<k>",
     "extends-no-base":
         "compile this pack against its base catalog {base}",
+    "family-member-unknown":
+        "declare {member} with `pred`, or take it out of family {family}: "
+        "a family's members are state predicates the host publishes",
+    "family-produced":
+        "read {members} with $ in {rule}: family {family} is the host's "
+        "exclusive reading, no rule writes a member",
+    "family-unread":
+        "read a member of family {family} in some rule, or drop the "
+        "declaration: a family exists for its readers",
+    "invariant-member-unknown":
+        "declare {member} with `pred`, or take it out of invariant "
+        "{invariant}",
+    "invariant-broken":
+        "make {rule} keep the sum of invariant {invariant}: what it "
+        "consumes of the members it produces again ({delta} now)",
+    "invariant-init":
+        "make the init hold exactly {total} token(s) over {members} "
+        "(it holds {held}), or change the declared sum of {invariant}",
+    "state-dead-end":
+        "give {pred} a consumer (a release, a cancel, a done), list it as "
+        "out or a status in the manifest, or drop the rule that produces "
+        "it: a hold with no way on",
+    "state-unproduced":
+        "produce {pred} in some rule, hold it in #init, or list it as in "
+        "or world-private in the manifest: nothing here makes it",
+    "rules-twin-body":
+        "write {rule} and {twin} as one rule with alternative heads "
+        "(`-o ( h1 @w a | h2 @w b )`): the sampler sums them as two "
+        "weights with no declared ratio",
+    "report-ungated":
+        "read $tick__gen(D, R, G) with the same G in {rule}: a report "
+        "carries the generation it answers, and a stale one must not act",
+    "stages-twice":
+        "keep one `{decl}` line in the spliced unit: the first met wins "
+        "and the second ({where}) is ignored",
     "decl-duplicate":
         "a name is declared once per kind: remove this {kind} "
         "declaration of {name}, or rename it (first at {first})",

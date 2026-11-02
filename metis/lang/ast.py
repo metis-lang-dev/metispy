@@ -141,6 +141,33 @@ class BwdDecl:
 
 
 @dataclass(frozen=True)
+class FamilyDecl:
+    """`family NAME (p q r).`: a HOST-published exclusive family of
+    propositions (exactly one member holds at every tick: the closure a
+    rule may rely on). The rules only read a member; a trace instrument
+    checks the exclusivity (patterns CHECKS.md §4)."""
+    name: str
+    members: Tuple[str, ...]
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
+
+
+@dataclass(frozen=True)
+class InvariantDecl:
+    """`invariant NAME (p q r) : N.`: a linear P-invariant over the
+    member's OWN atoms: every rule and link keeps the token sum over the
+    members (consumed minus produced = 0), and the init holds exactly N.
+    Proved on the rule text, so it holds in every reachable state."""
+    name: str
+    members: Tuple[str, ...]
+    total: int
+    line: int = field(default=0, compare=False, repr=False)
+    col: int = field(default=0, compare=False, repr=False)
+    file: str = field(default="", compare=False, repr=False)
+
+
+@dataclass(frozen=True)
 class ReadPattern:
     """One element of a weight port's declared read-scope: a state
     atom over the port's formal args, optionally guarded by bwd atoms
@@ -263,6 +290,10 @@ def decl_line(d) -> str:
     if isinstance(d, BwdDecl):
         a = "" if not d.args else f"({','.join(d.args)})"
         return f"bwd {d.name}{a}."
+    if isinstance(d, FamilyDecl):
+        return f"family {d.name} ({' '.join(d.members)})."
+    if isinstance(d, InvariantDecl):
+        return f"invariant {d.name} ({' '.join(d.members)}) : {d.total}."
     if isinstance(d, PortDecl):
         a = "" if not d.args else f"({','.join(d.args)})"
         r = "" if d.reads is None else \
