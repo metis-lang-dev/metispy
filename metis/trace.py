@@ -488,6 +488,29 @@ def case(path, member, k, after=(), out=(), k0=None, note=None, units=()):
     return yaml.safe_dump(doc, sort_keys=False, width=200)
 
 
+def rule_base(name):
+    """A fired event's rule name: an alternative head fires as <name>-<k>, a ground event as name[binding]."""
+    return name.split("[", 1)[0].rsplit("-", 1)[0] if "[" in name or "-" in name else name
+
+
+def generated_rules(doc):
+    """The rule names inside the protocol stub's generated block (BEGIN … END marks) of each source file of the compiled DOC: the protocol's rules, which a member's author never
+    wrote (Stub-owned echo). Read from the files the rules' locations name; a file that cannot be read contributes nothing."""
+    from metis.catalog.protocol_stub import END, MARK
+    from metis.lang import ast
+    rules = [r for d in (doc.source.decls if doc.source else ()) if isinstance(d, ast.Stage) for r in d.rules if r.file and r.line]
+    spans = {}
+    for f in {r.file for r in rules}:
+        try:
+            lines = open(f).read().split("\n")
+        except OSError:
+            continue
+        begun = [k for k, line in enumerate(lines) if line.startswith(MARK)]
+        if begun and END in lines[begun[0]:]:
+            spans[f] = (begun[0] + 1, lines.index(END, begun[0]) + 1)
+    return {ast.rule_base(r.name) for r in rules if r.file in spans and spans[r.file][0] <= r.line <= spans[r.file][1]}
+
+
 # ── whose is it: on the baseline, before any candidate ──
 def blame(path, member, k, atoms, program=None):
     """At tick K, who last moved each of ATOMS (`atom`: it should hold; `atom 0`: it should not) in MEMBER's session, over all the trace holds: a rule of the member, its world
@@ -504,9 +527,11 @@ def blame(path, member, k, atoms, program=None):
         raise TraceError("no member %r in the trace" % member)
     counts, last = dict(start.checkpoint["sessions"][member]["counts"]), {}
     world_preds = {pred_of(a) for a in (start.checkpoint.get("copies") or {}).get(member, ())}
-    events = {}
+    events, generated = {}, set()
     if program:
-        events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
+        sh = open_session(program, m.get("seed", 1))
+        events = {ev.name: ev for _, _, ev in sh.events_tbl}
+        generated = generated_rules(sh.doc)
 
     def op(line, tick, by):
         sign, a, n = parse_do_line(line)
@@ -545,7 +570,10 @@ def blame(path, member, k, atoms, program=None):
         row = {"atom": a, "want": want, "have": have, "last": last.get(a), "whose": None}
         if have != want:
             mover = (last.get(a) or {}).get("by")
-            if mover == "rule":
+            if mover == "rule" and rule_base((last.get(a) or {}).get("what") or "") in generated:
+                # patterns open item 10: a rule inside the stub's generated block is the protocol's, not the member's
+                row["whose"] = "the protocol's generated block (the stub's, not the member's)"
+            elif mover == "rule":
                 row["whose"] = "the member's rule"
             elif mover == "world" or (mover is None and pred_of(a) in world_preds):
                 row["whose"] = "the world's reading"
@@ -555,7 +583,7 @@ def blame(path, member, k, atoms, program=None):
                 row["whose"] = "from outside: %s" % mover
             else:
                 row["whose"] = "the member's: nothing ever moved it"
-            others = others or row["whose"] in ("the world's reading", "a take from the director")
+            others = others or row["whose"] in ("the world's reading", "a take from the director", "the protocol's generated block (the stub's, not the member's)")
         out.append(row)
     return {"atoms": out, "verdict": "not this package's" if others else "this package's"}
 
