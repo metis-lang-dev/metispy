@@ -16,6 +16,23 @@ ROOT = Path(__file__).resolve().parents[3]
 CORPUS = ROOT / "metis-lang/corpus"
 CATALOG = ROOT / "metis-catalog"
 
+TWO_STAGES = """catalog two 1.
+provenance text "one name in two stages, compiled with no resolve" "2026-11-02".
+layers (dyn).
+stages (a b).
+namespace n produce (dyn).
+pred p : n.
+pred q : n.
+stage a {
+  %% One.
+  h [dyn] : p -o q.
+}
+stage b {
+  %% Two.
+  h [dyn] : q -o p.
+}
+"""
+
 # every loop/runtime code and the test below that emits it
 COVERED = {
     "provenance-shape": "test_loop_codes_on_the_gate_report",
@@ -39,8 +56,10 @@ def _repl(path, monkeypatch=None):
 
 
 def test_loop_codes_on_the_gate_report():
-    """A pack without text provenance whose rule reuses a base rule's
-    short name: both discipline warnings, each a diagnostic."""
+    """A pack without text provenance whose rule reuses a base rule's short name: a discipline
+    warning, each a diagnostic, and the name is refused (dup-rule-names, spec/18 §4). The collision
+    warning stays only for a catalog that never went through resolve_includes, like the base here."""
+    from metis.lang import compile_catalog, parse
     from metis.lang.compiler import load_llp
     from metis.lang.formalize import admit_text_pack
     here = os.getcwd()
@@ -51,13 +70,16 @@ def test_loop_codes_on_the_gate_report():
             "obs [pack]", "h [pack]")
         r = admit_text_pack("a market note observes the coin.", src,
                             base=base)
+        codes = [d.code for d in r.diagnostics]
+        assert "provenance-shape" in codes and "pack-redeclares" in codes
+        unresolved = compile_catalog(parse(TWO_STAGES))
+        ok = "catalog p 1.\nextends two.\nstage b {\n  %% New.\n  fresh [dyn] : q -o p.\n}\n"
+        r = admit_text_pack("a note.", ok, base=unresolved)
     finally:
         os.chdir(here)
-    codes = [d.code for d in r.diagnostics]
-    assert "provenance-shape" in codes and "rule-name-collision" in codes
     (rc,) = [d for d in r.diagnostics if d.code == "rule-name-collision"]
     assert dict(rc.data) == {"rule": "h", "count": "2"}
-    assert rc.loc.decl == "note/h"          # the newcomer owns the slice
+    assert rc.loc.decl == "b/h"             # the newcomer owns the slice
     assert rc.text in r.warnings
 
 

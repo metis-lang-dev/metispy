@@ -176,7 +176,8 @@ def test_shell_revise_replaces_world_with_diff(tmp_path):
     assert d("gate")["ok"] and r.cmd_accept("")["ok"]
 
 
-def test_short_name_collision_warned(tmp_path):
+def test_short_name_collision_refused(tmp_path):
+    """One space of names, across stages (dup-rule-names, spec/18 §4): once a warning, now the gate's refusal."""
     collide = """catalog p 1.
 extends meadow.
 provenance text "t" "2026-09-27".
@@ -197,8 +198,7 @@ stage rest {
     d("text", "%% name collision")
     r.cmd_llp(collide)
     g = d("gate")
-    assert g["ok"] and any("catch" in w and "short" in w
-                           for w in g["warnings"]), g
+    assert not g["ok"] and "pack redeclares rule 'catch'" in str(g), g
 
 
 # -- the wire / intent policy ----------------------------------------

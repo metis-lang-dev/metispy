@@ -187,8 +187,7 @@ class Catalog:
                       src(f"bwd/{p}"),
                       (("kind", "bwd predicate"), ("name", p)))
         short = lambda n: n.rsplit("/", 1)[-1]
-        base_rules = {(e.payload.stage, short(e.name)) for e in self.entries
-                      if e.kind == "schema"}
+        base_rules = {short(e.name) for e in self.entries if e.kind == "schema"}
         base_links = {short(e.name) for e in self.entries if e.kind == "link"}
 
         def head(n):                  # an alternative head's rule: `turn-1` is `turn`'s
@@ -198,7 +197,8 @@ class Catalog:
         any_rule = {x for e in self.entries if e.kind == "schema"
                     for x in (short(e.name), head(short(e.name)))}
         for e in pack.entries:
-            if (e.kind == "schema" and ((e.payload.stage, short(e.name)) in base_rules
+            if (e.kind == "schema" and (short(e.name) in any_rule
+                                        or head(short(e.name)) in base_rules
                                         or short(e.name) in base_links
                                         or head(short(e.name)) in base_links)) \
                     or (e.kind == "link" and (short(e.name) in base_links or short(e.name) in any_rule)):

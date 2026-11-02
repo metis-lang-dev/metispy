@@ -308,10 +308,11 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
 
     def check_duplicate(decls):
         """A stage's rule names are unique across its blocks and its
-        includes, a link's among the links, and a rule and a link share
-        no name (spec/18 §4): the parser sees one block."""
+        includes, across stages, with links in the one space of names
+        (spec/18 §4): the parser sees one block. A rule with alternative
+        heads holds its name and each <name>-<k>."""
         from metis.kernel.diagnostics import Loc, Source, make
-        seen, links, rules = set(), set(), set()
+        seen, heads, links, rules = {}, {}, set(), set()
 
         def mixed(n, node, decl, subject):
             text = (f"rule {n} is named twice, as a rule and a stage link: "
@@ -336,8 +337,14 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                 links.add(s.name)
             if isinstance(s, ast.Stage):
                 for r in s.rules:
-                    if (s.name, r.name) in seen:
-                        text = (f"rule {r.name} is named twice in stage {s.name}: "
+                    base = ast.rule_base(r.name)
+                    first = seen.get(r.name)
+                    if first is None:
+                        first = seen.get(base) if base != r.name else heads.get(r.name)
+                    if first is not None:
+                        where = (f"in stage {s.name}" if first == s.name
+                                 else f"in stages {first} and {s.name}")
+                        text = (f"rule {r.name} is named twice {where}: "
                                 f"a rule is final, and a second one is not added")
                         raise LangError([text], [make(
                             "rule-duplicate", text,
@@ -348,7 +355,9 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                         if n in links:
                             mixed(n, r, f"{s.name}/{r.name}", ast.rule_line(r))
                     rules.update((r.name, ast.rule_base(r.name)))
-                    seen.add((s.name, r.name))
+                    if base != r.name:
+                        heads[base] = s.name
+                    seen[r.name] = s.name
 
     def resolve(c, base, seen):
         layers, stages = c.layers, c.stages
