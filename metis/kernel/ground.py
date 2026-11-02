@@ -138,8 +138,10 @@ def _over(schema, sig, limit):
                       for v, t in schema.vars.items())
     return GroundBudget(
         f"ground-budget: {schema.name} grounds more than {limit} events "
-        f"over its variables ({sizes}); bind them on the left with a fact "
-        f"the state holds, or drop the atom that reads them alone")
+        f"over its variables ({sizes}); bind them on the left with a bwd "
+        f"guard (a table the grounder reads) or narrow their types; a state "
+        f"atom does not bind at grounding, its variables range over the "
+        f"whole type whatever #init holds")
 
 
 def ground_schema(schema: ClauseSchema, sig: Signature,
