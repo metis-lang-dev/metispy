@@ -65,6 +65,12 @@ class CatalogDoc:
     # structured findings of a SUCCESSFUL compile (spec 08; warnings and
     # notes once migrated — errors travel on LangError/CatalogError)
     diagnostics: List = field(default_factory=list)
+    # the closure declarations (patterns CHECKS.md §4): families =
+    # [(name, members)] the host publishes exactly-one-of (a trace
+    # instrument checks it); invariants = [(name, members, total)] the
+    # rules provably keep (checked here, every rule and link)
+    families: List = field(default_factory=list)
+    invariants: List = field(default_factory=list)
 
 
 def _pattern(a: ast.Atom):
@@ -791,6 +797,83 @@ def compile_catalog(cat: ast.Catalog,
                     consume=lconsume, guards=lguards, persist=lpersist,
                     produce=[_pattern(a) for a in d.post_atoms])))
 
+    # the closure declarations (CHECKS.md §4): in one pass, in this
+    # order (metisc mirrors it): a family's unknown member, an
+    # invariant's unknown member, then per rule and link in source
+    # order a family member written (family-produced) and a broken
+    # invariant sum (invariant-broken), then a family nobody reads
+    families = [d for d in cat.decls if isinstance(d, ast.FamilyDecl)]
+    invariants = [d for d in cat.decls
+                  if isinstance(d, ast.InvariantDecl)]
+    if base is not None:
+        families = [ast.FamilyDecl(n, tuple(m)) for n, m in base.families] \
+            + families
+        invariants = [ast.InvariantDecl(n, tuple(m), t)
+                      for n, m, t in base.invariants] + invariants
+    state_preds = set(known_preds)
+    for d in families:
+        for m in d.members:
+            if m not in state_preds:
+                emitter(vocab.decl_source(d, f"family/{d.name}"))(
+                    "family-member-unknown",
+                    f"family {d.name}: '{m}' is not a declared state "
+                    f"predicate", (("family", d.name), ("member", m)))
+    for d in invariants:
+        for m in d.members:
+            if m not in state_preds:
+                emitter(vocab.decl_source(d, f"invariant/{d.name}"))(
+                    "invariant-member-unknown",
+                    f"invariant {d.name}: '{m}' is not a declared state "
+                    f"predicate", (("invariant", d.name), ("member", m)))
+    read_by: Dict[str, bool] = {}
+    for d in cat.decls:
+        if isinstance(d, ast.Stage):
+            clauses = [(r, [a for a in r.body if isinstance(a, ast.Atom)],
+                        list(r.head), f"{d.name}/{r.name}") for r in d.rules]
+        elif isinstance(d, ast.LinkDecl):
+            clauses = [(d, list(d.pre_atoms), list(d.post_atoms),
+                        f"qui/{d.name}")]
+        else:
+            continue
+        for node, body, head, decl in clauses:
+            consumed = [a.pred for a in body if not a.persist]
+            produced = [a.pred for a in head if a.pred != "one"]
+            for a in body:
+                read_by[a.pred] = True
+            src = vocab.source(node, decl, node.doc,
+                               ast.rule_line(node)
+                               if isinstance(node, ast.Rule)
+                               else ast.decl_line(node),
+                               [a for a in body + head if a.pred != "one"])
+            emit = emitter(src, f"line {node.line}: " if node.line else "")
+            for f in families:
+                hit = sorted({p for p in consumed + produced
+                              if p in f.members})
+                if hit:
+                    emit("family-produced",
+                         f"{node.name}: writes {', '.join(hit)} of family "
+                         f"{f.name}: a family is the host's, a rule only "
+                         f"reads a member",
+                         (("rule", node.name), ("family", f.name),
+                          ("members", " ".join(hit))))
+            for inv in invariants:
+                delta = sum(1 for p in produced if p in inv.members) \
+                    - sum(1 for p in consumed if p in inv.members)
+                if delta:
+                    emit("invariant-broken",
+                         f"{node.name}: moves the sum of invariant "
+                         f"{inv.name} by {delta:+d}",
+                         (("rule", node.name), ("invariant", inv.name),
+                          ("delta", f"{delta:+d}")))
+    # family-unread: the unit's own families only; a pack is judged on
+    # its own rules, and the base's readers are not here to count
+    for d in [d for d in cat.decls if isinstance(d, ast.FamilyDecl)]:
+        if not any(read_by.get(m) for m in d.members):
+            emitter(vocab.decl_source(d, f"family/{d.name}"))(
+                "family-unread",
+                f"family {d.name}: no rule reads a member",
+                (("family", d.name),))
+
     if findings:
         raise LangError(findings, diags)
 
@@ -814,7 +897,10 @@ def compile_catalog(cat: ast.Catalog,
         if f:
             raise CatalogError(f, kdiags)
     return CatalogDoc(kcat, ports, source=cat, warnings=warnings,
-                      diagnostics=diags)
+                      diagnostics=diags,
+                      families=[(d.name, tuple(d.members)) for d in families],
+                      invariants=[(d.name, tuple(d.members), d.total)
+                                  for d in invariants])
 
 
 def diagnose(path, base=None) -> List:

@@ -145,6 +145,10 @@ notch [ALPHA]       fit the ports from this session's sampled steps
                     sheet; `notch accept` ships it as an OVERLAY
                     (never a catalog edit), `notch pop` drops one;
                     `notch load FILE` ships a fitted overlay file
+lint                shape findings over the served program (a hold
+                    with no way on, a pred nothing makes, twin bodies,
+                    an ungated report) and each invariant's sum against
+                    the state; warnings, never gating
 key                 canonical program_key of the serving catalog
 version             what is running: package, source+git, python,
                     config dot file, llm endpoint
@@ -3055,6 +3059,20 @@ class Repl(LoopVerbs, Cmd):
         self._say(f"overlay shipped on {', '.join(shipped)} (depth "
                   f"{len(self._overlays)}) — the catalog is unchanged "
                   f"(key {self.key[:12]}…); `notch pop` drops it")
+
+    def do_lint(self, arg):
+        """lint — shape findings over the served program (patterns
+        CHECKS.md §3) and the init half of each invariant against the
+        current state; never gating"""
+        from metis.kernel.diagnostics import render_text
+        from metis.lint import invariant_init, lint
+        found = lint(self.doc, self.path.read_text(), None, self.path)
+        if self.prog is not None:
+            found += invariant_init(self.doc, self.counts)
+        if not found:
+            self._say("no lint finding")
+            return
+        self._say("".join(render_text(d) for d in found).rstrip("\n"))
 
     def do_key(self, arg):
         """canonical program_key of the serving catalog"""

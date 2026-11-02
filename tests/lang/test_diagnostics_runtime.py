@@ -42,6 +42,7 @@ COVERED = {
     "horn-nonground": "test_horn_nonground_rides_the_exception",
     "reads-undeclared": "test_reads_undeclared_rides_the_exception",
     "llm-endpoint": "test_llm_endpoint_note",
+    "invariant-init": "test_invariant_init_on_the_shell_lint",
 }
 
 
@@ -176,3 +177,37 @@ def test_notes_dedupe_and_retire_with_the_world(monkeypatch):
                                                "state-budget"]
     r.onecmd("reload")
     assert r.notes == []
+
+
+def test_invariant_init_on_the_shell_lint(tmp_path, capsys):
+    """The init half of an `invariant` (spec/00 §5a): the shell's `lint`
+    speaks invariant-init against the CURRENT state, so an `assert` that
+    breaks the sum is found after the fact and an init that holds it is
+    quiet."""
+    f = tmp_path / "inv.llp"
+    f.write_text("""catalog inv 1.
+provenance text "idle or busy, one of them" "2026-11-02".
+layers (dyn).
+stages (act).
+namespace n produce (dyn).
+pred idle : n.
+pred busy : n.
+pred go : n.
+invariant mode (idle busy) : 1.
+stage act {
+  %% Go: idle becomes busy.
+  start [dyn] : $go * idle -o busy.
+  %% Stop: busy becomes idle.
+  stop [dyn] : busy -o idle.
+}
+#init idle 1
+#init go 1
+""")
+    sh = _repl(f)
+    sh.onecmd("lint")
+    assert "no lint finding" in capsys.readouterr().out
+    sh.onecmd("assert busy")
+    sh.onecmd("lint")
+    out = capsys.readouterr().out
+    assert "error invariant-init (invariant/mode)" in out
+    assert "it holds 2" in out

@@ -474,6 +474,30 @@ def _parse(text: str) -> ast.Catalog:
             p.punct(".")
             decls.append(ast.PredDecl(pname, args, space, p.take_docs(),
                                       *at))
+        elif v in ("family", "invariant") and p.peek(1)[0] == "ident" \
+                and p.peek(2) == ("punct", "("):
+            # the closure declarations (CHECKS.md §4): `family NAME (p q
+            # r).` a host-published exclusive family; `invariant NAME (p
+            # q r) : N.` a linear P-invariant over the member's own atoms.
+            # Elsewhere `family` and `invariant` stay identifiers.
+            p.next()
+            at = p._here()
+            cname = p.expect("ident")
+            members = p.name_list_paren()
+            if not members:
+                p.err(f"{v} {cname}: an empty member list")
+            if v == "family":
+                p.punct(".")
+                decls.append(ast.FamilyDecl(cname, members, *at))
+            else:
+                p.punct(":")
+                total = p.expect("num")
+                if not total.isdigit():
+                    p.err(f"invariant {cname}: the sum is a whole number "
+                          f"of tokens, got {total!r}")
+                p.punct(".")
+                decls.append(ast.InvariantDecl(cname, members, int(total),
+                                               *at))
         elif v == "bwd":
             p.next()
             at = p._here()
