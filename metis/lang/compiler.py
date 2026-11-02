@@ -308,10 +308,21 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
 
     def check_duplicate(decls):
         """A stage's rule names are unique across its blocks and its
-        includes (spec/18 §4): the parser sees one block."""
+        includes, and a link's among the links (spec/18 §4): the parser
+        sees one block."""
         from metis.kernel.diagnostics import Loc, Source, make
-        seen = set()
+        seen, links = set(), set()
         for s in decls:
+            if isinstance(s, ast.LinkDecl):
+                if s.name in links:
+                    text = (f"rule {s.name} is named twice among the stage links: "
+                            f"a rule is final, and a second one is not added")
+                    raise LangError([text], [make(
+                        "rule-duplicate", text,
+                        Source(Loc(s.file, s.line, s.col, f"qui/{s.name}"),
+                               (ast.decl_line(s),), ()),
+                        (("rule", s.name), ("stage", "links")))])
+                links.add(s.name)
             if isinstance(s, ast.Stage):
                 for r in s.rules:
                     if (s.name, r.name) in seen:

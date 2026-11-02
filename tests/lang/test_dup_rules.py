@@ -13,6 +13,7 @@ from metis.lang.compiler import diagnose
 
 DUP = LANG / "corpus/dup"
 REFUSED = {"blocks": "aa", "include": "aa", "nested": "aa", "sibling": "aa", "diamond": "aa", "head": "turn-1"}
+LINKS = ("link", "link_include", "link_nested")
 
 
 def _diag(*args):
@@ -41,10 +42,19 @@ def test_one_error_in_metiscs_words(name):
     assert "".join(render_text(d) for d in ds) == _metisc(f"dup_{name}.llp")
 
 
-def test_a_pack_naming_its_bases_rule_is_refused_as_metisc_refuses_it():
-    ds = _diag("dup_pack.llp", "dup_unit.llp")
+@pytest.mark.parametrize("name", LINKS)
+def test_a_link_named_twice_is_the_same_error_in_metiscs_words(name):
+    ds = _diag(f"dup_{name}.llp")
+    assert [d.code for d in ds] == ["rule-duplicate"]
+    assert "rule back is named twice among the stage links" in ds[0].text
+    assert "".join(render_text(d) for d in ds) == _metisc(f"dup_{name}.llp")
+
+
+@pytest.mark.parametrize("pack,base", [("dup_pack", "dup_unit"), ("dup_link_pack", "dup_link_unit")])
+def test_a_pack_naming_its_bases_rule_or_link_is_refused_as_metisc_refuses_it(pack, base):
+    ds = _diag(f"{pack}.llp", f"{base}.llp")
     assert [d.code for d in ds] == ["pack-redeclares"]
-    assert "".join(render_text(d) for d in ds) == _metisc("dup_pack.llp", "--base", "dup_unit.llp")
+    assert "".join(render_text(d) for d in ds) == _metisc(f"{pack}.llp", "--base", f"{base}.llp")
 
 
 def test_two_names_or_one_name_in_two_stages_stay_legal():

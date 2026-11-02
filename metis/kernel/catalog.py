@@ -189,8 +189,10 @@ class Catalog:
         short = lambda n: n.rsplit("/", 1)[-1]
         base_rules = {(e.payload.stage, short(e.name)) for e in self.entries
                       if e.kind == "schema"}
+        base_links = {short(e.name) for e in self.entries if e.kind == "link"}
         for e in pack.entries:
-            if e.kind == "schema" and (e.payload.stage, short(e.name)) in base_rules:
+            if (e.kind == "schema" and (e.payload.stage, short(e.name)) in base_rules) \
+                    or (e.kind == "link" and short(e.name) in base_links):
                 n = short(e.name)
                 _emit(f, d, "pack-redeclares",
                       f"pack redeclares rule '{n}'", e.src,
