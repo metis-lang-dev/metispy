@@ -308,12 +308,23 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
 
     def check_duplicate(decls):
         """A stage's rule names are unique across its blocks and its
-        includes, and a link's among the links (spec/18 §4): the parser
-        sees one block."""
+        includes, a link's among the links, and a rule and a link share
+        no name (spec/18 §4): the parser sees one block."""
         from metis.kernel.diagnostics import Loc, Source, make
-        seen, links = set(), set()
+        seen, links, rules = set(), set(), set()
+
+        def mixed(n, node, decl, subject):
+            text = (f"rule {n} is named twice, as a rule and a stage link: "
+                    f"a rule is final, and a second one is not added")
+            raise LangError([text], [make(
+                "rule-duplicate", text,
+                Source(Loc(node.file, node.line, node.col, decl), (subject,), ()),
+                (("rule", n), ("stage", "links")))])
+
         for s in decls:
             if isinstance(s, ast.LinkDecl):
+                if s.name in rules:
+                    mixed(s.name, s, f"qui/{s.name}", ast.decl_line(s))
                 if s.name in links:
                     text = (f"rule {s.name} is named twice among the stage links: "
                             f"a rule is final, and a second one is not added")
@@ -333,6 +344,10 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                             Source(Loc(r.file, r.line, r.col, f"{s.name}/{r.name}"),
                                    (ast.rule_line(r),), ()),
                             (("rule", r.name), ("stage", s.name)))])
+                    for n in (r.name, ast.rule_base(r.name)):
+                        if n in links:
+                            mixed(n, r, f"{s.name}/{r.name}", ast.rule_line(r))
+                    rules.update((r.name, ast.rule_base(r.name)))
                     seen.add((s.name, r.name))
 
     def resolve(c, base, seen):

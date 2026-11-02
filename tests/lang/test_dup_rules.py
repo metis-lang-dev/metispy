@@ -14,6 +14,7 @@ from metis.lang.compiler import diagnose
 DUP = LANG / "corpus/dup"
 REFUSED = {"blocks": "aa", "include": "aa", "nested": "aa", "sibling": "aa", "diamond": "aa", "head": "turn-1"}
 LINKS = ("link", "link_include", "link_nested")
+MIXED = {"mixed": "back", "mixed_rule": "back", "mixed_include": "back", "mixed_head": "back"}
 
 
 def _diag(*args):
@@ -50,7 +51,16 @@ def test_a_link_named_twice_is_the_same_error_in_metiscs_words(name):
     assert "".join(render_text(d) for d in ds) == _metisc(f"dup_{name}.llp")
 
 
-@pytest.mark.parametrize("pack,base", [("dup_pack", "dup_unit"), ("dup_link_pack", "dup_link_unit")])
+@pytest.mark.parametrize("name", sorted(MIXED))
+def test_a_rule_and_a_link_share_no_name_in_metiscs_words(name):
+    ds = _diag(f"dup_{name}.llp")
+    assert [d.code for d in ds] == ["rule-duplicate"]
+    assert f"rule {MIXED[name]} is named twice, as a rule and a stage link" in ds[0].text
+    assert "".join(render_text(d) for d in ds) == _metisc(f"dup_{name}.llp")
+
+
+@pytest.mark.parametrize("pack,base", [("dup_pack", "dup_unit"), ("dup_link_pack", "dup_link_unit"),
+                                       ("dup_mixed_pack", "dup_link_unit"), ("dup_mixed_pack_link", "dup_link_unit")])
 def test_a_pack_naming_its_bases_rule_or_link_is_refused_as_metisc_refuses_it(pack, base):
     ds = _diag(f"{pack}.llp", f"{base}.llp")
     assert [d.code for d in ds] == ["pack-redeclares"]
