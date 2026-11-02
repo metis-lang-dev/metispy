@@ -1,0 +1,51 @@
+"""A rule named twice in a stage (dup-rule-names s-dfb61f45, spec/18 §4): this toolchain against metis-lang's
+corpus/dup and metisc: one error, the same words, across blocks and includes; a pack refused at admission."""
+
+import os
+import subprocess
+
+import pytest
+
+from langpath import LANG
+from metis.kernel.artifact import metisc
+from metis.kernel.diagnostics import render_text
+from metis.lang.compiler import diagnose
+
+DUP = LANG / "corpus/dup"
+REFUSED = {"blocks": "aa", "include": "aa", "nested": "aa", "sibling": "aa", "diamond": "aa", "head": "turn-1"}
+
+
+def _diag(*args):
+    here = os.getcwd()
+    os.chdir(DUP)
+    try:
+        return diagnose(*args[:1], base=args[1] if len(args) > 1 else None)
+    finally:
+        os.chdir(here)
+
+
+def _metisc(*args):
+    mc = metisc()
+    if not mc:
+        pytest.skip("no metisc: the python half only")
+    r = subprocess.run([mc, "--diagnostics", *args], cwd=DUP, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=60)
+    return r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("name", sorted(REFUSED))
+def test_one_error_in_metiscs_words(name):
+    ds = _diag(f"dup_{name}.llp")
+    assert [d.code for d in ds] == ["rule-duplicate"]
+    assert f"rule {REFUSED[name]} is named twice in stage act" in ds[0].text
+    assert "".join(render_text(d) for d in ds) == _metisc(f"dup_{name}.llp")
+
+
+def test_a_pack_naming_its_bases_rule_is_refused_as_metisc_refuses_it():
+    ds = _diag("dup_pack.llp", "dup_unit.llp")
+    assert [d.code for d in ds] == ["pack-redeclares"]
+    assert "".join(render_text(d) for d in ds) == _metisc("dup_pack.llp", "--base", "dup_unit.llp")
+
+
+def test_two_names_or_one_name_in_two_stages_stay_legal():
+    assert _diag("dup_ok.llp") == []

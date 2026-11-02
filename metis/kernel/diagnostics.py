@@ -71,6 +71,7 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "include-cycle": ("error", "compile"),
     "hiding-unknown": ("error", "compile"),
     "hiding-shadow": ("error", "compile"),
+    "rule-duplicate": ("error", "compile"),
     "extends-no-base": ("error", "compile"),
     "decl-duplicate": ("error", "compile"),
     # spec 12: a signature naming a type nobody declared (it replaces
@@ -189,6 +190,9 @@ HINTS: Dict[str, str] = {
     "hiding-shadow":
         "give {name} another name, or do not hide it from {unit}: a rule "
         "is hidden or kept, never replaced",
+    "rule-duplicate":
+        "rename this {rule}: a stage's rule names are unique across its "
+        "blocks and includes, and alternative heads reserve <name>-<k>",
     "extends-no-base":
         "compile this pack against its base catalog {base}",
     "decl-duplicate":

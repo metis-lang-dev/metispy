@@ -501,6 +501,19 @@ def test_a_pack_that_repeats_a_rule_is_found_by_name_or_by_its_body():
     assert T.duplicates("stage main {\n  %% New.\n  c_to_a [dyn] : c -o a.\n}\n", {"small.llp": PROGRAM}) == []
 
 
+def test_a_pack_that_names_a_rule_again_with_another_body_is_the_compilers_refusal():
+    """What duplicates leaves to the compiler, the compiler refuses; a pack that drops the rule first may take its name."""
+    from metis.lang import parse
+    from metis.lang.compiler import LangError, resolve_includes
+    again = "stage main {\n  %% Another body.\n  b_to_c [dyn] : c -o a.\n}\n"
+    assert T.duplicates(again, {"small.llp": PROGRAM}) == []
+    text, _ = T.apply_pack(PROGRAM, again)
+    with pytest.raises(LangError, match="rule b_to_c is named twice in stage main"):
+        resolve_includes(parse(text), ".")
+    text, _ = T.apply_pack(PROGRAM, "drop b_to_c\n" + again)
+    resolve_includes(parse(text), ".")
+
+
 def test_an_expectation_holds_on_a_replays_session():
     assert T.holds({"after": ["a", "b 0"]}, {"a": 1}, []) == []
     assert "after: b is 1" in " ".join(T.holds({"after": ["b 0"]}, {"b": 1}, []))

@@ -186,6 +186,15 @@ class Catalog:
                       f"pack redeclares bwd predicate '{p}'",
                       src(f"bwd/{p}"),
                       (("kind", "bwd predicate"), ("name", p)))
+        short = lambda n: n.rsplit("/", 1)[-1]
+        base_rules = {(e.payload.stage, short(e.name)) for e in self.entries
+                      if e.kind == "schema"}
+        for e in pack.entries:
+            if e.kind == "schema" and (e.payload.stage, short(e.name)) in base_rules:
+                n = short(e.name)
+                _emit(f, d, "pack-redeclares",
+                      f"pack redeclares rule '{n}'", e.src,
+                      (("kind", "rule"), ("name", n)))
         for s in pack.stages:
             if s not in self.stages:
                 _emit(f, d, "pack-adds-stage",

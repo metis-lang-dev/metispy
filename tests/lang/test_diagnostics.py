@@ -20,7 +20,8 @@ CORPUS = Path(__file__).resolve().parents[3] / "metis-lang/corpus"
 RUNS = (("diag_compile.llp", None), ("diag_kernel.llp", None),
         ("diag_pack.llp", "diag_pack_base.llp"),
         ("diag_cycle_a.llp", None), ("diag_hiding_unknown.llp", None),
-        ("diag_hiding_shadow.llp", None), ("diag_extends.llp", None),
+        ("diag_hiding_shadow.llp", None), ("diag_rule_duplicate.llp", None),
+        ("diag_extends.llp", None),
         ("diag_abstract.llp", None))
 
 

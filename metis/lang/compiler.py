@@ -306,6 +306,24 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                                f"rule {n} is hidden from '{d.path}' and named "
                                f"again: a rule is not replaced", d, n)
 
+    def check_duplicate(decls):
+        """A stage's rule names are unique across its blocks and its
+        includes (spec/18 §4): the parser sees one block."""
+        from metis.kernel.diagnostics import Loc, Source, make
+        seen = set()
+        for s in decls:
+            if isinstance(s, ast.Stage):
+                for r in s.rules:
+                    if (s.name, r.name) in seen:
+                        text = (f"rule {r.name} is named twice in stage {s.name}: "
+                                f"a rule is final, and a second one is not added")
+                        raise LangError([text], [make(
+                            "rule-duplicate", text,
+                            Source(Loc(r.file, r.line, r.col, f"{s.name}/{r.name}"),
+                                   (ast.rule_line(r),), ()),
+                            (("rule", r.name), ("stage", s.name)))])
+                    seen.add((s.name, r.name))
+
     def resolve(c, base, seen):
         layers, stages = c.layers, c.stages
         decls, hid = [], []
@@ -334,6 +352,7 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
             stages = stages or inc.stages
         for d, hidden in hid:
             check_shadow(decls, d, hidden)
+        check_duplicate(decls)
         return (ast.Catalog(c.name, c.version, c.provenance, layers,
                             stages, extends=c.extends,
                             decls=tuple(decls)),

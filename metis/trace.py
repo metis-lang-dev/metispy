@@ -668,7 +668,7 @@ def duplicates(pack, texts):
         for where, text in texts.items():
             for other, o in rules_of(text).items():
                 if other == name and body(o) != body(st):
-                    continue                   # the same name otherwise: the compiler's to say (or a replacement the pack drops)
+                    continue                   # the same name otherwise: the compiler's rule-duplicate (or a replacement the pack drops)
                 if other == name or body(o) == body(st):
                     out.append({"rule": name, "where": where, "other": other, "how": "the same rule" if other == name else "the same premises and effects"})
     return out
