@@ -251,21 +251,23 @@ def _singleton_fact_vars(atom, sigs) -> List[Tuple[str, str, str]]:
     return out
 
 
-def include_path(spec, base):
+def include_path(spec, base, root=None):
     """An include's file, the first of (the user's ruling, specialist-tree s-404d001f; metis-lang spec/17
     amendment 5): (1) relative to the including file's directory (BASE); (2) relative to the catalog root the
     session runs in (the cwd-root rule: $METIS_CATALOG, else the cwd); (3) the language's standard units, an
     iface/NAME (`include "iface/protocol_domain.llp".`: metispy's vendored copy of metis-lang's iface/);
-    (4) under METIS_HOME, the user's shared packages. A miss names the places searched."""
+    (4) under METIS_HOME, the user's shared packages. A miss names the places searched. ROOT: the catalog root
+    of (2) when not the session's (metis.catalog.includes, the gate's, passes the catalog it reads): the one
+    function the compiler and the gate resolve an include by."""
     from pathlib import Path
     from metis import catalog
     if (Path(base) / spec).is_file():
         return (Path(base) / spec).resolve()
     try:
-        return catalog.find(spec)              # the root, the standard units, METIS_HOME: one rule with find_package
+        return catalog.find(spec, root)        # the root, the standard units, METIS_HOME: one rule with find_package
     except FileNotFoundError:
         raise FileNotFoundError("include %r: not under %s" % (spec, ", ".join(
-            "%s (%s)" % (d, why) for d, why in [(Path(base), "the including file's directory")] + catalog.places()))) from None
+            "%s (%s)" % (d, why) for d, why in [(Path(base), "the including file's directory")] + catalog.places(root)))) from None
 
 
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:

@@ -786,7 +786,7 @@ def edit(name, path, old, new, replace_all=False, r=None):
     if old and "\r" not in old and old not in old_text and old.replace("\n", "\r\n") in old_text:
         old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")   # a CRLF file, the edit given in LF
     text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
-    inc = includes(d, [f for f in [prog, *exts] if f is not None])
+    inc = includes(d, [f for f in [prog, *exts] if f is not None], r)
     if p == prog:
         kw = {"program": text}
     elif p in exts:
@@ -846,7 +846,7 @@ def take(name, src, r=None, readme=None):
     """apply()'s arguments that bring the domain `name` over from the catalog
     `src` (a scratch catalog: the agentic loop's) into the root r: its
     domain.yaml as it is, the program, the extensions, the files they
-    include (includes(): inside the domain directory only), the host, the
+    include (includes(): inside the domain directory; a shared unit, found under METIS_HOME or the standard units, is not carried), the host, the
     notch (its fitted overlay), intent.yaml (apply generates intent/ again)
     and a corpus, its README (or `readme`), and as they are (`carried`) its goldens/ (the
     package's contract: what both runtimes are held to), its cases/ (its hand-written
@@ -887,7 +887,7 @@ def take(name, src, r=None, readme=None):
         if not nf.is_file():
             raise ValueError(f"{name}: its manifest names the notch {s.manifest['notch']}, which is not there")
         notch = _text(nf)
-    included = includes(d, [Path(s.program).resolve(), *(Path(e).resolve() for e in s.extensions())])
+    included = includes(d, [Path(s.program).resolve(), *(Path(e).resolve() for e in s.extensions())], src)
     it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
     if readme is None and (d / "README.md").is_file():
         readme = _text(d / "README.md")
@@ -953,11 +953,16 @@ def intents_status(name, r=None):
 INCLUDE = r'^\s*include\s+"([^"]+)"\s*(?:hiding\s*\([^)]*\)\s*)?\.'
 
 
-def includes(d, files):
+def includes(d, files, r=None):
     """{path relative to the domain directory d: text} of every file the .llp `files`
-    include, transitively (`include "x.llp".`, resolved beside the including file). An
-    include out of d is refused (ValueError): take carries a domain's own files only."""
+    include, transitively, by the compiler's include rule (metis.lang.compiler include_path, called here):
+    beside the including file, else find() under the catalog root R, the standard units,
+    METIS_HOME. A file beside it is the domain's own and is carried; one found by find()
+    outside d is shared (a family's unit, an iface/ unit): never carried, and its own
+    includes are its own business. Refused (ValueError): a file beside the including one
+    but outside d (take carries a domain's own files only), and an include found nowhere."""
     import re
+    from metis.lang.compiler import include_path
     d, out, todo, seen = Path(d).resolve(), {}, list(files), set()
     while todo:
         f = Path(todo.pop()).resolve()
@@ -965,12 +970,16 @@ def includes(d, files):
             continue
         seen.add(f)
         for m in re.finditer(INCLUDE, f.read_text(), re.M):
-            inc = (f.parent / m.group(1)).resolve()
+            try:
+                inc = include_path(m.group(1), f.parent, r)       # the compiler's own rule, one function
+            except FileNotFoundError as e:
+                raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, which is not there "
+                                 f"(not under {str(e).split(': not under ', 1)[-1]})") from None
             if d not in inc.parents:
-                raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, outside its domain directory: "
-                                 "take carries a domain's own files only")
-            if not inc.is_file():
-                raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, which is not there")
+                if (f.parent / m.group(1)).is_file():
+                    raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, outside its domain directory: "
+                                     "take carries a domain's own files only")
+                continue                          # shared: the family's or the standard units', not carried
             out[inc.relative_to(d).as_posix()] = _text(inc)
             todo.append(inc)
     return out

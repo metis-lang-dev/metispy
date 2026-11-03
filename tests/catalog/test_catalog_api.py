@@ -706,6 +706,39 @@ def test_take_carries_the_files_a_program_includes(scratch, tmp_path):
         catalog.plan("inc", included={"../plant/x.llp": "x"}, r=scratch)
 
 
+def test_a_family_unit_under_metis_home_is_shared_not_carried(scratch, tmp_path, monkeypatch):
+    """loop-workspace (nina, road): planner.llp includes the family's change.llp, which resolves under METIS_HOME,
+    not beside it. includes() follows the compiler's include rule: shared, never carried, and the member can be
+    edited, applied and taken through the gate; an include found nowhere is still "not there"."""
+    d = _inc_domain(scratch)
+    home = tmp_path / "home"
+    home.mkdir()
+    (d / "inc_rules.llp").rename(home / "inc_rules.llp")
+    monkeypatch.setenv("METIS_HOME", str(home))
+    assert catalog.includes(d, [d / "inc.llp"], scratch) == {}
+    dst = tmp_path.parent / (tmp_path.name + "-dst")
+    (dst / "domains").mkdir(parents=True)
+    out = catalog.apply("inc", **catalog.take("inc", scratch, dst), r=dst)
+    assert sorted(out["written"]) == ["domains/inc/domain.yaml", "domains/inc/inc.llp"], "the family's unit stays home"
+    (d / "inc.llp").write_text((d / "inc.llp").read_text() + 'include "gone.llp".\n')
+    with pytest.raises(ValueError, match=r"includes 'gone.llp', which is not there \(not under .*including file's directory.*METIS_HOME"):
+        catalog.includes(d, [d / "inc.llp"], scratch)
+
+
+@needs_metisc
+def test_an_edit_of_a_member_that_includes_its_family(scratch, tmp_path, monkeypatch):
+    """The gate's edit of a program whose include is the family's (METIS_HOME): no refusal, and metisc, which
+    resolves the include the same way, finds no diagnostic added."""
+    d = _inc_domain(scratch)
+    home = tmp_path / "home"
+    home.mkdir()
+    (d / "inc_rules.llp").rename(home / "inc_rules.llp")
+    monkeypatch.setenv("METIS_HOME", str(home))
+    kw = catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)
+    assert catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc.llp"]
+    assert not (d / "inc_rules.llp").exists()
+
+
 def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
     """rddl-worlds step 3: wildfire and tamarisk are packages with their fitted notch."""
     src = CAT / "domains" / "wildfire"
