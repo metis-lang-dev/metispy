@@ -525,6 +525,7 @@ def blame(path, member, k, atoms, program=None):
     m = start.header["members"].get(member)
     if m is None:
         raise TraceError("no member %r in the trace" % member)
+    program = session_program(start, member, program)
     counts, last = dict(start.checkpoint["sessions"][member]["counts"]), {}
     world_preds = {pred_of(a) for a in (start.checkpoint.get("copies") or {}).get(member, ())}
     events, generated = {}, set()
@@ -785,6 +786,7 @@ def timeline(path, member, program=None):
     m = segs[0].header["members"].get(member)
     if m is None:
         raise TraceError("no member %r in the trace (it has: %s)" % (member, ", ".join(sorted(segs[0].header["members"]))))
+    program = session_program(segs[0], member, program)
     events = {}
     if program:
         events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
@@ -854,6 +856,20 @@ def _toggles(labels, least=4):
                 out.append((start, i - 1))
             start = i if i >= len(labels) or labels[i] == labels[i - 1] else i - 1      # a b c: the run b c b c may start at b
     return out
+
+
+SESSION_LIVE = "metis-loop-console"          # the header's `live` of a console REPL session's trace (metis-loop SessionTrace)
+
+
+def session_program(seg, member, program=None):
+    """The program the verbs read a console session's trace with: PROGRAM when given, else the member's own from the
+    header when the trace is a REPL session's (live: metis-loop-console) and the file is there. A session steps the
+    rules by tool with no world, so without its program the rules' effects are unknown (the alf drive: /why said
+    'never moved' for an atom a rule made). A composition's trace keeps the program it is given."""
+    if program or (seg.header or {}).get("live") != SESSION_LIVE:
+        return program
+    p = ((seg.header.get("members") or {}).get(member) or {}).get("program")
+    return p if p and Path(p).is_file() else None
 
 
 def _note_state(exact):

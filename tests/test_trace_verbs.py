@@ -187,6 +187,31 @@ def test_fired_finds_a_ground_event_by_its_rule_after_a_take(tmp_path):
         assert t.rows == [[1, True, 2]] and t.notes == ["%s fired on 1 of 1 seeds" % name], (name, t.rows)
 
 
+def test_a_console_sessions_trace_is_read_with_its_program(tmp_path):
+    """The alf drive's L2: a REPL session's trace (live: metis-loop-console) steps the rules by tool with no world; the
+    verbs read it with the member's program from its header when none is given, so a rule's made atom is seen (blame:
+    the member's rule, not 'never moved'). A composition's trace without --program keeps the do-lines only."""
+    p = tmp_path / "ground.llp"
+    p.write_text(GROUND)
+    seq = [{"k": 1, "members": {"m": {"why": "command", "seq": [{"take": ["+want(door)"], "by": "person"}]}}},
+           {"k": 2, "members": {"m": {"why": "command", "seq": [{"step": ["go[P=door]"], "by": "tool"}]}}}]
+    for live, sees in (("metis-loop-console", True), (None, False)):
+        d = tmp_path / ("s" if live else "c")
+        w = T.Segments(d, every=0)
+        head = {"members": {"m": {"key": T.program_key(p), "program": str(p), "seed": 1, "weights": [], "out": []}},
+                "commands": [], **({"live": live} if live else {})}
+        w.open_segment(0, head, {"sessions": {"m": T.session_state(Shell(str(p), seed=1))}, "copies": {"m": {}}})
+        for t in seq:
+            w.line(t)
+        w.close()
+        ticks, exact = T.timeline(d, "m")
+        assert exact is sees, live
+        made = [x.made for x in ticks if x.k == 2][0]
+        assert (("at(door)" in made) if sees else not made), (live, made)
+        row = T.blame(d, "m", 2, ["at(door)"])["atoms"][0]
+        assert (row["have"] == 1 and (row["last"] or {}).get("by") == "rule") if sees else row["have"] == 0, (live, row)
+
+
 def test_the_cli_prints_notes_a_header_and_rows(trace, tmp_path, capsys):
     assert T.main(["blame", str(trace), "--member", "m", "--k", "3", "--atoms", "red, green 0"]) == 0
     lines = capsys.readouterr().out.splitlines()
