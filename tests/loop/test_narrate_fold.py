@@ -93,9 +93,12 @@ def test_narrate_applies_the_cut_from_the_endpoint(tmp_path, monkeypatch):
     assert out.getvalue().strip() == "The lamp was lit.\n\n(narration cut at 12 tokens; ask fewer beats)"
 
 
-def test_ollama_reports_the_cap(monkeypatch):
+def test_anthropic_reports_the_cap(monkeypatch):
+    """The endpoint says when it stopped at its token cap (replaces the
+    removed Ollama adapter's cap test: the same meta, from the anthropic
+    backend's stop_reason)."""
     import json
-    from metis.loop import ollama
+    from metis.loop import llm
 
     class R(io.BytesIO):
         def __enter__(self):
@@ -103,40 +106,27 @@ def test_ollama_reports_the_cap(monkeypatch):
 
         def __exit__(self, *a):
             pass
-    monkeypatch.setattr(ollama.urllib.request, "urlopen", lambda req, timeout=None: R(json.dumps(
-        {"response": "half a sen", "done_reason": "length", "eval_count": 700}).encode()))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(llm.urllib.request, "urlopen", lambda req, timeout=None: R(json.dumps(
+        {"content": [{"type": "text", "text": "half a sen"}], "stop_reason": "max_tokens",
+         "usage": {"output_tokens": 700}}).encode()))
     meta = {}
-    assert ollama.generate("p", model="m", host="http://x", meta=meta).strip() == "half a sen"
+    assert llm.complete("anthropic:m", "p", meta=meta) == "half a sen"
     assert meta == {"cut": True, "tokens": 700}
 
 
-def test_ollama_asks_a_thinking_model_not_to_think(monkeypatch, tmp_path):
-    """agentic-loop s-3ddb3e87 finding 3: /api/generate went out without
-    `think`, so Gemma 4 thought for minutes before each draft. The body
-    carries think: false; [ollama] think in the dot file sets it (true, or
-    a level), and generate(think=) has the last word."""
-    import json
-    from metis.loop import config, ollama
-    bodies = []
-
-    class R(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            pass
-
-    def urlopen(req, timeout=None):
-        bodies.append(json.loads(req.data))
-        return R(json.dumps({"response": "x", "done_reason": "stop"}).encode())
-    monkeypatch.setattr(ollama.urllib.request, "urlopen", urlopen)
-    ollama.generate("p", model="m", host="http://x")
-    assert bodies[-1]["think"] is False
-    dot = tmp_path / "config.toml"
-    dot.write_text('[ollama]\nthink = "low"\n')
-    monkeypatch.setenv("METIS_CONFIG", str(dot))
-    config.load(reload=True)
-    ollama.generate("p", model="m", host="http://x")
-    assert bodies[-1]["think"] == "low"
-    ollama.generate("p", model="m", host="http://x", think=True)
-    assert bodies[-1]["think"] is True
+def test_no_default_endpoint():
+    """loop-workspace: there is no default model. An unset endpoint is an
+    error naming both forms; a removed backend is refused by name, not
+    reached (replaces the Ollama think test: that adapter is gone)."""
+    import pytest
+    from metis.loop import llm
+    for spec in (None, "", "  "):
+        with pytest.raises(ValueError) as e:
+            llm.resolve(spec)
+        assert "anthropic[:MODEL] | command:ARGV" in str(e.value)
+        assert "[llm] endpoint" in str(e.value)
+    with pytest.raises(ValueError) as e:
+        llm.resolve("ollama:m")
+    assert "unknown LLM backend 'ollama'" in str(e.value)
+    assert llm.resolve("command:echo x") == llm.Endpoint("command", "echo x")

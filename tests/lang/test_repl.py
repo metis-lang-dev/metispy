@@ -199,7 +199,10 @@ def test_llm_and_narrate_via_command_backend():
     (this session's Foata beats + the file's %% docs) is verifiable."""
     r = shell()
     out = run(r, "llm")
-    assert "default" in out
+    assert "(unset)" in out and "anthropic[:MODEL] | command:ARGV" in out
+    run(r, "run 5")                       # no default endpoint: narrate says how to set one
+    out = run(r, "narrate")
+    assert "narrate failed" in out and "no LLM endpoint" in out
     out = run(r, "llm sorcery:x")
     assert "unknown LLM backend" in out
     run(r, "llm command:cat", "run 5")

@@ -314,8 +314,8 @@ HINTS: Dict[str, str] = {
         "the sampled counts stand; for exact numbers lower #steps or "
         "shrink the scene ({reason})",
     "llm-endpoint":
-        "{problem}: start the server or `ollama pull {model}`, or pick "
-        "another endpoint with `llm`",
+        "{problem}: set [llm] endpoint in the config dot file, or pick "
+        "one with `llm` (anthropic[:MODEL] | command:ARGV)",
 }
 
 

@@ -3,13 +3,21 @@
 
 An endpoint spec is a string:
 
-    ollama[:MODEL]        the local Ollama server (loop/ollama.py;
-                          $OLLAMA_HOST / $OLLAMA_MODEL defaults)
     anthropic[:MODEL]     the Anthropic API ($ANTHROPIC_API_KEY;
                           default model claude-opus-5-5)
     command:ARGV...       an external command, prompt on stdin,
                           completion on stdout (the Formalizer seam's
-                          shape) — never reachable from page intents
+                          shape) — never reachable from page intents;
+                          an OpenAI-compatible server (OpenRouter, a
+                          local one) is reached this way, e.g. the loop
+                          SDK's `python -m metis_loop_sdk.models
+                          openai-command --base-url U --model M` (the
+                          key from the environment, a token cap, a
+                          cost log)
+
+There is NO default endpoint: an unset spec is an error that says how to
+set one ([llm] endpoint in the config dot file, or `llm SPEC`), so no
+model is ever called that the person did not name.
 
 `resolve` parses a spec, `complete` runs one prompt through it. The
 completion is UNTRUSTED text either way: the formalize path gates it,
@@ -22,24 +30,29 @@ import subprocess
 import urllib.request
 from dataclasses import dataclass
 
-DEFAULT_SPEC = "ollama"
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5"
 ANTHROPIC_VERSION = "2023-06-01"
 
 
 @dataclass(frozen=True)
 class Endpoint:
-    backend: str                 # "ollama" | "anthropic" | "command"
+    backend: str                 # "anthropic" | "command"
     arg: str = ""                # model, or the command line
 
 
+UNSET = ("no LLM endpoint: set [llm] endpoint in the config dot file "
+         "($METIS_CONFIG | .metis.toml | ~/.config/metis/config.toml) or "
+         "`llm SPEC` — anthropic[:MODEL] | command:ARGV")
+
+
 def resolve(spec: str) -> Endpoint:
-    spec = (spec or DEFAULT_SPEC).strip()
+    spec = (spec or "").strip()
+    if not spec:
+        raise ValueError(UNSET)
     backend, _, rest = spec.partition(":")
-    if backend not in ("ollama", "anthropic", "command"):
+    if backend not in ("anthropic", "command"):
         raise ValueError(f"unknown LLM backend '{backend}' — "
-                         f"ollama[:MODEL] | anthropic[:MODEL] | "
-                         f"command:ARGV")
+                         f"anthropic[:MODEL] | command:ARGV")
     if backend == "command" and not rest.strip():
         raise ValueError("command backend needs a command line")
     return Endpoint(backend, rest.strip())
@@ -79,8 +92,8 @@ def complete(spec, prompt: str, timeout: int = 600,
              options: dict = None, system: str = None,
              meta: dict = None) -> str:
     """One completion from the configured endpoint. `options` are
-    sampling knobs (Ollama's: temperature, num_ctx, ...); the
-    anthropic backend honors temperature only, command ignores them.
+    sampling knobs (temperature, ...); the anthropic backend honors
+    temperature only, command ignores them.
     `system` rides the backend's system slot; the command backend,
     which has none, gets it prepended to the prompt. `meta`, when
     given, says whether the endpoint stopped at its token cap (cut)
@@ -89,10 +102,6 @@ def complete(spec, prompt: str, timeout: int = 600,
     ep = spec if isinstance(spec, Endpoint) else resolve(spec)
     if meta is not None:
         meta.setdefault("cut", False)
-    if ep.backend == "ollama":
-        from .ollama import generate
-        return generate(prompt, model=ep.arg or None, timeout=timeout,
-                        options=options, system=system, meta=meta)
     if ep.backend == "anthropic":
         return _anthropic(prompt, ep.arg, timeout, options, system, meta)
     if system:

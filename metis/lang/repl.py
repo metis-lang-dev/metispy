@@ -107,8 +107,8 @@ revise              gate as a BASE EDIT (accept replaces the world)
 accept              admitted candidate joins the served world LIVE
 show [what]         loop state     export [DIR]   world as files
 llm [SPEC]          show/set + VALIDATE the LLM endpoint
-                    (ollama[:MODEL] | anthropic[:MODEL] |
-                    command:ARGV; seeded by the config dot file:
+                    (anthropic[:MODEL] | command:ARGV, no
+                    default; seeded by the config dot file:
                     $METIS_CONFIG | .metis.toml |
                     ~/.config/metis/config.toml)
 narrate [SEED]      the session so far as prose — or, with a number, a
@@ -2519,43 +2519,47 @@ class Repl(LoopVerbs, Cmd):
         self._say("\n".join(lines))
 
     def _llm_status(self, spec):
-        """One line on the endpoint, VALIDATED where that is cheap:
-        for ollama, the /api/tags URI says whether the server is up
-        and the model pulled — a 404 at narrate time is too late."""
-        from metis.loop.llm import DEFAULT_SPEC, resolve
-        ep = resolve(spec or DEFAULT_SPEC)
-        shown = spec or f"(default: {DEFAULT_SPEC})"
-        if ep.backend != "ollama":
-            return f"llm: {shown}"
-        from metis.loop import ollama
-        host = ollama.default_host()
-        model = ep.arg or ollama.default_model()
+        """One line on the endpoint, VALIDATED where that is cheap: an
+        unset endpoint, anthropic without its key in the environment,
+        a command whose program is not on PATH each leave an
+        llm-endpoint note — a failure at narrate time is too late."""
+        import os
+        import shlex
+        import shutil
+        from metis.loop.llm import UNSET, resolve
+        shown = spec or "(unset)"
         from metis.kernel.diagnostics import note as dnote
 
         def llm_note(text, problem):
             _note(self, dnote(
                 "llm-endpoint", text, "llm", (f"llm {shown}",),
-                (("endpoint", str(shown)), ("host", host),
-                 ("problem", problem), ("model", model))))
-        try:
-            have = ollama.tags(host)
-        except OSError as e:
-            text = (f"llm: {shown} — ollama UNREACHABLE at {host} "
-                    f"({getattr(e, 'reason', e)})")
-            llm_note(text, f"ollama unreachable at {host}")
+                (("endpoint", str(shown)), ("problem", problem))))
             return text
-        ok = model in have or f"{model}:latest" in have
-        note = "" if ok else f" — '{model}' NOT pulled"
-        if not ok:
-            llm_note(f"llm: {shown} @ {host}{note}",
-                     f"model {model} not pulled")
-        return (f"llm: {shown} @ {host} "
-                f"(installed: {', '.join(have) or 'none'}){note}")
+        if not spec:
+            return llm_note(f"llm: (unset) — {UNSET}",
+                            "no LLM endpoint set")
+        try:
+            ep = resolve(spec)
+        except ValueError as e:          # a dot file's broken spec
+            return llm_note(f"llm: {shown} — {e}", str(e))
+        if ep.backend == "anthropic":
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                return llm_note(f"llm: {shown} — ANTHROPIC_API_KEY is "
+                                f"not set", "ANTHROPIC_API_KEY not set")
+            return f"llm: {shown}"
+        try:
+            argv = shlex.split(ep.arg)
+        except ValueError as e:          # an unbalanced quote
+            return llm_note(f"llm: {shown} — {e}", f"command line: {e}")
+        if not shutil.which(argv[0]):
+            return llm_note(f"llm: {shown} — command '{argv[0]}' NOT "
+                            f"found", f"command {argv[0]} not found")
+        return f"llm: {shown}"
 
     def do_llm(self, arg):
-        """show/set the LLM endpoint (loop.llm): ollama[:MODEL] |
-        anthropic[:MODEL] | command:ARGV; seeded by [llm] endpoint
-        in the config dot file"""
+        """show/set the LLM endpoint (loop.llm): anthropic[:MODEL] |
+        command:ARGV (no default); seeded by [llm] endpoint in the
+        config dot file"""
         from metis.loop.llm import resolve
         a = arg.strip()
         if not a:
@@ -2614,7 +2618,7 @@ class Repl(LoopVerbs, Cmd):
                       + (f"\n({self._pricing()})" if self.pricer else ""))
             return
         try:
-            text = narrate(self.llm or "ollama", rows, stage, kappa,
+            text = narrate(self.llm or "", rows, stage, kappa,
                            self.text, seed=seed,
                            system=self.sys_prompts.get("narrate"),
                            marks=hows, base_do=bdo)
@@ -3164,7 +3168,7 @@ class Repl(LoopVerbs, Cmd):
         f.write(f"# metis transcript — {self.path.name}\n\n"
                 f"- opened {_now_s()}\n"
                 f"- catalog {self.doc.catalog.name}, key {self.key}\n"
-                f"- llm seat: {self.llm or '(default)'}\n"
+                f"- llm seat: {self.llm or '(unset)'}\n"
                 f"- plugin: " + (f"{self.plugin_spec} "
                                  f"({type(self.plugin).__name__})"
                                  if self.plugin is not None else "(none)")

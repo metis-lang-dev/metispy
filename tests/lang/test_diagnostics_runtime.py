@@ -134,21 +134,27 @@ def test_reads_undeclared_rides_the_exception():
 
 
 def test_llm_endpoint_note(monkeypatch):
-    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")   # refused
+    """A command endpoint whose program is not on PATH, and an unset
+    endpoint, each leave the note (the removed Ollama probe's case was a
+    server unreachable)."""
     r = _repl(CATALOG / "domains/ceptre/three_pigs/three_pigs.llp")
-    r.onecmd("llm ollama:no-such-model")
+    r.onecmd("llm command:no-such-metis-model --x")
     (d,) = [d for d in r.notes if d.code == "llm-endpoint"]
-    assert "unreachable" in dict(d.data)["problem"]
+    assert dict(d.data)["problem"] == "command no-such-metis-model not found"
     assert d.loc.decl == "llm"
+    assert "[llm] endpoint" in render_text(d)
+    r = _repl(CATALOG / "domains/ceptre/three_pigs/three_pigs.llp")
+    r.onecmd("llm")
+    (d,) = [d for d in r.notes if d.code == "llm-endpoint"]
+    assert dict(d.data)["problem"] == "no LLM endpoint set"
 
 
 def test_findings_verb_lists_and_shows(capsys, monkeypatch):
     """`findings` lists catalog warnings + the gate report + session
     notes; `findings N` renders one in full; the wire returns JSON."""
     from metis.loop.wire import dispatch
-    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
     r = _repl(CATALOG / "domains/ceptre/primes/primes.llp")   # one warning
-    r.onecmd("llm ollama:no-such-model")
+    r.onecmd("llm command:no-such-metis-model")
     capsys.readouterr()
     r.onecmd("findings")
     listing = capsys.readouterr().out.splitlines()

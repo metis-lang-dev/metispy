@@ -11,21 +11,14 @@ Search order (first hit wins, no merging):
 Recognized today:
 
   [llm]
-  endpoint = "ollama:qwen2.5-coder:7b"   # ollama[:MODEL] |
-                                         # anthropic[:MODEL] |
-                                         # command:ARGV
-  [ollama]
-  host  = "http://localhost:11434"
-  model = "qwen2.5-coder:7b"
-  think = false                # Ollama's think field (default false;
-                               # true, or a level: "low", ...)
+  endpoint = "command:python -m metis_loop_sdk.models openai-command --base-url https://openrouter.ai/api/v1 --model M"
+                               # anthropic[:MODEL] | command:ARGV;
+                               # no default: unset is an error
   [narrate]                    # narrate seat only; formalize stays
   temperature = 0.3            # at temperature 0
-  num_ctx     = 8192
 
-Environment variables keep the last word ($OLLAMA_HOST /
-$OLLAMA_MODEL beat [ollama]); the config supplies defaults where
-the environment is silent. Unknown keys are ignored, a broken file
+Keys never live here: a backend reads its key from the environment
+($ANTHROPIC_API_KEY; the command's own variable). Unknown keys are ignored, a broken file
 is reported once and treated as absent — a dot file must never
 stop the shell from serving."""
 import os

@@ -163,7 +163,7 @@ class LoopVerbs:
         from .llm import resolve
         if not self.loop.text.strip():
             return {"ok": False, "error": "no text — mine/text first"}
-        spec = (arg.strip() or self.llm or "ollama")
+        spec = (arg.strip() or self.llm or "")    # unset: resolve says how
         ep = resolve(spec)
         if ep.backend == "command":
             backend = shlex.split(ep.arg)

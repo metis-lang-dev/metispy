@@ -263,12 +263,11 @@ def _op_seed(shell, arg):
 
 def _op_llm(shell, arg):
     """llm [SPEC]: show, or set and validate, the LLM endpoint formalize
-    and narrate use: ollama[:MODEL] | anthropic[:MODEL] | command:ARGV."""
-    from .llm import DEFAULT_SPEC, resolve
+    and narrate use: anthropic[:MODEL] | command:ARGV (no default)."""
+    from .llm import resolve
     a = arg.strip()
     if not a:
-        return {"ok": True,
-                "llm": shell.llm or f"(default: {DEFAULT_SPEC})"}
+        return {"ok": True, "llm": shell.llm or "(unset)"}
     resolve(a)
     shell.llm = a
     return {"ok": True, "llm": a}
@@ -322,11 +321,11 @@ def _op_narrate(shell, arg):
                 "prompt": user_prompt(rows, stage, kappa,
                                       shell.text, seed=seed,
                                       marks=hows, base_do=bdo)}
-    text = narrate(shell.llm or "ollama", rows, stage, kappa,
+    text = narrate(shell.llm or "", rows, stage, kappa,
                    shell.text, seed=seed, system=override,
                    marks=hows, base_do=bdo)
     return {"ok": True, "source": source, "seed": seed,
-            "events": len(rows), "llm": shell.llm or "ollama",
+            "events": len(rows), "llm": shell.llm,
             "narration": text}
 
 

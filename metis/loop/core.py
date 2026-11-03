@@ -2,7 +2,7 @@
 metispy's (admit_text_pack, recover); every model call goes through
 one seam: an external COMMAND that reads a prompt on stdin and
 writes .llp on stdout. `claude -p --model opus` is such a command;
-so is an Ollama wrapper — the loop cannot tell the difference."""
+so is an OpenAI-compatible wrapper — the loop cannot tell the difference."""
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -135,7 +135,7 @@ def render_prompt(text: str, vocabulary: str,
 def run_backend(command, prompt: str, timeout: int = 600) -> str:
     """The seam takes an external COMMAND (argv list; prompt on
     stdin, LLP on stdout) or a CALLABLE(prompt) -> LLP — the
-    in-process shape the Ollama adapter uses."""
+    in-process shape for a model adapter called in this process."""
     if callable(command):
         return command(prompt)
     r = subprocess.run(list(command), input=prompt, text=True,

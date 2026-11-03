@@ -351,9 +351,8 @@ def end_on_sentence(text: str, meta: dict) -> str:
 
 def options() -> Dict[str, object]:
     """The narrate seat's sampling knobs: the dot file's [narrate]
-    table verbatim (temperature, num_ctx, num_predict, ... — Ollama
-    option names); empty keeps the endpoint defaults (temperature
-    0)."""
+    table verbatim (temperature, ...: what the endpoint honors);
+    empty keeps the endpoint defaults (temperature 0)."""
     from . import config
     _, conf = config.load()
     t = conf.get("narrate")
