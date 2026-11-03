@@ -91,7 +91,8 @@ def test_an_empty_directory_is_an_empty_catalog(monkeypatch, tmp_path):
     monkeypatch.delenv("METIS_CATALOG", raising=False)
     monkeypatch.chdir(tmp_path)
     assert catalog.domains() == [] and catalog.index() == [] and catalog.listing() == []
-    out = catalog.new("lamp", LAMP, manifest="display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    write = catalog.new if METISC else (lambda n, prog, **kw: catalog._apply(n, "new", program=prog, **kw))   # the fast suite has no metisc
+    out = write("lamp", LAMP, manifest="display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
     assert sorted(out["written"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
     assert [e["name"] for e in catalog.index()] == ["lamp"] and [d.name for d in catalog.domains()] == ["lamp"]
     gen = catalog.generator()
