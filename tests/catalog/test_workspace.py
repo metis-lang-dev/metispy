@@ -86,6 +86,34 @@ def test_a_surprise_is_dropped_taken_and_ruled_in_files(tmp_path):
     assert not list(ws.state.rglob(".*.tmp")), "every file written whole then renamed"
 
 
+def test_three_dropped_in_one_second_read_back_in_drop_order(tmp_path, monkeypatch):
+    ws = W.workspace(tmp_path)
+    hexes = iter(["c00000", "b00000", "a00000"])          # each draw lower than the last: the bump orders them
+    real_hex = W.secrets.token_hex
+    monkeypatch.setattr(W.secrets, "token_hex", lambda n: next(hexes) if n == 3 else real_hex(n))   # the ids' draws only
+    monkeypatch.setattr(W, "_LAST_ID", [""])
+    sec = 1793700000.0
+    real = W.time.localtime
+    monkeypatch.setattr(W.time, "localtime", lambda now=None: real(sec))
+    ids = [ws.drop_surprise({"member": "m", "atoms": ["a%d" % i]}) for i in range(3)]
+    assert len({i[:15] for i in ids}) == 1, "one second"
+    assert [i[16:] for i in ids] == ["c00000", "c00001", "c00002"], "monotonic within the process, the hex bumped"
+    assert [s["id"] for s in ws.surprises()] == ids
+    ts = [s["ts"] for s in ws.surprises()]
+    assert all("." in x for x in ts) and ts == sorted(ts), "sub-second ts"
+
+
+def test_across_processes_the_ts_orders_one_second(tmp_path):
+    """Each CLI call is its own process (the ts face's way): the ids' hex is random across them, the ts is not."""
+    got = [cli(tmp_path, "drop", "-", input=json.dumps({"member": "m", "atoms": ["a%d" % i]}))[1]["id"] for i in range(3)]
+    ws = W.workspace(tmp_path)
+    by_ts = sorted(ws.surprises(), key=lambda s: s["ts"])
+    assert [s["id"] for s in ws.surprises()] == [s["id"] for s in by_ts] == got
+    for s in ws.surprises():
+        (ws.state / "surprises" / (s["id"] + ".json")).write_text(json.dumps({**s, "ts": "2026-11-03T12:00:00+02:00"}))
+    assert [s["id"] for s in ws.surprises()] == sorted(got), "an old second-only ts: the id breaks the tie"
+
+
 def test_a_dead_takers_take_is_taken_over(tmp_path):
     ws = W.workspace(tmp_path)
     sid = ws.drop_surprise({"member": "m", "reading": "x(1) expected"})

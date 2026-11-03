@@ -40,6 +40,7 @@ import re
 import secrets
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -93,13 +94,36 @@ def layout():
             "paths": {n: {"path": p, "kind": k, "writer": w, "what": t} for n, (p, k, w, t) in LAYOUT.items()}}
 
 
+_LAST_ID = [""]
+
+
 def new_id(now=None):
-    """YYYYMMDDTHHMMSS-<6 hex>: sorts by time; the hex keeps two in one second apart."""
-    return time.strftime("%Y%m%dT%H%M%S", time.localtime(now)) + "-" + secrets.token_hex(3)
+    """YYYYMMDDTHHMMSS-<6 hex>: the second, then random hex that keeps two writers in one second apart. Monotonic
+    within a process: an id in the same second as this process's last one is that one's hex plus one, so a
+    process's ids sort in the order it made them. Across processes the order is the record's ts (sub-second):
+    surprises() sorts by (ts, id)."""
+    sec = time.strftime("%Y%m%dT%H%M%S", time.localtime(now))
+    hx = secrets.token_hex(3)
+    last = _LAST_ID[0]
+    if last[:15] == sec and int(hx, 16) <= int(last[16:], 16):
+        hx = "%06x" % min(int(last[16:], 16) + 1, 0xFFFFFF)
+    _LAST_ID[0] = sec + "-" + hx
+    return _LAST_ID[0]
 
 
 def _ts():
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    """Now, ISO 8601 with microseconds and the offset: what orders records written in one second."""
+    return datetime.now().astimezone().isoformat(timespec="microseconds")
+
+
+def _order(rec):
+    """(when, id): a record's ts as an instant (an older ts without sub-seconds, or none, sorts at its second),
+    then its id."""
+    try:
+        when = datetime.fromisoformat(str(rec.get("ts"))).timestamp()
+    except ValueError:
+        when = float("inf")
+    return (when, str(rec.get("id") or ""))
 
 
 def _check_id(i):
@@ -440,7 +464,7 @@ class Workspace:
         return rec
 
     def surprises(self, status=None):
-        """Every surprise, oldest first, each with its status (open | taken | ruled) read from the files."""
+        """Every surprise, oldest first (by its ts, sub-second, then its id), each with its status (open | taken | ruled) read from the files."""
         if status is not None and status not in STATUS:
             raise ValueError("status %r: one of %s" % (status, ", ".join(STATUS)))
         d = self.path("surprises")
@@ -452,7 +476,7 @@ class Workspace:
             rec = self._with_take(dict(rec, id=f.stem, status=self.status(f.stem)))
             if status is None or rec["status"] == status:
                 out.append(rec)
-        return out
+        return sorted(out, key=_order)
 
     def surprise(self, sid):
         """One surprise with its status, and its ruling when ruled."""
@@ -542,9 +566,10 @@ class Workspace:
         return j
 
     def rulings(self):
-        """Every ruling's json, oldest first."""
+        """Every ruling's json, oldest first (by its ts, then id)."""
         d = self.path("rulings")
-        return [r for r in (_json(f) for f in sorted(d.glob("*.json"))) if isinstance(r, dict)] if d.is_dir() else []
+        return sorted([r for r in (_json(f) for f in d.glob("*.json")) if isinstance(r, dict)], key=_order) \
+            if d.is_dir() else []
 
     # ── the locks: one active pi loop, one backend (WORKSPACE.md §2.3) ──
     def loops(self):
