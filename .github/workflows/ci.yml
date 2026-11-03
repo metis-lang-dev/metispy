@@ -52,6 +52,12 @@ jobs:
         with:
           repository: metis-lang-dev/metis-catalog
           path: metis-catalog
+      - name: Checkout metis-worlds road/domains (NOT beside metispy; only $METIS_WORLDS reads it, the workspace's road test)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-worlds
+          path: _worlds/metis-worlds
+          sparse-checkout: road/domains
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -69,6 +75,8 @@ jobs:
         # verbatim from the review cycle; kitchen/overcooked and sumo are
         # excluded exactly as locally
         working-directory: metispy
+        env:
+          METIS_WORLDS: ${{ github.workspace }}/_worlds/metis-worlds
         run: |
           # the host-only gate (marker oracle: the wayplan ll2pg oracle checkout) is
           # deselected by name, never skipped silently; -rs names every skip
