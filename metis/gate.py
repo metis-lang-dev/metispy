@@ -9,8 +9,9 @@ policy: every write is a proposal the person reads, then confirms.
     from metis import gate
     g = gate.Gate()                                  # the memory in this process (a console)
     g = gate.Gate.at(state_dir)                      # … or in state_dir/gate.json (a CLI per call)
-    pl = g.propose("program", "lamp", root, text=…, display=…, line=…, run=state_dir)
+    pl = g.propose("new", "lamp", root, text=…, display=…, line=…, run=state_dir)
     pl["files"]          # [{path, new, diff, text, since_diff?}]: what confirm writes, each with its diff
+    pl["findings"]       # metis.catalog's checks: metisc's diagnostics, the lint rows (a refusing one refuses the plan)
     g.confirm(pl["token"])   # writes exactly that plan; {written, fingerprint, serve?, bundle?}
     g.refuse(pl["token"])    # the person said no: its texts are remembered, per root and file
 
@@ -18,18 +19,20 @@ policy: every write is a proposal the person reads, then confirms.
     python -m metis.gate --state DIR confirm TOKEN --json
     python -m metis.gate --state DIR refuse TOKEN --json
 
-The kinds (propose's args):
-  program    text (the candidate the loop gated), display, line: the domain's program; a new
-             domain gets a domain.yaml (program, its host when <d>_host.py sits there, clock, records)
-  served     text (the program the REPL serves, as it is: a seed), display, line; a package seed
-             (run/seed.json package: true) comes whole from run/seed/, its own domain.yaml kept
-  extension  name, text: domains/<d>/extensions/<name>.llp
-  intents    text (an intent.yaml), else the program's skeleton (no model); a world with no
-             commands gets a note and no write
-  readme     text (the summary paragraph), title: the README, the SDK writing every other part
-  edit       path, old, new, replace_all: one exact edit of a file on disk
+The kinds (propose's args; workspace-files s-9ea4cfa4: the workspace owns the file, so no kind writes a copy of
+a text over a package's file — an existing package changes by edit, one file at a time):
+  new        text (the program; served: true when it is the program the REPL serves as it is, a seed),
+             display, line, extensions {name: text}, intents (intent.yaml's text, or true: the program's
+             skeleton, no model; a world with no commands gets none and a note), readme (its text, or
+             {text, title}: the summary paragraph and the title, the SDK writing every other part): a
+             package the catalog lacks, ONE plan; its domain.yaml (program, its host when <d>_host.py sits
+             there, clock, records). A package seed (run/seed.json package: true) with served comes whole
+             from run/seed/, its own domain.yaml kept
+  edit       path, old, new, replace_all: one exact edit of a file on disk (old "" makes a file the
+             domain lacks: README.md, intent.yaml, extensions/<name>.llp, its corpus, its host)
   take       src (the loop's catalog): the domain into root (another catalog), a README of the
              run (run) when it has none of its own; confirm builds its bundle
+  who        (any kind) backend | pi: the writer, for the journal of a root that is a workspace
 
 The rules:
   - confirm writes exactly the plan the person read: a plan is named by its token, and a
@@ -37,10 +40,9 @@ The rules:
   - a refused proposal is remembered per root and file: the next plan of that file carries
     since_diff, what changed since the refusal; a write of the file forgets it;
   - seed first: in a seeded run (run/seed.json), until the seed's domain is in the catalog,
-    no program and no extension of a domain the catalog lacks, and the seed is served under
-    its own name only;
-  - README refused: an edit of a file that was never written because its proposal was
-    refused goes through the proposal again (its gate shows what changed since);
+    no new package but the seed, under its own name;
+  - refused first: an edit of a file that was never written because its proposal was refused
+    makes it again (old ""), its gate showing what changed since;
   - a plan with nothing to write (a note) needs no confirmation of the person.
 
 The experimental policy (loop-policy s-dd842f2a, metis-agentic-loop docs/POLICY.md): a loop
@@ -49,7 +51,7 @@ when it is cornered. The human gate above is the default and is unchanged.
 
     g = gate.Gate(policy="experimental", gain=fn, journal=state_dir / "journal.jsonl")
     g = gate.Gate.at(state_dir, policy="experimental", gain=fn)    # the journal beside gate.json
-    pl = g.propose("program", "alf", root, text=…, phase="exploit", cost=0.004)
+    pl = g.propose("edit", "alf", root, path="alf.llp", old=…, new=…, phase="exploit", cost=0.004)
     pl["verdict"]    # {verdict: accept|refuse, phase, numbers, why}; accept is confirmed at once
                      # (pl["written"]), refuse is remembered as the person's refusal is (since_diff)
     a = g.propose("ask", "alf", root, phase="exploit", reason="no_progress", tried=[…],
@@ -57,8 +59,9 @@ when it is cornered. The human gate above is the default and is unchanged.
     g.answer(a["token"], {"kind": "note", "text": "…"})      # the person's instruction
     g.answers(); g.journal()                                  # what the loop reads at re-engagement
 
-  - the judged kinds are program, extension and edit; the others (served, intents, readme,
-    take) wait for the person under either policy;
+  - the judged kinds are new and edit (a candidate program over a known domain is an edit of
+    its file, old = its text now); take waits for the person under either policy; a write the
+    catalog's checks refuse (an added diagnostic) is refused before any numbers are read;
   - numbers come from `gain(plan, phase)` (the run driver measures the candidate on the
     held-out split), or as `numbers` in propose's args (a driver that measured them itself:
     the CLI). They are changes, candidate minus current: likelihood, success; and
@@ -109,9 +112,9 @@ from pathlib import Path
 
 from metis import catalog
 
-KINDS = ("program", "served", "extension", "intents", "readme", "edit", "take", "ask")
+KINDS = ("new", "edit", "take", "ask")
 POLICIES = ("human", "experimental")
-JUDGED = ("program", "extension", "edit")
+JUDGED = ("new", "edit")
 PHASES = ("explore", "exploit", "refactor")
 REASONS = ("budget", "no_progress", "out_of_vocabulary", "contradiction", "stuck")
 ANSWERS = ("note", "edit", "rule", "budget", "phase", "abandon")
@@ -475,12 +478,15 @@ class Gate:
             return self._ask(domain, root, args)
         judged = self.policy == "experimental" and kind in JUDGED
         phase, cost, numbers = (args.pop(k, None) for k in ("phase", "cost", "numbers"))
+        who = args.pop("who", None) or "backend"           # the writer, for the workspace's journal: backend | pi
+        if who not in ("backend", "pi"):
+            raise Refused(f"who: backend | pi, not {json.dumps(who)}")
         if judged and phase not in PHASES:
             raise Refused(f"the experimental policy judges a {kind} in a phase: phase {' | '.join(PHASES)}")
-        pl = self._plan(kind, domain, root, run, args, since=self.refused(root))
+        pl = self._plan(kind, domain, root, run, args, since=self.refused(root), who=who)
         pl["token"] = hashlib.sha256(json.dumps(
             [kind, domain, root, [(f["path"], f["text"]) for f in pl["files"]], pl.get("note")]).encode()).hexdigest()[:16]
-        self.store["plans"][pl["token"]] = {"kind": kind, "domain": domain, "root": root, "run": run, "args": args,
+        self.store["plans"][pl["token"]] = {"kind": kind, "domain": domain, "root": root, "run": run, "args": args, "who": who,
                                             "files": [[f["path"], f["text"]] for f in pl["files"]]}
         self._save(self.store)
         if not judged:
@@ -576,7 +582,7 @@ class Gate:
         if p is None:
             raise Refused("not approved: no such plan (propose it again)")
         kind, domain, root, run, args = p["kind"], p["domain"], p["root"], p["run"], p["args"]
-        now = self._plan(kind, domain, root, run, args)
+        now = self._plan(kind, domain, root, run, args, who=p.get("who") or "backend")
         if [[f["path"], f["text"]] for f in now["files"]] != p["files"]:
             if kind == "edit":
                 raise Refused(f"{args.get('path')} changed after the person approved the edit: nothing written; propose it again")
@@ -586,7 +592,7 @@ class Gate:
         out = now["write"]()
         self._remember(root, now["files"], True)
         self._save(self.store)
-        res = {"written": out["written"], "fingerprint": out.get("fingerprint")}
+        res = {"written": out["written"], "fingerprint": out.get("fingerprint"), "findings": now.get("findings") or []}
         if now["reopen"]:
             res["serve"] = _serve(domain, root)
         if kind == "take":
@@ -598,18 +604,18 @@ class Gate:
 
     # -- the kinds ------------------------------------------------------------
 
-    def _plan(self, kind, domain, root, run, a, since=None):
+    def _plan(self, kind, domain, root, run, a, since=None, who="backend"):
         if kind not in KINDS:
             raise Refused(f"kind: {' | '.join(KINDS)}, not {json.dumps(kind)}")
         if not NAME.match(domain or ""):
             raise Refused(f"domain {json.dumps(domain)}: lowercase letters, digits, _")
         since = since or {}
 
-        def planned(w, reopen=False, r=root, say=None):
+        def planned(w, reopen=False, r=root, say=None, findings=()):
             def write():
-                return catalog.apply(domain, r=r, **w)
+                return catalog._apply(domain, kind, who, r, **w)
             out = {"kind": kind, "domain": domain, "root": r, "reopen": reopen,
-                   "files": catalog.plan(domain, r=r, since=since, **w), "write": write}
+                   "files": catalog._plan(domain, r=r, since=since, **w), "findings": list(findings), "write": write}
             if say:
                 out["say"] = say
             return out
@@ -622,79 +628,90 @@ class Gate:
             text = None
             if run and not (catalog.get(domain, src).dir / "README.md").is_file():
                 text = catalog.readme(domain, src, run)
-            kw = catalog.take(domain, src, root, text)
-            return planned(kw)
+            return planned(catalog._take_spec(domain, src, root, text))
         if kind == "edit":
             d = catalog.get(domain, root)
             import posixpath
             # the file as the plan names it: relative to the root, wherever the package sits (rule 9: DIR/lamp/ too)
             pkg = Path(d.dir).resolve().relative_to(Path(root).resolve()).as_posix()
             rel = posixpath.normpath(f"{pkg}/{a['path']}")
-            if not (Path(d.dir) / a["path"]).exists() and rel in since:
-                raise Refused(f"{a['path']} was never written: the person refused its proposal. Send it again through "
-                              "catalog_apply with only the fix; its gate shows what changed since")
-            kw = catalog.edit(domain, a["path"], a["old"], a["new"], bool(a.get("replace_all")), root)
+            if not (Path(d.dir) / a["path"]).exists() and rel in since and a.get("old"):
+                raise Refused(f"{a['path']} was never written: the person refused its proposal. Propose it again "
+                              "with old_string empty (it makes the file) and only the fix; its gate shows what changed since")
+            kw, findings = catalog._edit_spec(domain, a["path"], a.get("old") or "", a.get("new") or "",
+                                              bool(a.get("replace_all")), root)
+            if any(x["refuses"] for x in findings):
+                raise Refused(catalog._refusal(domain, findings))
             reopen = bool(d.program) and (Path(d.dir) / a["path"]).resolve() == Path(d.program).resolve()
-            return planned(kw, reopen)
+            return planned(kw, reopen, findings=findings)
 
-        known = _known(domain, root)
+        # kind new: a package the catalog lacks, ONE plan (its program, manifest, intents, README)
+        if _known(domain, root):
+            raise Refused(f"{domain}: the catalog has it: change it with edit (one file at a time)")
         seed = _seed(run)
+        served = bool(a.get("served"))
         shown = {k: a[k] for k in ("display", "line") if a.get(k) is not None}
-        if (not known and seed and not _known(seed.get("name", ""), root)
-                and kind in ("program", "extension")):
-            raise Refused(f"a seeded run applies the seed first (catalog_apply domain={domain} what=served); "
-                          "a change to it is then its diff against the seed")
-        if kind == "readme":
-            if not known:
-                raise Refused(f"no domain {domain} in the loop's catalog yet: its README follows its program")
-            if not (a.get("text") or "").strip():
-                raise Refused("what=readme: text is the summary paragraph (what the program tells; the SDK writes the rest)")
-            return planned({"readme": catalog.readme(domain, root, run, a["text"], a.get("title"))})
-        if kind == "intents":
-            text = a.get("text")
-            if text is None:
-                text = catalog.skeleton(domain, root)
-                if text is None:
-                    return {"kind": kind, "domain": domain, "root": root, "reopen": False, "files": [],
-                            "note": NOTE_NO_COMMANDS, "write": lambda: {"written": [], "fingerprint": None}}
-            return planned({"intents": text})
-        if (kind == "served" and seed and not seed.get("package") and domain != seed.get("name")
-                and not _known(seed.get("name", ""), root)):
-            raise Refused(f"the seed is {seed['name']}: catalog_apply domain={seed['name']} what=served")
-        if kind == "served" and seed and seed.get("package"):
-            if domain != seed["name"]:
-                raise Refused(f"the seed is the package {seed['name']}: catalog_apply domain={seed['name']} what=served")
+        if seed and not _known(seed.get("name", ""), root) and domain != seed.get("name"):
+            raise Refused(f"a seeded run makes the seed first (catalog_new domain={seed['name']} program=served); "
+                          "a change to it is then an edit")
+        if served and seed and seed.get("package"):          # a package seed comes whole from run/seed/
             src = Path(run) / "seed"
             say = None
             if shown:
                 own = catalog.get(domain, src)
                 say = (f" The package's own domain.yaml is used as it is, so the display and line given here were not: "
                        f"it has display {json.dumps(own.display)} and line {json.dumps(own.line)}.")
-            return planned(catalog.take(domain, src, root), True, say=say)
+            return planned(catalog._take_spec(domain, src, root), True, say=say)
         text = a.get("text")
-        if text is None and kind == "served":
-            raise Refused("the REPL serves a blank world: there is no program to apply (loop.sh --seed starts it on one)")
         if text is None:
-            raise Refused(f"{kind}: text, the program's text")
-        if kind == "extension":
-            name = a.get("name") or ""
-            if not NAME.match(name):
-                raise Refused("an extension needs a name (lowercase): it is written to domains/<domain>/extensions/<name>.llp")
-            return planned({"extensions": {name: text}})
-        # the console writes a program with its extensions in one plan (loop-parity step 2)
-        exts = {k: v for k, v in (a.get("extensions") or {}).items()}
+            raise Refused("the REPL serves a blank world: there is no program to make a package of (loop.sh --seed starts it on one)"
+                          if served else "new: text, the program's text")
+        exts = dict(a.get("extensions") or {})
         for k in exts:
             if not NAME.match(k):
                 raise Refused(f"extension {json.dumps(k)}: lowercase letters, digits, _ (domains/<domain>/extensions/<name>.llp)")
-        if exts:
-            shown["extensions"] = exts
-        if known:
-            return planned({"program": text, **shown}, True)
-        # a new domain: its manifest, the host beside the program when the world brought one
-        host = (Path(root) / "domains" / domain / f"{domain}_host.py").is_file()
-        manifest = (f"# written by the agentic loop's catalog_apply (docs/LOOP-AGENT.md)\nprogram: {domain}.llp\n"
-                    + (f"host: {domain}_host.py:make\n" if host else "") + "clock: {beats: 1}\nrecords: records/\n")
-        return planned({"program": text, "manifest": manifest, **shown}, True)
+        manifest = (f"# written by the loop's catalog_new (docs/LOOP-AGENT.md)\n" + catalog._new_manifest(domain, Path(root)))
+        intents, readme = a.get("intents"), a.get("readme")
+        if intents is True or isinstance(readme, dict):
+            intents, readme, note = self._draft(domain, root, run, dict(program=text, extensions=exts or None,
+                                                                         manifest=manifest, **shown), intents, readme)
+        else:
+            note = None
+        try:
+            kw, findings = catalog._new_spec(domain, text, shown.get("display"), shown.get("line"), exts or None,
+                                             intents if isinstance(intents, str) else None,
+                                             readme if isinstance(readme, str) else None, manifest=manifest, r=root)
+        except ValueError as e:
+            raise Refused(str(e)) from None
+        if any(x["refuses"] for x in findings):
+            raise Refused(catalog._refusal(domain, findings))
+        return planned(kw, True, say=note, findings=findings)
+
+    @staticmethod
+    def _draft(domain, root, run, kw, intents, readme):
+        """(intent.yaml's text or None, the README's text or None, a note or None) of a new package, drafted in a
+        scratch catalog with its files: intents=True the program's skeleton (no model; a world with no commands
+        gets none, and a note), readme {text, title} the SDK's README around the summary."""
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="gate-new-") as tmp:
+            host = Path(root) / "domains" / domain
+            if host.is_dir():                                # a world's files already there (its host)
+                shutil.copytree(host, Path(tmp) / "domains" / domain)
+            catalog._apply(domain, "new", r=tmp, **kw)
+            note, text = None, None
+            if intents is True:
+                text = catalog.skeleton(domain, tmp)
+                if text is None:
+                    note = " " + NOTE_NO_COMMANDS + "."
+                else:
+                    catalog._apply(domain, "new", r=tmp, intents=text)
+            rd = None
+            if isinstance(readme, dict):
+                if not (readme.get("text") or "").strip():
+                    raise Refused("readme: text is the summary paragraph (what the program tells; the SDK writes the rest)")
+                rd = catalog.readme(domain, tmp, run, readme["text"], readme.get("title"))
+            return text, rd if rd is not None else (readme if isinstance(readme, str) else None), note
 
 
 def public(pl):
@@ -706,7 +723,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m metis.gate", description=__doc__.split("\n")[0])
     ap.add_argument("--state", required=True, metavar="DIR", help="the loop's state (DIR/.metis/): its gate.json")
     ap.add_argument("--policy", choices=POLICIES, default="human",
-                    help="experimental: program/extension/edit judged by the numbers in the args (phase, numbers, cost)")
+                    help="experimental: new/edit judged by the numbers in the args (phase, numbers, cost)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     pr = sub.add_parser("propose", help="a plan of a write: its files and their diffs, its token (args: JSON on stdin)")
     pr.add_argument("kind", choices=KINDS)

@@ -11,12 +11,14 @@ import sys
 import pytest
 
 from catalogs import installed_catalog
-from metis import gate
+from metis import catalog, gate
 
 CAT = installed_catalog()
 if CAT is None or not (CAT / "domains" / "plant").is_dir():
     pytest.skip(f"no metis-catalog plant at {CAT} (METIS_CATALOG)", allow_module_level=True)
-EXT = "% an extension\n"
+EXT = "% an extension\ncatalog tired 1.\nextends plant.\nstage main {\n  %% I stay dry.\n  tire [dyn] : dry -o dry.\n}\n"
+TIRED = {"path": "extensions/tired.llp", "old": ""}          # an edit that makes the extension (workspace-files)
+needs_metisc = pytest.mark.skipif(not catalog.metisc(), reason="no metisc (METISC or PATH): a .llp write is checked")
 
 
 @pytest.fixture
@@ -67,13 +69,14 @@ def test_the_verdict_per_phase(phase, numbers, verdict):
         assert "success: not measured" in v["why"]
 
 
+@needs_metisc
 def test_an_accept_is_confirmed_and_journaled(root, tmp_path):
     j = tmp_path / "state" / "journal.jsonl"
     gain = fake({"likelihood": 0.25, "success": 0.1})
     g = gate.Gate(policy="experimental", gain=gain, journal=j)
     plant = (root / "domains/plant/plant.llp").read_text()
-    pl = g.propose("program", "plant", root, text=plant + "% a comment the candidate adds\n",
-                   phase="exploit", cost=0.004)
+    pl = g.propose("edit", "plant", root, path="plant.llp", old=plant, new=plant + "% a comment the candidate adds\n",
+                   phase="exploit", cost=0.004)          # a candidate program: an edit of its file, old = its text now
     assert pl["verdict"]["verdict"] == "accept" and pl["written"] == ["domains/plant/plant.llp"]
     assert (root / "domains/plant/plant.llp").read_text().endswith("% a comment the candidate adds\n")
     assert g.store["plans"] == {}                                             # confirmed: no plan waits
@@ -86,38 +89,42 @@ def test_an_accept_is_confirmed_and_journaled(root, tmp_path):
     assert json.loads(j.read_text().splitlines()[0])["token"] == pl["token"]
 
 
+@needs_metisc
 def test_a_refuse_writes_nothing_and_is_remembered(root):
     g = gate.Gate(policy="experimental", gain=fake({"likelihood": -0.2, "success": 0.3}))
-    pl = g.propose("extension", "plant", root, name="tired", text=EXT, phase="exploit")
+    pl = g.propose("edit", "plant", root, **TIRED, new=EXT, phase="exploit")
     assert pl["verdict"]["verdict"] == "refuse" and pl["refused"] == ["domains/plant/extensions/tired.llp"]
     assert any(w.startswith("not: a generalization gain") for w in pl["verdict"]["why"])
     assert not (root / "domains/plant/extensions/tired.llp").exists()
-    again = g.propose("extension", "plant", root, name="tired", text=EXT + "% more\n", phase="exploit")
+    again = g.propose("edit", "plant", root, **TIRED, new=EXT + "% more\n", phase="exploit")
     assert "+% more" in again["files"][0]["since_diff"]                       # since the refusal, as the person's
     assert [e["verdict"] for e in g.journal()] == ["refuse", "refuse"]
 
 
+@needs_metisc
 def test_numbers_given_instead_of_a_hook(root):
     """A driver that measured the numbers itself (the CLI, pi) passes them in the proposal."""
     g = gate.Gate(policy="experimental")
-    pl = g.propose("extension", "plant", root, name="tired", text=EXT, phase="explore",
+    pl = g.propose("edit", "plant", root, **TIRED, new=EXT, phase="explore",
                    numbers={"fits_records": True, "likelihood": 0.0})
     assert pl["verdict"]["verdict"] == "accept" and (root / "domains/plant/extensions/tired.llp").is_file()
     with pytest.raises(gate.Refused, match="needs the numbers"):
-        g.propose("extension", "plant", root, name="other", text=EXT, phase="explore")
+        g.propose("edit", "plant", root, path="extensions/other.llp", old="", new=EXT, phase="explore")
     with pytest.raises(gate.Refused, match="in a phase"):
-        g.propose("extension", "plant", root, name="other", text=EXT, numbers={})
+        g.propose("edit", "plant", root, path="extensions/other.llp", old="", new=EXT, numbers={})
 
 
-def test_the_unjudged_kinds_still_wait_for_the_person(root):
+def test_the_unjudged_kinds_still_wait_for_the_person(root, tmp_path):
     g = gate.Gate(policy="experimental", gain=fake({}))
-    pl = g.propose("readme", "plant", root, text="A plant that dries out.")
+    (tmp_path / "into").mkdir()
+    pl = g.propose("take", "plant", tmp_path / "into", src=str(root))
     assert "verdict" not in pl and pl["token"] in g.store["plans"] and g.journal() == []
 
 
+@needs_metisc
 def test_the_human_gate_is_unchanged_without_a_policy(root):
     g = gate.Gate()
-    pl = g.propose("extension", "plant", root, name="tired", text=EXT, phase="exploit", numbers={"likelihood": 1})
+    pl = g.propose("edit", "plant", root, **TIRED, new=EXT, phase="exploit", numbers={"likelihood": 1})
     assert "verdict" not in pl and not (root / "domains/plant/extensions/tired.llp").exists()
     assert pl["token"] in g.store["plans"] and g.journal() == []
     g.confirm(pl["token"])
@@ -197,6 +204,7 @@ def test_a_budget_answer_raises_any_one_budget(root, key):
     assert out["instruction"] == {"kind": "budget", key: 2} and not g.asks()
 
 
+@needs_metisc
 def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
     st = tmp_path / "state"
 
@@ -206,8 +214,8 @@ def test_the_cli_journals_and_answers_across_calls(root, tmp_path):
         assert r.returncode == 0, r.stdout + r.stderr
         return json.loads(r.stdout)
 
-    pl = cli("--policy", "experimental", "propose", "extension", "plant", "--root", str(root),
-             stdin=json.dumps({"name": "tired", "text": EXT, "phase": "explore", "cost": 0.01,
+    pl = cli("--policy", "experimental", "propose", "edit", "plant", "--root", str(root),
+             stdin=json.dumps({**TIRED, "new": EXT, "phase": "explore", "cost": 0.01,
                                "numbers": {"fits_records": True, "likelihood": 0.0}}))
     assert pl["verdict"]["verdict"] == "accept" and pl["written"] == ["domains/plant/extensions/tired.llp"]
     a = cli("propose", "ask", "plant", "--root", str(root), stdin=json.dumps(ASK))
@@ -297,6 +305,7 @@ def test_numbers_of_the_wrong_type_refuse_in_words(numbers, words):
         gate.judge(phase, numbers)
 
 
+@needs_metisc
 def test_a_bool_likelihood_writes_nothing_and_leaves_no_plan(root):
     """Under the experimental policy a refusal of the numbers writes nothing and leaves no plan
     waiting (from the hook as from the args), and the journal has no verdict."""
@@ -304,17 +313,32 @@ def test_a_bool_likelihood_writes_nothing_and_leaves_no_plan(root):
               gate.Gate(policy="experimental")):
         args = {} if g.gain else {"numbers": {"likelihood": True, "success": 0.0}}
         with pytest.raises(gate.Refused, match="likelihood is a real number"):
-            g.propose("extension", "plant", root, name="tired", text=EXT, phase="exploit", **args)
+            g.propose("edit", "plant", root, **TIRED, new=EXT, phase="exploit", **args)
         assert not (root / "domains/plant/extensions/tired.llp").exists()
         assert g.store["plans"] == {} and g.journal() == []
 
 
+@needs_metisc
 def test_the_cli_refuses_bad_numbers_as_json(root, tmp_path):
     """The CLI answers the refusal as its JSON error (exit 1), not a traceback."""
     r = subprocess.run([sys.executable, "-m", "metis.gate", "--state", str(tmp_path / "st"), "--policy", "experimental",
-                        "propose", "extension", "plant", "--root", str(root), "--json"],
-                       input=json.dumps({"name": "tired", "text": EXT, "phase": "exploit",
+                        "propose", "edit", "plant", "--root", str(root), "--json"],
+                       input=json.dumps({**TIRED, "new": EXT, "phase": "exploit",
                                          "numbers": {"likelihood": "lots", "success": 0.1}}),
                        capture_output=True, text=True)
     assert r.returncode == 1 and "Traceback" not in r.stderr, r.stderr
     assert "likelihood is a real number" in json.loads(r.stdout)["error"]
+
+
+@needs_metisc
+def test_a_candidate_that_adds_a_diagnostic_is_refused_before_its_numbers(root):
+    """workspace-files s-9ea4cfa4 (the architect: the right order): a candidate program is an edit of its file, and
+    the catalog's check (an added metisc diagnostic) refuses it before the gain is asked; no plan waits."""
+    gain = fake({"likelihood": 1.0, "success": 1.0})
+    g = gate.Gate(policy="experimental", gain=gain)
+    plant = (root / "domains/plant/plant.llp").read_text()
+    rule = next(l for l in plant.splitlines() if " -o moist" in l)
+    with pytest.raises(gate.Refused, match="(?s)adds 1 diagnostic.*pred-undeclared"):
+        g.propose("edit", "plant", root, path="plant.llp", old=plant, new=plant.replace(rule, rule.replace("moist", "moistt")),
+                  phase="exploit")
+    assert gain.seen == [] and g.store["plans"] == {} and g.journal() == []

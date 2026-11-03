@@ -20,18 +20,19 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
     catalog.intents("dog")          # the domain's intent material: {spec, grammar, prompt, examples, corpus}
     catalog.generator()             # the intent generator (metis.intents) as a module, its ROOT the root
     catalog.fingerprint("dog")      # the stale detection: a hash over what a reload takes
-    catalog.plan("dog", program=…)  # what apply would write, with each file's diff
-    catalog.apply("dog", program=…, extensions={…}, intents=…, manifest={…}, display=…, line=…)
-                                    # the one validated write: never a commit
-    catalog.edit("dog", "dog.llp", old, new)   # apply()'s arguments for one exact edit of a file on disk
-    catalog.take("lamp", src)       # apply()'s arguments that bring a domain over from another catalog
+    # the writes (workspace-files s-9ea4cfa4: the workspace owns the file, no copy is written over it):
+    #   each checked (metisc's diagnostics, the lint with the manifest), never a commit, a journal row in the
+    #   root's .metis/ when it has one; dry_run=True is the plan: {dry_run, files, diff, findings, ok}
+    catalog.edit("dog", "dog.llp", old, new)   # one exact edit of a file on disk (old="" makes a file it lacks)
+    catalog.new("lamp", program, display=…, line=…)  # a package the catalog lacks: its program, manifest, …
+    catalog.take("lamp", src)       # a package brought over whole from another catalog (a scratch one)
     catalog.readme("lamp", src, run, summary=…)  # a README for a domain an agentic-loop run made
     catalog.units("planner")        # {path: own|shared|std}: every .llp it serves and includes (read-only)
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
     metis.catalog.workspace         # the workspace over a root: its bundle, surprises, rulings, journal, the .metis/
                                     #   LAYOUT table (loop-workspace s-5b4be5fa; metis-loop docs/WORKSPACE.md §2)
 
-    python -m metis.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|units|root|state|installed … --json
+    python -m metis.catalog list|get|intents [--spec|--skeleton]|fingerprint|new|edit|take|readme|build|units|root|state|installed … --json
 
 The TypeScript face and the catalog widget stay metis-loop's (metis_loop_sdk.catalog: TS_DIR,
 WIDGET_DIR, widget_file, and its CLI's `ts` and `widget` verbs over this one).
@@ -66,7 +67,7 @@ def root() -> Path:
     """The catalog root (cwd-root s-ddac2cbf): $METIS_CATALOG, else the
     current directory — as `cd DIR && claude` makes DIR the project, `cd DIR
     && metis-loop` makes DIR the catalog. Any directory is one: an empty
-    one is an empty catalog, and domains/ appears at the first apply."""
+    one is an empty catalog, and domains/ appears at the first new."""
     c = os.environ.get("METIS_CATALOG")
     return Path(c).resolve() if c else Path.cwd().resolve()
 
@@ -498,9 +499,10 @@ def _notch_file(d, keys, whole):
     return p
 
 
-def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
+def _plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
          r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None, carried=None):
-    """What apply would write: [{path (relative to the root), new, diff,
+    """What _apply would write (the writes' one planner: edit, new and take give it their files; never
+    called with a program over an existing package but by edit, workspace-files s-9ea4cfa4): [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
     {name: text} written as <dir>/extensions/<name>.llp; intents
@@ -642,15 +644,12 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
     return out
 
 
-def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-          r=None, display=None, line=None, as_is=None, included=None, notch=None, carried=None):
-    """The one validated write into a catalog root (a working copy or a
-    scratch catalog): plan()'s files written, never a commit. Returns
-    {written: [paths], diff, fingerprint} — the fingerprint of the domain
-    after the write (None for a catalog no manifest names)."""
+def _apply(name, kind, who="backend", r=None, **w):
+    """_plan()'s files written (never a commit): {written: [paths], diff, fingerprint} — the fingerprint of the
+    domain after the write (None for a catalog no manifest names). A root with a .metis/ (a workspace) gets one
+    journal row {who, kind (edit | new | take), domain, files}: who is the caller's, backend or pi."""
     r = _r(r)
-    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is,
-                 included=included, notch=notch, carried=carried)
+    files = _plan(name, r=r, **w)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -659,7 +658,17 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
     fp = None
     if d is not None and (d / "domain.yaml").is_file():
         fp = fingerprint(d.name, r)
-    return {"written": [f["path"] for f in files], "diff": "".join(f["diff"] for f in files), "fingerprint": fp}
+    out = {"written": [f["path"] for f in files], "diff": "".join(f["diff"] for f in files), "fingerprint": fp}
+    _journal(r, who, kind, name, out["written"])
+    return out
+
+
+def _journal(r, who, kind, name, files):
+    """One row in the workspace's journal (metis.catalog.workspace) when the root is one (it has a .metis/)."""
+    if not files or not (Path(r) / STATE).is_dir():
+        return
+    from .workspace import Workspace
+    Workspace(r).journal(who if who in ("backend", "pi") else "backend", kind, domain=name, files=list(files))
 
 
 # ── one exact edit of a file on disk ─────────────────────────────────────────
@@ -712,9 +721,12 @@ class _Beside:
     """The text `text` as a dot-file beside `at` (`.<name>.edit-…`, no .llp suffix: no
     reload watches it), so its includes resolve as the original's; removed on exit."""
     def __init__(self, at, text):
-        self.at, self.text, self.path = Path(at), text, None
+        self.at, self.text, self.path, self.made = Path(at), text, None, None
 
     def __enter__(self):
+        if not self.at.parent.is_dir():              # a file an edit makes in a directory the domain lacks (extensions/)
+            self.made = self.at.parent
+            self.made.mkdir(parents=True)
         fd, t = tempfile.mkstemp(prefix=f".{self.at.name}.edit-", dir=self.at.parent)
         with os.fdopen(fd, "w") as f:
             f.write(self.text)
@@ -723,6 +735,8 @@ class _Beside:
 
     def __exit__(self, *exc):
         self.path.unlink(missing_ok=True)
+        if self.made is not None:
+            self.made.rmdir()
 
 
 def _added(before, after):
@@ -756,14 +770,80 @@ def edited(text, old, new, replace_all=False, what="the file"):
     return text.replace(old, new)
 
 
-def edit(name, path, old, new, replace_all=False, r=None):
-    """apply()'s arguments for one exact edit of a file of the domain `name` as it is on
-    disk: `path` relative to the domain directory (the program, an extensions/*.llp,
-    README.md, intent.yaml, domain.yaml, the host's file, the corpus), old replaced by new
-    (edited()). It never goes through formalize or revise: every other byte, comments and
-    all, stays. A .llp edit adds no diagnostic (metisc's, before and after; an extension
-    against the program it extends). Then `apply(name, **edit(…))`: the program
-    and intent.yaml go through apply's own checks, intent/ generated again."""
+def _finding(file, x, as_, refuses, level=None):
+    """One finding of a write's checks: {file (relative to the domain directory), level (error | warning | lint),
+    code, line, decl, msg, hint, as (how the file was checked: program | extension | included | lint), refuses}."""
+    return {"file": file, "level": level or ("error" if x.get("severity") == "error" else "warning"),
+            "code": x.get("code"), "line": x.get("line"), "decl": x.get("decl"), "msg": x.get("text"),
+            "hint": x.get("hint"), "as": as_, "refuses": bool(refuses)}
+
+
+def lint_rows(path, manifest=None):
+    """metis.lint's rows of the program file `path` with the member's manifest (a domain.yaml path, or None), as
+    diagnostics() gives them ({code, severity, decl, text, line, hint}); [] for a file that does not compile (its
+    diagnostics say so)."""
+    from metis import lint as L
+    from metis.lang.compiler import CatalogError, LangError, load_llp
+    try:
+        doc = load_llp(str(path))
+    except (LangError, CatalogError, OSError, Exception):    # noqa: BLE001 — a file that does not parse: no lint
+        return []
+    text = _text(path)
+    return [{"code": x.code, "severity": "lint", "decl": x.loc.decl or None, "line": x.loc.line or None,
+             "text": x.text, "hint": x.hint or None}
+            for x in L.lint(doc, text, str(manifest) if manifest else None, str(path))
+            + L.invariant_init(doc, L.init_counts(text))]
+
+
+def _refusal(what, findings):
+    """The words of a write its checks refuse (the findings that refuse)."""
+    bad = [x for x in findings if x["refuses"]]
+    return (f"{what}: the write adds {len(bad)} diagnostic(s), so it is refused:\n" + "\n".join(
+        f"  {x['file']}: {x['level']} {x['code']}" + (f" @ line {x['line']}" if x.get("line") else "")
+        + (f" ({x['decl']})" if x.get("decl") else "") + f": {x['msg']}" + (f" — {x['hint']}" if x.get("hint") else "")
+        for x in bad))
+
+
+def _result(name, kind, kw, findings, r, dry_run, since, who):
+    """A write's answer: the plan (dry_run: {dry_run, files, diff, findings, ok}), else the write
+    ({written, diff, fingerprint, findings, ok}; refused in words when a finding refuses)."""
+    ok = not any(x["refuses"] for x in findings)
+    if dry_run:
+        files = _plan(name, r=r, since=since, **kw)
+        return {"dry_run": True, "files": files, "diff": "".join(f["diff"] for f in files), "findings": findings,
+                "ok": ok}
+    if not ok:
+        raise ValueError(_refusal(name, findings))
+    return dict(_apply(name, kind, who, r, **kw), findings=findings, ok=True)
+
+
+# the files an edit makes when the domain lacks them (old=""): its README, its intent.yaml, an extension, its corpus
+MADE = ("README.md", "intent.yaml")
+
+
+def edit(name, path, old, new, replace_all=False, r=None, dry_run=False, since=None, who="backend"):
+    """One exact edit of a file of the domain `name` as it is on disk: `path` relative to the domain directory
+    (the program, an extensions/*.llp, a file they include, README.md, intent.yaml, domain.yaml, the host's file,
+    the corpus), old replaced by new (edited()). It never goes through formalize or revise: every other byte,
+    comments and all, stays. old="" on a file the domain lacks makes it (README.md, intent.yaml, an
+    extensions/<name>.llp, intent/<name>-corpus.tsv, the host's file its manifest names).
+
+    Checked before anything is written: a .llp edit adds no metisc diagnostic (before and after: an extension
+    against the program it extends, a program's extensions against the edited program, an included file through
+    the program that includes it; a made .llp no error), and a program's (or an extension's) metis.lint rows with
+    the manifest that the edit adds are shown, never refusing; intent.yaml and domain.yaml through their own
+    checks, intent/ generated again.
+
+    dry_run: the plan, {dry_run, files, diff, findings, ok} (findings: _finding's; ok: none refuses). Else the
+    write, {written, diff, fingerprint, findings, ok}, refused (ValueError) when a finding refuses; a root with a
+    .metis/ journals it (who: backend | pi)."""
+    r = _r(r)
+    kw, findings = _edit_spec(name, path, old, new, replace_all, r)
+    return _result(name, "edit", kw, findings, r, dry_run, since, who)
+
+
+def _edit_spec(name, path, old, new, replace_all=False, r=None):
+    """(_plan's arguments, the findings) of edit()."""
     r = _r(r)
     dom = get(name, r)
     d = Path(dom.dir).resolve()
@@ -773,8 +853,6 @@ def edit(name, path, old, new, replace_all=False, r=None):
     rel = p.relative_to(d).as_posix()
     if rel.startswith("intent/") and rel != f"intent/{name}-corpus.tsv":
         raise ValueError(f"{name}: {rel} is generated from intent.yaml: edit intent.yaml")
-    if not p.is_file():
-        raise ValueError(f"{name}: there is no {rel} to edit (a new file is written by apply)")
     prog = Path(dom.program).resolve() if dom.program else None
     exts = {Path(e).resolve(): Path(e).stem for e in dom.extensions()}
     host = None
@@ -783,15 +861,34 @@ def edit(name, path, old, new, replace_all=False, r=None):
             host = _host_file(d, {}, (d / "domain.yaml").read_text())
         except ValueError:
             host = None
-    old_text = _text(p)
-    if old and "\r" not in old and old not in old_text and old.replace("\n", "\r\n") in old_text:
-        old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")   # a CRLF file, the edit given in LF
-    text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
-    inc = includes(d, [f for f in [prog, *exts] if f is not None], r)
+    made = not p.is_file()
+    if made:
+        if old:
+            raise ValueError(f"{name}: there is no {rel} to edit (old_string empty makes a file the domain lacks)")
+        if not new:
+            raise ValueError(f"{name}/{rel}: a file made by an edit has some text (new_string is empty)")
+        is_ext = rel.startswith("extensions/") and rel.count("/") == 1 and rel.endswith(".llp") \
+            and not dom.manifest.get("extensions")
+        if not (rel in MADE or is_ext or rel == f"intent/{name}-corpus.tsv" or p == host):
+            raise ValueError(f"{name}: an edit makes {', '.join(MADE)}, extensions/<name>.llp, intent/{name}-corpus.tsv "
+                             f"or the host's file when the domain lacks it, not {rel}")
+        if is_ext and prog is None:
+            raise ValueError(f"{name}: an extension extends the domain's program, and it has none")
+        if is_ext:
+            exts[p] = p.stem
+        text = new
+    else:
+        if not old:
+            raise ValueError(f"{name}/{rel}: old_string is empty, and the file is there (an edit replaces text that is there)")
+        old_text = _text(p)
+        if "\r" not in old and old not in old_text and old.replace("\n", "\r\n") in old_text:
+            old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")   # a CRLF file, the edit given in LF
+        text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
+    inc = includes(d, [f for f in [prog, *exts] if f is not None and f.is_file()], r)
     if p == prog:
         kw = {"program": text}
     elif p in exts:
-        kw = {"as_is": {p: text}}       # written back where it is (plan's extensions= would clean its name)
+        kw = {"as_is": {p: text}} if not made else {"extensions": {p.stem: text}}
     elif rel == "README.md":
         kw = {"readme": text}
     elif rel == "intent.yaml":
@@ -807,18 +904,22 @@ def edit(name, path, old, new, replace_all=False, r=None):
     else:
         raise ValueError(f"{name}: {rel} is not one of the domain's files an edit changes (its program, "
                          "extensions/*.llp, the files they include, README.md, intent.yaml, domain.yaml, its host, its corpus)")
+    findings = []
     if p.suffix == ".llp":
-        found = []   # (the file, its added diagnostics)
+        mf = d / "domain.yaml" if (d / "domain.yaml").is_file() else None
+        rp = lambda f: f.relative_to(d).as_posix() if d in f.parents else str(f)      # noqa: E731
         with _Beside(p, text) as cand:
             if p in exts:                                   # an extension, against the program it extends
-                found.append((rel, _added(diagnostics(p, prog), diagnostics(cand, prog))))
+                before = [] if made else diagnostics(p, prog)
+                after = diagnostics(cand, prog)
+                findings += [_finding(rel, x, "extension", not made or x["severity"] == "error")
+                             for x in (after if made else _added(before, after))]
             else:
-                found.append((rel, _added(diagnostics(p), diagnostics(cand))))
-                if p == prog and not found[0][1]:           # the program's extensions, against the edited program
+                found = [(rel, "program" if p == prog else "included", _added(diagnostics(p), diagnostics(cand)))]
+                if p == prog and not found[0][2]:           # the program's extensions, against the edited program
                     for e in exts:
-                        found.append((e.relative_to(d).as_posix() if d in e.parents else str(e),
-                                      _added(diagnostics(e, prog), diagnostics(e, cand))))
-                if rel in inc and prog is not None and not found[0][1]:
+                        found.append((rp(e), "extension", _added(diagnostics(e, prog), diagnostics(e, cand))))
+                if rel in inc and prog is not None and not found[0][2]:
                     # the program that includes it, with the edited file in its place: the domain's .llp
                     # files mirrored (their includes are the domain's own), the one replaced
                     with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
@@ -826,16 +927,13 @@ def edit(name, path, old, new, replace_all=False, r=None):
                             t = Path(tmp) / f.relative_to(d)
                             t.parent.mkdir(parents=True, exist_ok=True)
                             _write(t, text if f.resolve() == p else _text(f))
-                        found.append((prog.relative_to(d).as_posix(),
+                        found.append((rp(prog), "program",
                                       _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(d)))))
-        found = [(f, a) for f, a in found if a]
-        if found:
-            n = sum(len(a) for _, a in found)
-            raise ValueError(f"{name}/{rel}: the edit adds {n} diagnostic(s), so it is refused:\n" + "\n".join(
-                f"  {f}: {x['severity']} {x['code']}" + (f" @ line {x['line']}" if x.get("line") else "")
-                + (f" ({x['decl']})" if x.get("decl") else "") + f": {x['text']}"
-                + (f" — {x['hint']}" if x.get("hint") else "") for f, a in found for x in a))
-    return kw
+                findings += [_finding(f, x, as_, True) for f, as_, a in found for x in a]
+            if p == prog and not findings:                  # the lint with the manifest: what the edit adds, shown
+                findings += [_finding(rel, x, "lint", False, "lint")
+                             for x in _added([] if made else lint_rows(p, mf), lint_rows(cand, mf))]
+    return kw, findings
 
 
 # what take() carries: the manifest's keys whose files it brings, and the ones with no file
@@ -843,18 +941,26 @@ TAKEN = ("program", "extensions", "host", "intent", "notch", "display", "line", 
 CARRIED = ("goldens", "cases")      # a package's own directories take() brings whole, as they are
 
 
-def take(name, src, r=None, readme=None):
-    """apply()'s arguments that bring the domain `name` over from the catalog
+def take(name, src, r=None, readme=None, dry_run=False, since=None, who="backend"):
+    """The domain `name` brought over whole from the catalog `src` (_take_spec: what it carries, what it
+    refuses) into the root r. dry_run: the plan {dry_run, files, diff, findings, ok}; else the write
+    {written, diff, fingerprint, findings, ok}, journalled when r has a .metis/."""
+    r = _r(r)
+    return _result(name, "take", _take_spec(name, src, r, readme), [], r, dry_run, since, who)
+
+
+def _take_spec(name, src, r=None, readme=None):
+    """_plan()'s arguments that bring the domain `name` over from the catalog
     `src` (a scratch catalog: the agentic loop's) into the root r: its
     domain.yaml as it is, the program, the extensions, the files they
     include (includes(): inside the domain directory; a shared unit, found under METIS_HOME or the standard units, is not carried), the host, the
-    notch (its fitted overlay), intent.yaml (apply generates intent/ again)
+    notch (its fitted overlay), intent.yaml (its intent/ generated again)
     and a corpus, its README (or `readme`), and as they are (`carried`) its goldens/ (the
     package's contract: what both runtimes are held to), its cases/ (its hand-written
     specialist tests) and intent/*-spoken.txt. Never records/ or build/ (the agents' own) or
     another document beside its README (a transcript). Refused when r has the domain already, or the domain names a
     file take does not carry (serves, agent, pair: bring those by hand) or keeps one elsewhere
-    than its directory's layout. Then `apply(name, **take(name, src, r))`."""
+    than its directory's layout."""
     r, src = _r(r), Path(src).resolve()
     s = get(name, src)
     if (r / "domains" / name).exists():
@@ -899,6 +1005,84 @@ def take(name, src, r=None, readme=None):
                 intents=_text(it) if it.is_file() else None, host=host,
                 corpus=_text(cp) if cp.is_file() else None, readme=readme, included=included or None,
                 notch=notch, carried=carried or None)
+
+
+def new(name, program, display=None, line=None, extensions=None, intents=None, readme=None, host=None, corpus=None,
+        manifest=None, r=None, dry_run=False, since=None, who="backend"):
+    """A package the catalog lacks, from a draft once (the loop's formalize path, a seed, the console's new
+    domain): domains/<name>/<name>.llp (`program`'s text), its domain.yaml (`manifest`: its whole text, or keys;
+    without one the package's keys: program, its host when domains/<name>/<name>_host.py is there already,
+    clock, records), `display` and `line`, extensions {name: text}, intents (intent.yaml's text, its files
+    generated), readme, host, corpus. Refused when the catalog has a package `name` (an existing package is
+    changed by edit, one file at a time).
+
+    Checked before anything is written: the program and each extension compile without an error (metisc's
+    diagnostics in a scratch tree at the package's depth: an error refuses, a warning is shown); the program's
+    metis.lint rows with the new manifest are shown, never refusing. dry_run: the plan {dry_run, files, diff,
+    findings, ok}; else the write {written, diff, fingerprint, findings, ok}, journalled when r has a .metis/."""
+    r = _r(r)
+    kw, findings = _new_spec(name, program, display, line, extensions, intents, readme, host, corpus, manifest, r)
+    return _result(name, "new", kw, findings, r, dry_run, since, who)
+
+
+NEW_NAME = __import__("re").compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _new_manifest(name, r):
+    """The manifest of a new package that names none: its program, its host when the world brought one."""
+    host = (r / "domains" / name / f"{name}_host.py").is_file()
+    return (f"program: {name}.llp\n" + (f"host: {name}_host.py:make\n" if host else "")
+            + "clock: {beats: 1}\nrecords: records/\n")
+
+
+def _new_spec(name, program, display=None, line=None, extensions=None, intents=None, readme=None, host=None,
+              corpus=None, manifest=None, r=None):
+    """(_plan()'s arguments, the findings) of new()."""
+    r = _r(r)
+    if not NEW_NAME.match(name or ""):
+        raise ValueError(f"a new package's name: lowercase letters, digits, _ (a letter first), not {name!r}")
+    if name in {x.name for x in domains(r)}:
+        raise ValueError(f"{name}: the catalog has the package {name} ({get(name, r).dir}): change it with edit")
+    d = r / "domains" / name
+    if (d / "domain.yaml").exists() or (d / f"{name}.llp").exists():
+        raise ValueError(f"{name}: {d} has a package's files already: change them with edit")
+    if not isinstance(program, str) or not program.strip():
+        raise ValueError(f"{name}: a new package has a program (its text)")
+    if not program.endswith("\n"):
+        program += "\n"
+    if manifest is None:
+        manifest = _new_manifest(name, r)
+    kw = dict(program=program, extensions=extensions or None, intents=intents, readme=readme, host=host,
+              corpus=corpus, manifest=manifest, display=display, line=line)
+    files = _plan(name, r=r, **kw)              # the manifest checked by the loader, the intents generated
+    findings = []
+    with tempfile.TemporaryDirectory(prefix="new-") as tmp:
+        t = Path(tmp)
+        for e in r.iterdir():                   # the root's entries beside it, so the includes resolve as they will
+            if e.name not in ("domains", STATE):
+                (t / e.name).symlink_to(e)
+        (t / "domains").mkdir()
+        if (r / "domains").is_dir():
+            for e in (r / "domains").iterdir():
+                if e.name != name:
+                    (t / "domains" / e.name).symlink_to(e)
+        for f in files:
+            q = t / f["path"]
+            q.parent.mkdir(parents=True, exist_ok=True)
+            _write(q, f["text"])
+        if d.is_dir():                          # a world's files already there (its host): beside the program
+            for e in d.iterdir():
+                if not (t / "domains" / name / e.name).exists():
+                    (t / "domains" / name / e.name).symlink_to(e)
+        tp, td = t / "domains" / name / f"{name}.llp", t / "domains" / name
+        findings += [_finding(f"{name}.llp", x, "program", x["severity"] == "error") for x in diagnostics(tp)]
+        for e in sorted((td / "extensions").glob("*.llp")) if (td / "extensions").is_dir() else []:
+            findings += [_finding(f"extensions/{e.name}", x, "extension", x["severity"] == "error")
+                         for x in diagnostics(e, tp)]
+        if not any(x["refuses"] for x in findings):
+            mf = td / "domain.yaml"
+            findings += [_finding(f"{name}.llp", x, "lint", False, "lint") for x in lint_rows(tp, mf if mf.is_file() else None)]
+    return kw, findings
 
 
 def header(prog):
@@ -1154,22 +1338,23 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     it.add_argument("--spec", action="store_true", help="intent.yaml itself, read (null without one)")
     fp = sub.add_parser("fingerprint", help="the hash over what a reload takes")
     fp.add_argument("name")
-    a_ = sub.add_parser("apply", help="the one validated write (never a commit); --dry-run: the plan and its diff")
-    a_.add_argument("name", help="a domain, or a catalog's path relative to the root (no .llp)")
-    a_.add_argument("--program", metavar="FILE", help="the program's text from FILE (- = stdin)")
+    a_ = sub.add_parser("new", help="a package the catalog lacks: its program, its manifest, … (never a commit; an "
+                                    "existing package is changed by edit); --dry-run: the plan, its diff, its findings")
+    a_.add_argument("name", help="the new package's name: domains/NAME/NAME.llp")
+    a_.add_argument("--program", required=True, metavar="FILE", help="the program's text from FILE (- = stdin)")
     a_.add_argument("--extension", action="append", default=[], metavar="NAME=FILE",
                     help="an extension, written as extensions/NAME.llp")
     a_.add_argument("--intents", metavar="FILE", help="intent.yaml's text from FILE (its files generated)")
-    a_.add_argument("--intents-skeleton", action="store_true", help="intent.yaml drafted from the program")
-    a_.add_argument("--manifest", metavar="JSON", help="domain.yaml keys to set, as a JSON object")
+    a_.add_argument("--manifest", metavar="JSON", help="domain.yaml's keys, as a JSON object (default: program, its host "
+                                                    "when NAME_host.py is there, clock, records)")
     a_.add_argument("--readme", metavar="FILE", help="the domain's README.md from FILE")
     a_.add_argument("--host", metavar="FILE", help="the host's Python from FILE, written as the file the manifest's host names")
     a_.add_argument("--corpus", metavar="FILE", help="intent/<name>-corpus.tsv from FILE")
     a_.add_argument("--display", metavar="TEXT", help="domain.yaml's display: the world's short name")
     a_.add_argument("--line", metavar="TEXT", help="domain.yaml's line: one line on what the world is")
     a_.add_argument("--dry-run", action="store_true")
-    ed = sub.add_parser("edit", help="one exact edit of a domain's file as it is on disk (never formalize); "
-                                     "--dry-run: the plan and its diff")
+    ed = sub.add_parser("edit", help="one exact edit of a domain's file as it is on disk (never formalize; --old with an "
+                                     "empty file makes a file the domain lacks); --dry-run: the plan, its diff, its findings")
     ed.add_argument("name")
     ed.add_argument("path", help="the file, relative to the domain directory (its program, extensions/X.llp, "
                                  "README.md, intent.yaml, domain.yaml, the host, the corpus)")
@@ -1220,6 +1405,8 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, lk, cs, gd, rt, hm, fd, un, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
+        p.add_argument("--who", choices=("backend", "pi"), default="backend",
+                       help="the writer, for the workspace's journal (a root with a .metis/)")
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
                                                       "--dry-run's files then carry since_diff, the diff from each")
     a = ap.parse_args(argv)
@@ -1228,10 +1415,8 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     def read(f):
         return sys.stdin.read() if f == "-" else Path(f).read_text()
 
-    def dry(name, kw):
-        since = json.loads(read(a.since)) if getattr(a, "since", None) else None
-        files = plan(name, **kw, since=since)
-        return {"dry_run": True, "files": files, "diff": "".join(f["diff"] for f in files)}
+    def since():
+        return json.loads(read(a.since)) if getattr(a, "since", None) else None
 
     try:
         if a.cmd == "list":
@@ -1279,8 +1464,7 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
         elif a.cmd == "edit":
             if a.old == "-" and a.new == "-":
                 raise ValueError("edit: one text from stdin (-) at most")
-            kw = edit(a.name, a.path, read(a.old), read(a.new), a.replace_all, r)
-            out = dry(a.name, {**kw, "r": r}) if a.dry_run else apply(a.name, r=r, **kw)
+            out = edit(a.name, a.path, read(a.old), read(a.new), a.replace_all, r, a.dry_run, since(), a.who)
         elif a.cmd == "build":
             out = {"name": a.name, "bundle": build(a.name, r)}
         elif a.cmd == "link":
@@ -1320,11 +1504,7 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
             text = read(a.readme) if a.readme else None
             if a.readme_from_run and not (get(a.name, Path(a.src).resolve()).dir / "README.md").is_file():
                 text = readme(a.name, a.src, a.readme_from_run)
-            kw = take(a.name, a.src, r, text)
-            if a.dry_run:
-                out = dry(a.name, {**kw, "r": r})
-            else:
-                out = apply(a.name, r=r, **kw)
+            out = take(a.name, a.src, r, text, a.dry_run, since(), a.who)
         else:
             ext, ext_files = {}, []
             for e in a.extension:
@@ -1333,23 +1513,13 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
                     raise ValueError(f"--extension {e!r}: NAME=FILE")
                 ext_files.append(f)
             if sum(1 for f in [a.program, a.intents, a.readme, a.host, a.corpus, *ext_files] if f == "-") > 1:
-                raise ValueError("apply: one text from stdin (-) at most")
+                raise ValueError("new: one text from stdin (-) at most")
             for e, f in zip(a.extension, ext_files):
                 ext[e.partition("=")[0]] = read(f)
-            itext = read(a.intents) if a.intents else None
-            if a.intents_skeleton:
-                itext = skeleton(a.name, r)
-                if itext is None:
-                    raise ValueError(f"{a.name}: the world takes no commands (its program has no cmd_* atom): "
-                                     "no intent.yaml (the agents open it with no verbs)")
-            kw = dict(program=read(a.program) if a.program else None, extensions=ext, intents=itext,
-                      manifest=json.loads(a.manifest) if a.manifest else None,
-                      readme=read(a.readme) if a.readme else None, host=read(a.host) if a.host else None,
-                      corpus=read(a.corpus) if a.corpus else None, r=r, display=a.display, line=a.line)
-            if a.dry_run:
-                out = dry(a.name, kw)
-            else:
-                out = apply(a.name, **kw)
+            out = new(a.name, read(a.program), a.display, a.line, ext or None, read(a.intents) if a.intents else None,
+                      read(a.readme) if a.readme else None, read(a.host) if a.host else None,
+                      read(a.corpus) if a.corpus else None, json.loads(a.manifest) if a.manifest else None, r,
+                      a.dry_run, since(), a.who)
     except (KeyError, ValueError, FileNotFoundError) as e:
         msg = e.args[0] if isinstance(e, KeyError) and e.args else str(e)
         if a.json:

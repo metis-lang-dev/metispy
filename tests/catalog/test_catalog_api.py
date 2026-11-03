@@ -1,6 +1,7 @@
 """metis.catalog (catalog-sdk s-bc1718e3; moved from metis_loop_sdk.catalog by metis-packages s-65778b98, with
 its tests: the widget's and the TS face's stay metis-loop's): the facade reads what the
-loader reads, apply is the one validated write (into a scratch catalog here),
+loader reads, edit / new / take are the writes (into a scratch catalog here; workspace-files s-9ea4cfa4: no
+apply of a text over an existing package),
 the CLI says the same in JSON, the widget ships as package data.
 
 The fixtures are the installed metis-catalog's own domains (its checkout
@@ -54,6 +55,12 @@ stage main {
 """
 
 
+METISC = catalog.metisc()
+if not METISC and os.environ.get("METIS_LOOP_REQUIRE_METISC"):     # CI builds it: an edit's check must run there
+    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC or PATH)")
+needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC or PATH)")
+
+
 def cli(args, cwd):
     """The CLI run in `cwd`, without $METIS_CATALOG: its root is the cwd."""
     env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG"}
@@ -78,13 +85,13 @@ def test_root_is_the_env_else_the_cwd(monkeypatch, tmp_path):
 
 
 def test_an_empty_directory_is_an_empty_catalog(monkeypatch, tmp_path):
-    """An empty cwd lists nothing; the first apply makes domains/<name>/,
+    """An empty cwd lists nothing; the first new makes domains/<name>/,
     and the index then shows it; the intent generator is the installed
     metis-catalog's (the root has no tools/)."""
     monkeypatch.delenv("METIS_CATALOG", raising=False)
     monkeypatch.chdir(tmp_path)
     assert catalog.domains() == [] and catalog.index() == [] and catalog.listing() == []
-    out = catalog.apply("lamp", program=LAMP, manifest="display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    out = catalog.new("lamp", LAMP, manifest="display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
     assert sorted(out["written"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
     assert [e["name"] for e in catalog.index()] == ["lamp"] and [d.name for d in catalog.domains()] == ["lamp"]
     gen = catalog.generator()
@@ -175,21 +182,34 @@ def test_the_fingerprint_moves_with_what_a_reload_takes(scratch):
     assert catalog.fingerprint("dog", scratch) != fp
 
 
-def test_apply_writes_the_program_and_an_extension_never_outside(scratch):
-    prog = (scratch / "domains/dog/dog.llp").read_text()
-    new = prog + "\n% applied\n"
-    files = catalog.plan("dog", program=new, extensions={"Pet Tricks": "% an extension\n"}, r=scratch)
-    assert [f["path"] for f in files] == ["domains/dog/dog.llp", "domains/dog/extensions/pet_tricks.llp"]
-    assert not (scratch / "domains/dog/extensions/pet_tricks.llp").exists()      # plan writes nothing
+def test_no_text_is_applied_over_an_existing_package():
+    """workspace-files s-9ea4cfa4 (the user, 2026-11-03: the workspace owns the file): the copy's write went;
+    the writes are edit, new and take."""
+    assert not hasattr(catalog, "apply") and not hasattr(catalog, "plan")
+    assert callable(catalog.edit) and callable(catalog.new) and callable(catalog.take)
+
+
+@needs_metisc
+def test_an_edit_makes_an_extension_the_domain_lacks_never_outside(scratch):
+    ext = "% an extension\ncatalog pet_tricks 1.\nextends dog.\nstage serve {\n  %% I rest when idle.\n  rest [dyn] : idle -o idle.\n}\n"
+    bad = catalog.edit("dog", "extensions/pet_tricks.llp", "", "% only a comment\n", r=scratch, dry_run=True)
+    assert not bad["ok"] and [(x["code"], x["as"]) for x in bad["findings"]] == [("metisc-failed", "extension")]
+    assert not (scratch / "domains/dog/extensions").exists()            # the check's dot-file and directory gone
+    dry = catalog.edit("dog", "extensions/pet_tricks.llp", "", ext, r=scratch, dry_run=True)
+    assert dry["dry_run"] and dry["ok"] and [f["path"] for f in dry["files"]] == ["domains/dog/extensions/pet_tricks.llp"]
+    assert dry["files"][0]["new"] and not (scratch / "domains/dog/extensions/pet_tricks.llp").exists()   # a plan writes nothing
     before = catalog.fingerprint("dog", scratch)
-    out = catalog.apply("dog", program=new, extensions={"Pet Tricks": "% an extension\n"}, r=scratch)
-    assert out["written"] == [f["path"] for f in files]
-    assert "+% applied" in out["diff"]
-    assert (scratch / "domains/dog/dog.llp").read_text() == new
+    out = catalog.edit("dog", "extensions/pet_tricks.llp", "", ext, r=scratch)
+    assert out["written"] == ["domains/dog/extensions/pet_tricks.llp"] and out["ok"] and "+% an extension" in out["diff"]
     assert out["fingerprint"] == catalog.fingerprint("dog", scratch) != before
-    assert catalog.apply("dog", program=new, r=scratch)["written"] == []          # unchanged: nothing
+    with pytest.raises(ValueError, match="old_string is empty, and the file is there"):
+        catalog.edit("dog", "extensions/pet_tricks.llp", "", ext, r=scratch)
+    with pytest.raises(ValueError, match="makes README.md, intent.yaml, extensions"):
+        catalog.edit("dog", "notes.md", "", "x", r=scratch)
+    with pytest.raises(ValueError, match="no x.llp to edit"):
+        catalog.edit("dog", "x.llp", "a", "b", r=scratch)
     with pytest.raises(ValueError):
-        catalog.plan("../../etc/x", program="", r=scratch)
+        catalog._plan("../../etc/x", program="", r=scratch)
 
 
 def test_apply_intents_generates_and_names_the_spec(scratch):
@@ -199,7 +219,7 @@ def test_apply_intents_generates_and_names_the_spec(scratch):
     mf = d / "domain.yaml"
     mf.write_text("".join(l for l in mf.read_text().splitlines(True) if not l.startswith("intent:")))
     text = catalog.skeleton("plant", scratch)
-    out = catalog.apply("plant", intents=text, r=scratch)
+    out = catalog.edit("plant", "intent.yaml", "", text, r=scratch)
     gen = catalog.generator(scratch)
     made = {f: t for f, t in gen.files("plant").items() if t}  # an empty one is not written (no spoken: no -spoken.txt)
     assert set(out["written"]) == {"domains/plant/intent.yaml", "domains/plant/domain.yaml",
@@ -209,46 +229,62 @@ def test_apply_intents_generates_and_names_the_spec(scratch):
         assert (d / "intent" / fn).read_text() == t
     assert not (d / "intent/plant-spoken.txt").exists()
     with pytest.raises(ValueError):
-        catalog.plan("plant", intents="not: [a, mapping", r=scratch)
+        catalog._plan("plant", intents="not: [a, mapping", r=scratch)
 
 
 def test_the_manifest_goes_through_the_loaders_check(scratch):
     with pytest.raises(ValueError, match="unknown key"):
-        catalog.plan("dog", manifest={"colour": "brown"}, r=scratch)
+        catalog._plan("dog", manifest={"colour": "brown"}, r=scratch)
     mf = scratch / "domains/dog/domain.yaml"
     old = mf.read_text()
-    files = catalog.plan("dog", manifest={"reload": "auto", "line": "a dog: it sits"}, r=scratch)
+    files = catalog._plan("dog", manifest={"reload": "auto", "line": "a dog: it sits"}, r=scratch)
     text = files[0]["text"]
     assert text.endswith("reload: auto\n") and "line: 'a dog: it sits'\n" in text
     assert text.count("\n") == old.count("\n") + 1                # one line replaced, one appended
     with pytest.raises(ValueError, match="reload is propose or auto"):
-        catalog.plan("dog", manifest={"reload": "sometimes"}, r=scratch)
+        catalog._plan("dog", manifest={"reload": "sometimes"}, r=scratch)
     # the loader's containment, read where the manifest will live (needs metis-catalog ae1e3b2)
     if "root" in __import__("inspect").signature(catalog.loader().check_manifest).parameters:
         with pytest.raises(ValueError, match="leaves the catalog root"):
-            catalog.plan("dog", manifest={"notch": "../../../../etc/passwd"}, r=scratch)
-        assert catalog.plan("dog", manifest={"notch": "../plant/x.notch.json"}, r=scratch)   # a neighbour's file
+            catalog._plan("dog", manifest={"notch": "../../../../etc/passwd"}, r=scratch)
+        assert catalog._plan("dog", manifest={"notch": "../plant/x.notch.json"}, r=scratch)   # a neighbour's file
 
 
+@needs_metisc
 def test_a_new_domain(scratch):
-    out = catalog.apply("lamp", program="% the lamp\n", manifest={"display": "the lamp", "records": "records/"},
-                        r=scratch)
-    assert out["written"] == ["domains/lamp/lamp.llp", "domains/lamp/domain.yaml"]
+    out = catalog.new("lamp", LAMP, manifest={"display": "the lamp", "records": "records/"}, r=scratch)
+    assert out["written"] == ["domains/lamp/lamp.llp", "domains/lamp/domain.yaml"] and out["ok"]
     assert (scratch / "domains/lamp/domain.yaml").read_text() == \
         "display: the lamp\nrecords: records/\nprogram: lamp.llp\n"
     assert catalog.get("lamp", scratch).program == (scratch / "domains/lamp/lamp.llp").resolve()
     whole = "display: the bell\nprogram: bell.llp\n"
-    catalog.apply("bell", program="% the bell\n", manifest=whole, r=scratch)
+    catalog.new("bell", LAMP.replace("lamp", "bell"), manifest=whole, r=scratch)
     assert (scratch / "domains/bell/domain.yaml").read_text() == whole
+    # without a manifest: the package's keys
+    catalog.new("lamp3", LAMP.replace("lamp", "lamp3"), display="the third lamp", r=scratch)
+    import yaml
+    assert yaml.safe_load((scratch / "domains/lamp3/domain.yaml").read_text()) == \
+        {"program": "lamp3.llp", "clock": {"beats": 1}, "records": "records/", "display": "the third lamp"}
+    # an existing package is changed by edit; a package that does not compile is refused; a plan writes nothing
+    with pytest.raises(ValueError, match="the catalog has the package dog.*change it with edit"):
+        catalog.new("dog", LAMP, r=scratch)
+    with pytest.raises(ValueError, match="(?s)adds 1 diagnostic.*lamp4.llp: error"):
+        catalog.new("lamp4", LAMP.replace("switch_on [dyn] : off -o on.", "switch_on [dyn] : off -o onn."), r=scratch)
+    assert not (scratch / "domains/lamp4").exists()
+    dry = catalog.new("lamp5", LAMP.replace("lamp", "lamp5"), r=scratch, dry_run=True)
+    assert dry["ok"] and [f["path"] for f in dry["files"]] == ["domains/lamp5/lamp5.llp", "domains/lamp5/domain.yaml"]
+    assert not (scratch / "domains/lamp5").exists()
+    with pytest.raises(ValueError, match="name: lowercase"):
+        catalog.new("Lamp", LAMP, r=scratch)
 
 
 def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
     dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     shutil.copytree(scratch / "tools", dst / "tools")
     (dst / "domains").mkdir()
-    kw = catalog.take("dog", scratch, dst)
+    kw = catalog._take_spec("dog", scratch, dst)
     assert kw["host"] == (scratch / "domains/dog/dog_host.py").read_text() and kw["corpus"] and kw["readme"]
-    out = catalog.apply("dog", r=dst, **kw)
+    out = catalog.take("dog", scratch, dst)
     assert "domains/dog/dog_host.py" in out["written"] and "domains/dog/intent/dog-corpus.tsv" in out["written"]
     for f in ("dog.llp", "dog_host.py", "domain.yaml", "intent.yaml", "README.md", *(
             "intent/" + n for n in ("dog.gbnf", "dog-prompt.txt", "dog-spoken.txt", "dog-corpus.tsv"))):
@@ -261,14 +297,14 @@ def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
         assert (dst / "domains/dog" / f).read_text() == (scratch / "domains/dog" / f).read_text(), f
     assert not (dst / "domains/dog/build").exists() and not (dst / "domains/dog/records").exists()
     with pytest.raises(ValueError, match="carried file"):
-        catalog.plan("dog", carried={"build/x": "x"}, r=dst)
+        catalog._plan("dog", carried={"build/x": "x"}, r=dst)
     assert catalog.fingerprint("dog", dst) == catalog.fingerprint("dog", scratch)
     with pytest.raises(ValueError, match="already"):
         catalog.take("dog", scratch, dst)
     # the plant's extension, and a README given in place of its own
-    kw = catalog.take("plant", scratch, dst, readme="# plant\n")
+    kw = catalog._take_spec("plant", scratch, dst, readme="# plant\n")
     assert list(kw["extensions"]) == ["visitor"]
-    catalog.apply("plant", r=dst, **kw)
+    catalog.take("plant", scratch, dst, readme="# plant\n")
     assert (dst / "domains/plant/extensions/visitor.llp").read_text() == \
         (scratch / "domains/plant/extensions/visitor.llp").read_text()
     assert (dst / "domains/plant/README.md").read_text() == "# plant\n"
@@ -279,7 +315,7 @@ def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
         catalog.take("dog", scratch, tmp_path / "other")
     # a host's text needs a file host to land in
     with pytest.raises(ValueError, match="file.py:factory"):
-        catalog.plan("bell", program="% the bell\n", host="# a host\n", r=dst)
+        catalog._plan("bell", program="% the bell\n", host="# a host\n", r=dst)
 
 
 def _cli(*args, root=None, stdin=None):
@@ -304,14 +340,20 @@ def test_the_cli_in_json(scratch):
     assert it["intent"]["spec"].endswith("domains/dog/intent.yaml")
     rc, sk, _ = _cli("intents", "plant", "--skeleton", "--json", root=scratch)
     assert rc == 0 and sk["skeleton"] == catalog.skeleton("plant", scratch)
-    prog = (scratch / "domains/dog/dog.llp").read_text() + "% cli\n"
-    rc, dry, _ = _cli("apply", "dog", "--program", "-", "--dry-run", "--json", root=scratch, stdin=prog)
-    assert rc == 0 and dry["dry_run"] and [f["path"] for f in dry["files"]] == ["domains/dog/dog.llp"]
-    assert "% cli" not in (scratch / "domains/dog/dog.llp").read_text()
-    rc, out, _ = _cli("apply", "dog", "--program", "-", "--json", root=scratch, stdin=prog)
-    assert rc == 0 and out["written"] == ["domains/dog/dog.llp"] and out["fingerprint"]
-    rc, err, _ = _cli("apply", "dog", "--manifest", '{"colour": 1}', "--json", root=scratch)
-    assert rc == 1 and "unknown key" in err["error"]
+    rc, err, _ = _cli("apply", "dog", "--json", root=scratch)          # the copy's write went (workspace-files)
+    assert rc == 2 and err == ""
+    if METISC:
+        rc, dry, _ = _cli("new", "lamp", "--program", "-", "--dry-run", "--json", root=scratch, stdin=LAMP)
+        assert rc == 0 and dry["dry_run"] and dry["ok"] and [f["path"] for f in dry["files"]] == \
+            ["domains/lamp/lamp.llp", "domains/lamp/domain.yaml"]
+        assert not (scratch / "domains/lamp").exists()
+        rc, out, _ = _cli("new", "lamp", "--program", "-", "--json", root=scratch, stdin=LAMP)
+        assert rc == 0 and out["written"] == ["domains/lamp/lamp.llp", "domains/lamp/domain.yaml"] and out["fingerprint"]
+        rc, err, _ = _cli("new", "lamp", "--program", "-", "--json", root=scratch, stdin=LAMP)
+        assert rc == 1 and "change it with edit" in err["error"]
+        rc, err, _ = _cli("new", "bell", "--program", "-", "--manifest", '{"colour": 1}', "--json", root=scratch,
+                          stdin=LAMP.replace("lamp", "bell"))
+        assert rc == 1 and "unknown key" in err["error"]
     rc, err, _ = _cli("get", "nosuch", "--json", root=scratch)
     assert rc == 1 and "nosuch" in err["error"]
     dst = scratch.parent / "dst"
@@ -369,30 +411,33 @@ def test_a_host_stays_in_its_domain(scratch, tmp_path):
     with pytest.raises(ValueError, match="not beside its domain.yaml"):
         catalog.take("plant", scratch, dst)
     with pytest.raises(ValueError, match="not beside its domain.yaml"):
-        catalog.plan("plant", host="# mine\n", r=scratch)
+        catalog._plan("plant", host="# mine\n", r=scratch)
     with pytest.raises(ValueError, match="not beside its domain.yaml"):
-        catalog.plan("bell", program="% b\n", manifest={"host": "../dog/victim.py:make"}, host="# x\n", r=scratch)
+        catalog._plan("bell", program="% b\n", manifest={"host": "../dog/victim.py:make"}, host="# x\n", r=scratch)
     with pytest.raises(ValueError, match="not beside its domain.yaml"):
-        catalog.plan("bell", program="% b\n", manifest={"host": "sub/h.py:make"}, host="# x\n", r=scratch)
+        catalog._plan("bell", program="% b\n", manifest={"host": "sub/h.py:make"}, host="# x\n", r=scratch)
     assert (dst / "domains/dog/victim.py").read_text() == "# the target's dog\n"
-    assert catalog.plan("bell", program="% b\n", manifest={"host": "bell_host.py:make"}, host="# x\n",
+    assert catalog._plan("bell", program="% b\n", manifest={"host": "bell_host.py:make"}, host="# x\n",
                         r=scratch)[-1]["path"] == "domains/bell/domain.yaml"
 
 
-def test_apply_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
-    # review R3: the CLI's apply writes what py's apply writes (readme, host, corpus)
-    for n, t in (("r", "# plant, by hand\n"), ("h", "# the plant's host, again\n"), ("c", "water it\tWATER\n")):
+def test_new_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
+    # review R3: the CLI's new writes what py's new writes (readme, host, corpus)
+    for n, t in (("r", "# bell, by hand\n"), ("h", "# the bell's host\n"), ("c", "ring it\tRING\n"),
+                 ("p", LAMP.replace("lamp", "bell"))):
         (tmp_path / n).write_text(t)
-    rc, dry, _ = _cli("apply", "plant", "--readme", str(tmp_path / "r"), "--host", str(tmp_path / "h"), "--corpus", "-",
-                      "--dry-run", "--json", root=scratch, stdin="water it\tWATER\n")
-    assert rc == 0 and [f["path"] for f in dry["files"]] == [
-        "domains/plant/README.md", "domains/plant/intent/plant-corpus.tsv", "domains/plant/plant_host.py"]
-    rc, out, _ = _cli("apply", "plant", "--readme", str(tmp_path / "r"), "--host", str(tmp_path / "h"), "--corpus",
-                      str(tmp_path / "c"), "--json", root=scratch)
-    assert rc == 0 and (scratch / "domains/plant/README.md").read_text() == "# plant, by hand\n"
-    assert (scratch / "domains/plant/plant_host.py").read_text() == "# the plant's host, again\n"
-    assert (scratch / "domains/plant/intent/plant-corpus.tsv").read_text() == "water it\tWATER\n"
-    rc, err, _ = _cli("apply", "plant", "--readme", "-", "--corpus", "-", "--json", root=scratch, stdin="x")
+    if METISC:
+        args = ("new", "bell", "--program", str(tmp_path / "p"), "--readme", str(tmp_path / "r"), "--host",
+                str(tmp_path / "h"), "--manifest", '{"program": "bell.llp", "host": "bell_host.py:make"}')
+        rc, dry, _ = _cli(*args, "--corpus", "-", "--dry-run", "--json", root=scratch, stdin="ring it\tRING\n")
+        assert rc == 0 and [f["path"] for f in dry["files"]] == [
+            "domains/bell/bell.llp", "domains/bell/README.md", "domains/bell/intent/bell-corpus.tsv",
+            "domains/bell/bell_host.py", "domains/bell/domain.yaml"]
+        rc, out, _ = _cli(*args, "--corpus", str(tmp_path / "c"), "--json", root=scratch)
+        assert rc == 0 and (scratch / "domains/bell/README.md").read_text() == "# bell, by hand\n"
+        assert (scratch / "domains/bell/bell_host.py").read_text() == "# the bell's host\n"
+        assert (scratch / "domains/bell/intent/bell-corpus.tsv").read_text() == "ring it\tRING\n"
+    rc, err, _ = _cli("new", "gong", "--program", "-", "--readme", "-", "--json", root=scratch, stdin="x")
     assert rc == 1 and "one text from stdin" in err["error"]
     rc, rd, _ = _cli("readme", "plant", "--json", root=scratch)
     assert rc == 0 and rd["readme"] == catalog.readme("plant", scratch)
@@ -405,10 +450,6 @@ def test_apply_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
 
 # ── loop-fixes s-855d8067 ────────────────────────────────────────────────────
 
-METISC = catalog.metisc()
-if not METISC and os.environ.get("METIS_LOOP_REQUIRE_METISC"):     # CI builds it: an edit's check must run there
-    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC or PATH)")
-needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC or PATH)")
 
 
 def changed(diff):
@@ -423,14 +464,16 @@ def test_an_edit_changes_exactly_its_text_and_keeps_every_comment(scratch):
     prog = scratch / "domains/plant/plant.llp"
     before = prog.read_text()
     old = "% Made in the loop console (new)."
-    kw = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.", r=scratch)
+    kw, findings = catalog._edit_spec("plant", "plant.llp", old, "% Made in the loop console (new), edited.", r=scratch)
     assert list(kw) == ["program"] and kw["program"] == before.replace(old, "% Made in the loop console (new), edited.")
-    files = catalog.plan("plant", **kw, r=scratch)
-    assert [f["path"] for f in files] == ["domains/plant/plant.llp"]
+    assert not any(x["refuses"] for x in findings)
+    dry = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.", r=scratch, dry_run=True)
+    files = dry["files"]
+    assert [f["path"] for f in files] == ["domains/plant/plant.llp"] and dry["ok"] and dry["diff"] == files[0]["diff"]
     assert changed(files[0]["diff"]) == (["% Made in the loop console (new). Say in prose what there is, what can"],
                                          ["% Made in the loop console (new), edited. Say in prose what there is, what can"])
-    out = catalog.apply("plant", **kw, r=scratch)
-    assert out["written"] == ["domains/plant/plant.llp"]
+    out = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.", r=scratch)
+    assert out["written"] == ["domains/plant/plant.llp"] and out["ok"]
     after = prog.read_text()
     assert [l for l in after.splitlines() if l.startswith("%")] == \
         [l.replace("(new).", "(new), edited.") for l in before.splitlines() if l.startswith("%")]
@@ -442,7 +485,7 @@ def test_an_edit_is_refused_unless_it_is_exact_inside_and_adds_no_diagnostic(scr
         catalog.edit("plant", "plant.llp", "no such text", "x", r=scratch)
     with pytest.raises(ValueError, match="occurs [0-9]+ times"):
         catalog.edit("plant", "plant.llp", "pred", "PRED", r=scratch)
-    with pytest.raises(ValueError, match="empty"):
+    with pytest.raises(ValueError, match="old_string is empty, and the file is there"):
         catalog.edit("plant", "plant.llp", "", "x", r=scratch)
     with pytest.raises(ValueError, match="the same"):
         catalog.edit("plant", "plant.llp", "catalog plant 1.", "catalog plant 1.", r=scratch)
@@ -458,32 +501,39 @@ def test_an_edit_is_refused_unless_it_is_exact_inside_and_adds_no_diagnostic(scr
         catalog.edit("plant", "plant.llp", rule, rule.replace("-o moist", "-o moistt"), r=scratch)
     assert "moistt" in str(e.value)
     # every occurrence with replace_all: the program's own rename of an atom passes …
-    kw = catalog.edit("plant", "plant.llp", "sun", "light", replace_all=True, r=scratch)
+    kw = catalog._edit_spec("plant", "plant.llp", "sun", "light", replace_all=True, r=scratch)[0]
     assert "sun" not in kw["program"]
+    # the plan says the same as findings, never raising: ok false, the finding names the code, how it was checked
+    dry = catalog.edit("plant", "plant.llp", rule, rule.replace("-o moist", "-o moistt"), r=scratch, dry_run=True)
+    assert not dry["ok"] and [(x["code"], x["as"], x["refuses"]) for x in dry["findings"]] == \
+        [("pred-undeclared", "program", True)]
     # … but not one its extension still reads (review R3): visitor.llp, against the edited program
     with pytest.raises(ValueError, match="(?s)extensions/visitor.llp: error pred-undeclared.*'moist'"):
         catalog.edit("plant", "plant.llp", "moist", "wet", replace_all=True, r=scratch)
 
 
 @needs_metisc
-def test_an_edit_routes_each_file_through_applys_own_checks(scratch):
+def test_an_edit_routes_each_file_through_its_own_checks(scratch):
     d = scratch / "domains/plant"
-    assert list(catalog.edit("plant", "README.md", "plant", "Plant", r=scratch, replace_all=True)) == ["readme"]
-    ext = catalog.edit("plant", "extensions/visitor.llp", "my soil is moist again", "my soil is wet again", r=scratch)
+    spec = lambda *a, **k: catalog._edit_spec(*a, **k)[0]       # noqa: E731
+    assert list(spec("plant", "README.md", "plant", "Plant", r=scratch, replace_all=True)) == ["readme"]
+    ext = spec("plant", "extensions/visitor.llp", "my soil is moist again", "my soil is wet again", r=scratch)
     assert list(ext) == ["as_is"] and [Path(k).name for k in ext["as_is"]] == ["visitor.llp"]
-    assert [f["path"] for f in catalog.plan("plant", **ext, r=scratch)] == ["domains/plant/extensions/visitor.llp"]
+    assert [f["path"] for f in catalog.edit("plant", "extensions/visitor.llp", "my soil is moist again",
+                                            "my soil is wet again", r=scratch, dry_run=True)["files"]] == \
+        ["domains/plant/extensions/visitor.llp"]
     with pytest.raises(ValueError, match="(?s)adds .*undeclared predicate 'guest'"):   # checked against the program
         catalog.edit("plant", "extensions/visitor.llp", "* visitor -o", "* guest -o", r=scratch)
-    it = catalog.edit("plant", "intent.yaml", "potted plant", "pot plant", replace_all=True, r=scratch)
-    assert [f["path"] for f in catalog.plan("plant", **it, r=scratch)][0] == "domains/plant/intent/plant-prompt.txt"
-    bad = catalog.edit("plant", "intent.yaml", "verbs:", "verbz:", r=scratch)
+    dry = catalog.edit("plant", "extensions/visitor.llp", "* visitor -o", "* guest -o", r=scratch, dry_run=True)
+    assert not dry["ok"] and {x["as"] for x in dry["findings"]} == {"extension"}
+    it = catalog.edit("plant", "intent.yaml", "potted plant", "pot plant", replace_all=True, r=scratch, dry_run=True)
+    assert [f["path"] for f in it["files"]][0] == "domains/plant/intent/plant-prompt.txt"
     with pytest.raises(ValueError, match="does not generate"):
-        catalog.plan("plant", **bad, r=scratch)
-    mf = catalog.edit("plant", "domain.yaml", "records: records/", "colour: 1\nrecords: records/", r=scratch)
+        catalog.edit("plant", "intent.yaml", "verbs:", "verbz:", r=scratch, dry_run=True)
     with pytest.raises(ValueError, match="unknown key"):                       # the loader's own check
-        catalog.plan("plant", **mf, r=scratch)
+        catalog.edit("plant", "domain.yaml", "records: records/", "colour: 1\nrecords: records/", r=scratch, dry_run=True)
     line = (d / "plant_host.py").read_text().splitlines()[0]
-    assert list(catalog.edit("plant", "plant_host.py", line, line + " (edited)", r=scratch)) == ["host"]
+    assert list(spec("plant", "plant_host.py", line, line + " (edited)", r=scratch)) == ["host"]
 
 
 @needs_metisc
@@ -513,29 +563,29 @@ def test_the_cli_edit_and_since(scratch, tmp_path):
 
 def test_since_on_a_plan(scratch):
     rd = "# plant\n\nOne.\nTwo.\n"
-    f = catalog.plan("plant", readme=rd, r=scratch, since={"domains/plant/README.md": "# plant\n\nOne.\nTwi.\n"})[0]
+    (scratch / "domains/plant/README.md").write_text("# plant\n\nOne.\nOld.\n")
+    f = catalog.edit("plant", "README.md", "Old.", "Two.", r=scratch, dry_run=True,
+                     since={"domains/plant/README.md": "# plant\n\nOne.\nTwi.\n"})["files"][0]
     assert changed(f["since_diff"]) == (["Twi."], ["Two."]) and f["text"] == rd
-    assert "since_diff" not in catalog.plan("plant", readme=rd, r=scratch)[0]
+    assert "since_diff" not in catalog.edit("plant", "README.md", "Old.", "Two.", r=scratch, dry_run=True)["files"][0]
 
 
 def test_display_and_line_go_into_the_manifest(scratch):
-    files = catalog.plan("plant", display="the plant", line="a potted plant that dries out", r=scratch)
+    files = catalog._plan("plant", display="the plant", line="a potted plant that dries out", r=scratch)
     text = files[0]["text"]
     assert [f["path"] for f in files] == ["domains/plant/domain.yaml"]
     import yaml
     m = yaml.safe_load(text)
     assert m["display"] == "the plant" and m["line"] == "a potted plant that dries out"
-    new = catalog.plan("lamp2", program="catalog lamp2 1.\n", display="the lamp", line="a lamp", r=scratch)
+    new = catalog._plan("lamp2", program="catalog lamp2 1.\n", display="the lamp", line="a lamp", r=scratch)
     m = yaml.safe_load(next(f for f in new if f["path"].endswith("domain.yaml"))["text"])
     assert m == {"program": "lamp2.llp", "display": "the lamp", "line": "a lamp"}
-    whole = catalog.plan("plant", manifest="program: plant.llp\n", display="the plant", r=scratch)
+    whole = catalog._plan("plant", manifest="program: plant.llp\n", display="the plant", r=scratch)
     assert yaml.safe_load(whole[0]["text"]) == {"program": "plant.llp", "display": "the plant"}
     with pytest.raises(ValueError, match="one line"):
-        catalog.plan("plant", line="two\nlines", r=scratch)
-    uni = catalog.plan("plant", line="the pigs: ⊗, &, 1 and ⊕", r=scratch)[0]["text"]   # as written, not \u escapes
+        catalog._plan("plant", line="two\nlines", r=scratch)
+    uni = catalog._plan("plant", line="the pigs: ⊗, &, 1 and ⊕", r=scratch)[0]["text"]   # as written, not \u escapes
     assert "line: 'the pigs: ⊗, &, 1 and ⊕'\n" in uni and yaml.safe_load(uni)["line"] == "the pigs: ⊗, &, 1 and ⊕"
-    rc, out, _ = _cli("--root", str(scratch), "apply", "plant", "--display", "the plant", "--line", "dries out", "--json")
-    assert rc == 0 and catalog.get("plant", scratch).line == "dries out"
 
 
 NOCMD = """% a world that only happens: no commands
@@ -553,7 +603,7 @@ stage s {
 
 
 def test_a_world_with_no_commands_gets_no_draft(scratch, monkeypatch):
-    catalog.apply("quiet", program=NOCMD, r=scratch)
+    catalog._apply("quiet", "new", r=scratch, program=NOCMD)      # a fixture: the planner's write, unchecked
     assert catalog.commands("quiet", scratch) == [] and catalog.commands("plant", scratch)
     sk = catalog.skeleton("quiet", scratch, intentless=False)
     assert sk.startswith(catalog.NO_COMMANDS.format(n="quiet")) and "DRAFT" not in sk
@@ -561,13 +611,10 @@ def test_a_world_with_no_commands_gets_no_draft(scratch, monkeypatch):
     assert [v["verb"] for v in yaml.safe_load(sk)["verbs"]] == ["UNKNOWN"]
     assert "a DRAFT" in catalog.skeleton("plant", scratch, intentless=True).split("\n")[0]   # a real draft keeps it
     assert catalog.skeleton("quiet", scratch, intentless=True) is None
-    files = catalog.plan("quiet", intents=sk, r=scratch)
+    files = catalog._plan("quiet", intents=sk, r=scratch)
     assert "domains/quiet/intent/quiet-spoken.txt" not in [f["path"] for f in files]      # empty: not written
     assert "domains/quiet/intent/quiet.gbnf" in [f["path"] for f in files]
     env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG_INTENTLESS"}   # the default: intentless
-    p = subprocess.run([sys.executable, "-m", "metis.catalog", "--root", str(scratch), "apply", "quiet",
-                        "--intents-skeleton", "--json"], capture_output=True, text=True, env=env)
-    assert p.returncode == 1 and "takes no commands" in json.loads(p.stdout)["error"]
     p = subprocess.run([sys.executable, "-m", "metis.catalog", "--root", str(scratch), "intents", "quiet",
                         "--skeleton", "--json"], capture_output=True, text=True, env=env)
     assert json.loads(p.stdout) == {"name": "quiet", "skeleton": None, "commands": []}
@@ -577,7 +624,7 @@ def test_a_world_with_no_commands_gets_no_draft(scratch, monkeypatch):
 
 
 def test_the_readme_writes_its_mechanical_parts(scratch, tmp_path):
-    catalog.apply("quiet", program=NOCMD, r=scratch)
+    catalog._apply("quiet", "new", r=scratch, program=NOCMD)      # a fixture: the planner's write, unchecked
     run = tmp_path / "run"
     run.mkdir()
     (run / "seed.json").write_text(json.dumps({"seed": "domains/x/quiet.llp", "name": "quiet"}))
@@ -588,7 +635,7 @@ def test_the_readme_writes_its_mechanical_parts(scratch, tmp_path):
     assert "`metisc --run quiet.llp` runs the case its `#` lines give:\n\n```text\n#init a 1\n#steps 2\n```" in text
     assert "`metis quiet.llp`" in text
     assert text.rstrip().endswith("so it has no intent.yaml: the agents open it with no verbs.")
-    catalog.apply("quiet", intents=catalog.skeleton("quiet", scratch, intentless=False), r=scratch)
+    catalog._apply("quiet", "new", r=scratch, intents=catalog.skeleton("quiet", scratch, intentless=False))
     assert "`intent.yaml` knows only UNKNOWN" in catalog.readme("quiet", scratch)
     assert catalog.readme("quiet", scratch).startswith("# quiet\n\n**Where")       # no title, no prose: the name
     plant = catalog.readme("plant", scratch)
@@ -610,8 +657,7 @@ def test_an_edit_of_a_program_that_includes(scratch):
                                'include "inc_rules.llp".\n#init a 1\n#steps 2\n')
     (d / "domain.yaml").write_text("program: inc.llp\n")
     assert catalog.diagnostics(d / "inc.llp") == []
-    kw = catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)
-    assert catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc.llp"]
+    assert catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)["written"] == ["domains/inc/inc.llp"]
     with pytest.raises(ValueError, match="(?s)adds 1 diagnostic.*metisc-failed.*nope.llp"):
         catalog.edit("inc", "inc.llp", '"inc_rules.llp"', '"nope.llp"', r=scratch)
     assert sorted(f.name for f in d.iterdir()) == ["domain.yaml", "inc.llp", "inc_rules.llp"]   # no dot-file left
@@ -623,13 +669,12 @@ def test_an_extension_edit_writes_back_its_own_file(scratch):
     d = scratch / "domains/plant"
     (d / "extensions/visitor.llp").rename(d / "extensions/Wear-2.llp")
     assert [Path(e).name for e in catalog.get("plant", scratch).extensions()] == ["Wear-2.llp"]
-    kw = catalog.edit("plant", "extensions/Wear-2.llp", "moist again", "wet again", r=scratch)
-    files = catalog.plan("plant", **kw, r=scratch)
+    files = catalog.edit("plant", "extensions/Wear-2.llp", "moist again", "wet again", r=scratch, dry_run=True)["files"]
     assert [(f["path"], f["new"]) for f in files] == [("domains/plant/extensions/Wear-2.llp", False)]
-    catalog.apply("plant", **kw, r=scratch)
+    catalog.edit("plant", "extensions/Wear-2.llp", "moist again", "wet again", r=scratch)
     assert sorted(f.name for f in (d / "extensions").iterdir()) == ["Wear-2.llp"]
     with pytest.raises(ValueError, match="existing file of the domain"):
-        catalog.plan("plant", as_is={scratch / "domains/dog/dog.llp": "x"}, r=scratch)
+        catalog._plan("plant", as_is={scratch / "domains/dog/dog.llp": "x"}, r=scratch)
 
 
 @needs_metisc
@@ -639,7 +684,7 @@ def test_an_edit_may_repair_a_file_that_does_not_compile(scratch):
     good = prog.read_text()
     prog.write_text(good.replace("catalog plant 1.", "catalog plant 1"))       # a parse error
     assert [x["code"] for x in catalog.diagnostics(prog)] == ["metisc-failed"]
-    kw = catalog.edit("plant", "plant.llp", "catalog plant 1\n", "catalog plant 1.\n", r=scratch)
+    kw = catalog._edit_spec("plant", "plant.llp", "catalog plant 1\n", "catalog plant 1.\n", r=scratch)[0]
     assert kw["program"] == good
     prog.write_text(good)
     with pytest.raises(ValueError, match="metisc-failed"):                     # and breaking it is refused
@@ -650,7 +695,7 @@ def test_one_line_means_no_line_break_of_any_kind(scratch):
     """review note 2: U+2028, U+0085 and the other breaks str.splitlines knows are refused."""
     for v in ("a\u2028b", "a\x85b", "a\rb", "a\x0cb"):
         with pytest.raises(ValueError, match="one line"):
-            catalog.plan("plant", line=v, r=scratch)
+            catalog._plan("plant", line=v, r=scratch)
 
 
 def test_the_readme_refuses_or_survives_odd_inputs(scratch):
@@ -696,14 +741,14 @@ def test_take_carries_the_files_a_program_includes(scratch, tmp_path):
         {"inc_rules.llp": (scratch / "domains/inc/inc_rules.llp").read_text()}
     dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     (dst / "domains").mkdir(parents=True)
-    out = catalog.apply("inc", **catalog.take("inc", scratch, dst), r=dst)
+    out = catalog.take("inc", scratch, dst)
     assert sorted(out["written"]) == ["domains/inc/domain.yaml", "domains/inc/inc.llp", "domains/inc/inc_rules.llp"]
     assert (dst / "domains/inc/inc_rules.llp").read_text() == (scratch / "domains/inc/inc_rules.llp").read_text()
     (scratch / "domains/inc/inc.llp").write_text('catalog inc 1.\ninclude "../plant/plant.llp".\n')
     with pytest.raises(ValueError, match="outside its domain directory"):
         catalog.take("inc", scratch, tmp_path / "dst2")
     with pytest.raises(ValueError, match="a .llp inside the domain"):
-        catalog.plan("inc", included={"../plant/x.llp": "x"}, r=scratch)
+        catalog._plan("inc", included={"../plant/x.llp": "x"}, r=scratch)
 
 
 def test_a_family_unit_under_metis_home_is_shared_not_carried(scratch, tmp_path, monkeypatch):
@@ -718,7 +763,7 @@ def test_a_family_unit_under_metis_home_is_shared_not_carried(scratch, tmp_path,
     assert catalog.includes(d, [d / "inc.llp"], scratch) == {}
     dst = tmp_path.parent / (tmp_path.name + "-dst")
     (dst / "domains").mkdir(parents=True)
-    out = catalog.apply("inc", **catalog.take("inc", scratch, dst), r=dst)
+    out = catalog.take("inc", scratch, dst)
     assert sorted(out["written"]) == ["domains/inc/domain.yaml", "domains/inc/inc.llp"], "the family's unit stays home"
     (d / "inc.llp").write_text((d / "inc.llp").read_text() + 'include "gone.llp".\n')
     with pytest.raises(ValueError, match=r"includes 'gone.llp', which is not there \(not under .*including file's directory.*METIS_HOME"):
@@ -758,8 +803,7 @@ def test_an_edit_of_a_member_that_includes_its_family(scratch, tmp_path, monkeyp
     home.mkdir()
     (d / "inc_rules.llp").rename(home / "inc_rules.llp")
     monkeypatch.setenv("METIS_HOME", str(home))
-    kw = catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)
-    assert catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc.llp"]
+    assert catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)["written"] == ["domains/inc/inc.llp"]
     assert not (d / "inc_rules.llp").exists()
 
 
@@ -771,11 +815,11 @@ def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
     shutil.copytree(src, scratch / "domains/wildfire", ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
     dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     (dst / "domains").mkdir(parents=True)
-    kw = catalog.take("wildfire", scratch, dst)
+    kw = catalog._take_spec("wildfire", scratch, dst)
     assert kw["notch"] == (src / "wildfire.notch.json").read_text()
-    files = {f["path"]: f for f in catalog.plan("wildfire", **kw, r=dst)}
+    files = {f["path"]: f for f in catalog.take("wildfire", scratch, dst, dry_run=True)["files"]}
     assert files["domains/wildfire/wildfire.notch.json"]["new"]       # shown at the gate, a file of its own
-    catalog.apply("wildfire", **kw, r=dst)
+    catalog.take("wildfire", scratch, dst)
     for f in ("wildfire.llp", "wildfire.notch.json", "wildfire_host.py", "domain.yaml", "README.md"):
         assert (dst / "domains/wildfire" / f).read_text() == (src / f).read_text(), f
     assert catalog.get("wildfire", dst).notch == (dst / "domains/wildfire/wildfire.notch.json").resolve()
@@ -791,14 +835,14 @@ def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
 def test_plan_writes_a_notch_where_the_manifest_names_it(scratch):
     n = '{"rows": []}\n'
     with pytest.raises(ValueError, match="not JSON"):
-        catalog.plan("dog", notch="{rows", r=scratch)
-    files = {f["path"]: f for f in catalog.plan("dog", notch=n, r=scratch)}   # no notch named: <name>.notch.json
+        catalog._plan("dog", notch="{rows", r=scratch)
+    files = {f["path"]: f for f in catalog._plan("dog", notch=n, r=scratch)}   # no notch named: <name>.notch.json
     assert files["domains/dog/dog.notch.json"]["text"] == n
     assert "notch: dog.notch.json" in files["domains/dog/domain.yaml"]["text"]
     with pytest.raises(ValueError, match="beside its domain.yaml"):
-        catalog.plan("dog", notch=n, manifest={"notch": "../plant/x.notch.json"}, r=scratch)
+        catalog._plan("dog", notch=n, manifest={"notch": "../plant/x.notch.json"}, r=scratch)
     with pytest.raises(ValueError, match="beside its domain.yaml"):
-        catalog.plan("dog", notch=n, manifest={"notch": "dog.json"}, r=scratch)
+        catalog._plan("dog", notch=n, manifest={"notch": "dog.json"}, r=scratch)
 
 
 def test_take_and_edit_keep_a_files_bytes(scratch, tmp_path):
@@ -812,9 +856,9 @@ def test_take_and_edit_keep_a_files_bytes(scratch, tmp_path):
     dst = tmp_path / "dst"
     shutil.copytree(scratch / "tools", dst / "tools")
     (dst / "domains").mkdir()
-    catalog.apply("dog", **catalog.take("dog", scratch, dst), r=dst)
+    catalog.take("dog", scratch, dst)
     assert (dst / "domains/dog/dog.llp").read_bytes() == prog.read_bytes()
-    assert catalog.plan("dog", program=catalog._text(prog), r=dst) == []          # the same bytes: nothing to write
+    assert catalog._plan("dog", program=catalog._text(prog), r=dst) == []          # the same bytes: nothing to write
 
 
 @needs_metisc
@@ -825,8 +869,7 @@ def test_an_edit_in_lf_keeps_a_crlf_files_line_ends(scratch):
     lines = prog.read_bytes().split(b"\n")
     prog.write_bytes(b"\r\n".join(lines[:3]) + b"\r\n" + b"\n".join(lines[3:]))   # a CRLF header, LF below
     two = lines[0].decode() + "\n" + lines[1].decode()
-    kw = catalog.edit("dog", "dog.llp", two, two + " (edited)", r=dst)
-    catalog.apply("dog", **kw, r=dst)
+    catalog.edit("dog", "dog.llp", two, two + " (edited)", r=dst)
     out = (dst / "domains/dog/dog.llp").read_bytes()
     assert out.count(b"\r\n") == 3 and b"(edited)\r\n" in out and out.endswith(b"\n".join(lines[3:]))
 
@@ -834,7 +877,7 @@ def test_an_edit_in_lf_keeps_a_crlf_files_line_ends(scratch):
 def test_the_gate_diff_marks_a_last_line_with_no_newline(scratch):
     """The gate shows the files' diffs joined: a file without a final newline ran
     on into the next file's header (`}--- a/…`)."""
-    files = catalog.plan("dog", program="% the dog\ncatalog dog 9.", readme="# dog\n", r=scratch)
+    files = catalog._plan("dog", program="% the dog\ncatalog dog 9.", readme="# dog\n", r=scratch)
     prog = next(f for f in files if f["path"].endswith("dog.llp"))
     assert prog["diff"].endswith("+catalog dog 9.\n\\ No newline at end of file\n")
     joined = "".join(f["diff"] for f in files)
@@ -855,10 +898,31 @@ def test_take_says_how_to_name_a_program_it_does_not_carry(scratch, tmp_path):
 def test_an_edit_of_an_included_file(scratch):
     """The included file is checked alone, and the program that includes it with the edit in its place."""
     d = _inc_domain(scratch)
-    kw = catalog.edit("inc", "inc_rules.llp", "the lifted part", "the lifted part, edited", r=scratch)
-    assert list(kw) == ["included"] and catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc_rules.llp"]
+    kw = catalog._edit_spec("inc", "inc_rules.llp", "the lifted part", "the lifted part, edited", r=scratch)[0]
+    assert list(kw) == ["included"]
+    assert catalog.edit("inc", "inc_rules.llp", "the lifted part", "the lifted part, edited", r=scratch)["written"] == \
+        ["domains/inc/inc_rules.llp"]
     # a rename the included file alone is fine with; the program's fact near(c1) is not: refused, naming the program
     assert catalog.diagnostics(d / "inc.llp") == []
     with pytest.raises(ValueError, match=r"(?s)adds 1 diagnostic.*\n  inc\.llp: error fact-not-bwd"):
         catalog.edit("inc", "inc_rules.llp", "bwd near(cell).", "bwd nearr(cell).", r=scratch)
     assert sorted(f.name for f in d.iterdir()) == ["domain.yaml", "inc.llp", "inc_rules.llp"]
+
+
+@needs_metisc
+def test_an_edit_shows_the_lint_it_adds_and_a_workspace_journals_it(scratch):
+    """workspace-files s-9ea4cfa4: the plan's findings are metisc's (refusing) and the lint's with the manifest
+    (shown, never refusing); a root with a .metis/ gets one journal row of the write (who, kind, domain, files)."""
+    (scratch / ".metis").mkdir()
+    p = (scratch / "domains/plant/plant.llp").read_text()
+    rule = next(l for l in p.splitlines() if " -o moist" in l)
+    new = p.replace("pred dry", "pred thirsty : plant.\npred dry").replace(
+        rule, rule + "\n  %% I sulk when thirsty.\n  sulk [dyn] : thirsty -o dry.")
+    dry = catalog.edit("plant", "plant.llp", p, new, r=scratch, dry_run=True)
+    assert dry["ok"] and [(x["level"], x["code"], x["decl"], x["refuses"]) for x in dry["findings"]] == \
+        [("lint", "state-unproduced", "pred/thirsty", False)]
+    assert not (scratch / ".metis/loop/journal.jsonl").exists()              # a plan journals nothing
+    out = catalog.edit("plant", "plant.llp", p, new, r=scratch, who="pi")
+    assert out["ok"] and out["findings"] == dry["findings"]
+    rows = [json.loads(x) for x in (scratch / ".metis/loop/journal.jsonl").read_text().splitlines()]
+    assert [(r["who"], r["kind"], r["domain"], r["files"]) for r in rows] == [("pi", "edit", "plant", ["domains/plant/plant.llp"])]
