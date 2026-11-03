@@ -355,3 +355,51 @@ def test_the_cli_serves_the_table_and_the_argv(tmp_path):
     assert rc == 0 and out["argv"][3:] == ["count", "t", "a", "--by", "b"]
     rc, err = cli(tmp_path, "argv", "trace_no_such_verb")       # (trace_sort was the example until pascal's sort landed)
     assert rc == 1 and "not a declared trace tool" in err["error"]
+
+
+def ring_trace(ws, run, ticks, every):
+    from metis import trace as T
+    s = T.Segments(ws.state / "traces" / run, every=every)
+    for k in range(ticks):
+        if s.due(k):
+            s.open_segment(k, {"members": {}}, {"state": {"k": k}})
+        s.line({"k": k})
+    s.close()
+    return ws.state / "traces" / run
+
+
+def test_a_window_is_kept_past_the_ring_with_its_marks_and_config(tmp_path):
+    """loop-workspace step 5 (WORKSPACE.md §6.1, item 4): keep_window copies the segments that hold [k0, k1], each with
+    its checkpoint, and the run's marks and config, to traces/<run>-<name>/, which reads as a trace; the original may then
+    lose them to its ring. A window the trace no longer holds is refused with the range it does."""
+    from metis import trace as T
+    ws = W.workspace(tmp_path)
+    d = ring_trace(ws, "r1", 10, 3)                      # segments at 0, 3, 6, 9
+    (d / "marks.jsonl").write_text('{"mark": 1, "edge": "start", "at_tick": 3, "at_k": 4}\n'
+                                   '{"mark": 1, "edge": "stop", "at_tick": 6, "at_k": 7}\n'
+                                   '{"mark": 2, "edge": "start", "at_tick": 8, "at_k": 9}\nnot json\n'
+                                   '{"mark": 3, "edge": "start", "at_tick": 1}\n')
+    (d / "config.yaml").write_text("trace: {}\n")
+    assert ws.marks("r1") == [
+        {"mark": 1, "k0": 4, "k1": 7, "start": {"mark": 1, "edge": "start", "at_tick": 3, "at_k": 4},
+         "stop": {"mark": 1, "edge": "stop", "at_tick": 6, "at_k": 7}},
+        {"mark": 2, "k0": 9, "k1": None, "start": {"mark": 2, "edge": "start", "at_tick": 8, "at_k": 9}}]
+    assert ws.keep_window("r1", 4, 7, "mark-1") == "traces/r1-mark-1"
+    kept = ws.state / "traces" / "r1-mark-1"
+    assert sorted(p.name for p in kept.glob("seg-*.jsonl")) == ["seg-3.jsonl", "seg-6.jsonl"]
+    assert sorted(p.name for p in (kept / "checkpoints").iterdir()) == ["k3.json", "k6.json"]
+    assert (kept / "marks.jsonl").read_text() == (d / "marks.jsonl").read_text() and (kept / "config.yaml").is_file()
+    t = ws.trace("r1-mark-1")
+    assert (t["k0"], t["k1"], t["checkpoints"]) == (3, 8, [3, 6])
+    assert [r["kind"] for r in ws.events()][-1] == "keep"
+    with pytest.raises(ValueError, match="there already"):
+        ws.keep_window("r1", 4, 7, "mark-1")
+    for seg in ("seg-0.jsonl", "seg-3.jsonl"):           # the writer's ring drops the oldest
+        (d / seg).unlink()
+    with pytest.raises(ValueError, match=r"not in traces/r1 any more: it holds 6\.\.9"):
+        ws.keep_window("r1", 4, 7, "again")
+    with pytest.raises(ValueError):
+        ws.keep_window("r1", 7, 4, "back")
+    with pytest.raises(ValueError):
+        ws.keep_window("r1", 6, 7, "../x")
+    assert len(T.read(kept)) == 2

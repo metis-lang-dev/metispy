@@ -23,7 +23,10 @@ they meet here, in files, and the UI tails one journal.
     ws.unlock(kind, pid=None)
     tools(), tool_argv(name, args)    # the trace verbs and lint as declared tools (metis/trace_tools.json, §3.1)
 
-    python -m metis.catalog.workspace [--root DIR] layout|bundle|context|traces|trace|surprises|drop|take|rule|
+    ws.marks(run)                     # a run's marks as windows (traces/<run>/marks.jsonl: the world's rows, at_k)
+    ws.keep_window(run, k0, k1, name) # the window copied to traces/<run>-<name>/, past the writer's ring: its path
+
+    python -m metis.catalog.workspace [--root DIR] layout|bundle|context|traces|trace|marks|keep|surprises|drop|take|rule|
                                       rulings|journal|events|cost|loops|lock|unlock|tools|argv … --json
     (a CLI lock/take's pid defaults to the caller's: the CLI's parent, a shell or the node face)
 
@@ -56,7 +59,7 @@ STATUS = ("open", "taken", "ruled")
 # face's (metis-loop sdk/ts/workspace.ts), one for one: its test reads them from layout()["face"].
 FACE = ("layout", "root", "path", "bundle", "context", "traces", "trace", "surprises", "surprise", "drop_surprise",
         "take_surprise", "rule", "rulings", "journal", "events", "cost", "loops", "lock", "unlock", "tools",
-        "tool_argv")
+        "tool_argv", "marks", "keep_window")
 
 # The layout: name → (path under .metis/, kind, who writes it, what it is). {id}, {run}, {kind} are filled in.
 LAYOUT = {
@@ -79,6 +82,12 @@ LAYOUT = {
     "traces":     ("traces/", "dir", "", "the traces, one dir per run"),
     "trace":      ("traces/{run}/", "dir", "backend|world",
                    "the Segments writer's dir (metis.trace: seg-<k0>.jsonl, checkpoints/k<k>.json)"),
+    "marks":      ("traces/{run}/marks.jsonl", "jsonl", "world",
+                   "{mark, edge: start|stop, at_k, at_tick, ...}: the person's marks on the run, the world's log rows with the "
+                   "trace's k added (at_k: the writer shifts)"),
+    "run_config": ("traces/{run}/config.yaml", "text", "world", "the service config the run was played with (the judge replays it)"),
+    "kept":       ("traces/{run}-{name}/", "dir", "backend",
+                   "a window kept past the writer's ring: keep_window's copy of the segments and checkpoints that hold it"),
     "records":    ("records/", "dir", "backend", "the REPL's records (metis.catalog.state, as before)"),
     "sessions":   ("sessions/", "dir", "backend", "the REPL's sessions (as before)"),
     "seed":       ("seed/", "dir", "pi", "the seeded start's files (as before)"),
@@ -424,6 +433,55 @@ class Workspace:
         return {"run": run, "path": self.rel(d), "k0": segs[0].k0, "k1": last[-1] if last else segs[-1].k0,
                 "checkpoints": [s.k0 for s in segs], "header": segs[0].header}
 
+    def marks(self, run):
+        """The run's marks (traces/<run>/marks.jsonl, the world's writer: its log rows with `at_k`, the trace's k), as
+        windows: [{mark, k0, k1, start, stop}] by mark number; a mark not ended yet has k1 None. Rows without an at_k
+        are skipped (a tick is not a k: the writer shifts, nothing here computes it)."""
+        rows = _rows(self.path("marks", run=_check_run(run)))
+        by = {}
+        for r in rows:
+            if not isinstance(r, dict) or not isinstance(r.get("at_k"), int) or r.get("edge") not in ("start", "stop"):
+                continue
+            m = by.setdefault(r.get("mark"), {"mark": r.get("mark"), "k0": None, "k1": None})
+            m["k0" if r["edge"] == "start" else "k1"] = r["at_k"]
+            m["start" if r["edge"] == "start" else "stop"] = r
+        return sorted(by.values(), key=lambda m: (m["k0"] if m["k0"] is not None else -1, str(m["mark"])))
+
+    def keep_window(self, run, k0, k1, name, who="backend"):
+        """The window [K0, K1] of traces/<RUN>/ kept past the writer's ring: the segments that hold it, each with the
+        checkpoint it starts from, and the run's marks.jsonl and config.yaml when there are, copied to
+        traces/<RUN>-<NAME>/ (whole, then renamed). Refused when the window is not in the trace any more, with the k
+        range it holds, or when the copy is there already. → "traces/<RUN>-<NAME>"."""
+        import shutil
+        from metis import trace as T
+        src = self.path("trace", run=_check_run(run))
+        dst_run = _check_run("%s-%s" % (run, name))
+        if not isinstance(k0, int) or not isinstance(k1, int) or k0 > k1:
+            raise ValueError("window [%r, %r]: two ticks, k0 <= k1" % (k0, k1))
+        segs = T.read(src)
+        last = [t["k"] for t in segs[-1].ticks if "k" in t]
+        hi = last[-1] if last else segs[-1].k0
+        if k0 < segs[0].k0 or k1 > hi:
+            raise ValueError("window [%d, %d] is not in traces/%s any more: it holds %d..%d" % (k0, k1, run, segs[0].k0, hi))
+        dst = self.path("trace", run=dst_run)
+        if dst.exists():
+            raise ValueError("traces/%s is there already" % dst_run)
+        keep = [s for i, s in enumerate(segs)
+                if s.k0 <= k1 and (i + 1 == len(segs) or segs[i + 1].k0 > k0)]
+        self.made()
+        tmp = dst.with_name(".%s.tmp%d" % (dst.name, os.getpid()))
+        shutil.rmtree(tmp, ignore_errors=True)
+        (tmp / "checkpoints").mkdir(parents=True)
+        for sg in keep:
+            shutil.copy2(src / ("seg-%d.jsonl" % sg.k0), tmp / ("seg-%d.jsonl" % sg.k0))
+            shutil.copy2(src / sg.header["checkpoint"], tmp / sg.header["checkpoint"])
+        for f in ("marks.jsonl", "config.yaml"):
+            if (src / f).is_file():
+                shutil.copy2(src / f, tmp / f)
+        os.rename(tmp, dst)
+        self.journal(who, "keep", trace="traces/" + dst_run, source="traces/" + run, window=[k0, k1])
+        return "traces/" + dst_run
+
     # ── the journal ──
     def journal(self, who, kind, **ptrs):
         """Append one row {ts, who, kind, ...PTRS} to the journal (one write of one line: O_APPEND keeps rows
@@ -654,6 +712,13 @@ def main(argv=None):
     c.add_argument("--patterns", help="the patterns catalog's path (else $METIS_PATTERNS)")
     ps["traces"] = sub.add_parser("traces", help="the traces under .metis/traces/")
     ps["trace"] = t = sub.add_parser("trace", help="one trace: its k range, checkpoints and header")
+    ps["marks"] = mk = sub.add_parser("marks", help="a run's marks as windows (traces/<run>/marks.jsonl)")
+    mk.add_argument("run")
+    ps["keep"] = kp = sub.add_parser("keep", help="keep a window of a trace past its ring: traces/<run>-<name>/")
+    kp.add_argument("run")
+    kp.add_argument("k0", type=int)
+    kp.add_argument("k1", type=int)
+    kp.add_argument("name")
     t.add_argument("run")
     ps["surprises"] = s = sub.add_parser("surprises", help="the surprises, each with its status")
     s.add_argument("--status", choices=STATUS)
@@ -725,6 +790,10 @@ def main(argv=None):
                 out = ws.traces()
             elif a.cmd == "trace":
                 out = ws.trace(a.run)
+            elif a.cmd == "marks":
+                out = ws.marks(a.run)
+            elif a.cmd == "keep":
+                out = {"trace": ws.keep_window(a.run, a.k0, a.k1, a.name)}
             elif a.cmd == "surprises":
                 out = ws.surprises(a.status)
             elif a.cmd == "surprise":
