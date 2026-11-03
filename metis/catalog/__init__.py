@@ -500,7 +500,7 @@ def _notch_file(d, keys, whole):
 
 
 def _plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-         r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None, carried=None):
+         r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None, carried=None, within=None):
     """What _apply would write (the writes' one planner: edit, new and take give it their files; never
     called with a program over an existing package but by edit, workspace-files s-9ea4cfa4): [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
@@ -549,8 +549,10 @@ def _plan(name, program=None, extensions=None, intents=None, manifest=None, read
         if d is None:
             raise ValueError(f"{name}: included files belong to a domain directory")
         ip = (Path(d) / rel_).resolve()
-        if Path(d).resolve() not in ip.parents or ip.suffix != ".llp":
-            raise ValueError(f"{name}: an included file is a .llp inside the domain's directory, not {rel_!r}")
+        inside = Path(d).resolve() in ip.parents or (within is not None and Path(within).resolve() in ip.parents)
+        if not inside or ip.suffix != ".llp":     # within: the bundle (the composition's directory), edit() only
+            raise ValueError(f"{name}: an included file is a .llp inside the domain's directory"
+                             f"{' or its bundle' if within else ''}, not {rel_!r}")
         files[ip] = text
     for ap, text in (as_is or {}).items():
         ap = (Path(ap) if Path(ap).is_absolute() else r / ap).resolve()
@@ -848,9 +850,10 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
     dom = get(name, r)
     d = Path(dom.dir).resolve()
     p = (d / path).resolve()
-    if d not in p.parents:
-        raise ValueError(f"{name}: {path!r} is not inside the domain's directory")
-    rel = p.relative_to(d).as_posix()
+    bundle = bundle_dir(d, r)                   # the composition's directory: a member's includes may lie in it
+    if d not in p.parents and not (bundle is not None and bundle in p.parents):
+        raise ValueError(f"{name}: {path!r} is not inside the domain's directory" + (" or its bundle" if bundle else ""))
+    rel = Path(os.path.relpath(p, d)).as_posix()
     if rel.startswith("intent/") and rel != f"intent/{name}-corpus.tsv":
         raise ValueError(f"{name}: {rel} is generated from intent.yaml: edit intent.yaml")
     prog = Path(dom.program).resolve() if dom.program else None
@@ -884,7 +887,9 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
         if "\r" not in old and old not in old_text and old.replace("\n", "\r\n") in old_text:
             old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")   # a CRLF file, the edit given in LF
         text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
-    inc = includes(d, [f for f in [prog, *exts] if f is not None and f.is_file()], r)
+    inc = includes(d, [f for f in [prog, *exts] if f is not None and f.is_file()], r, within=bundle)
+    if d not in p.parents and rel not in inc:
+        raise ValueError(f"{name}: {rel} is in the bundle but not a file this member's program includes")
     if p == prog:
         kw = {"program": text}
     elif p in exts:
@@ -900,7 +905,9 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
     elif rel == f"intent/{name}-corpus.tsv":
         kw = {"corpus": text}
     elif rel in inc:
-        kw = {"included": {rel: text}}          # a file the program includes (rddl's nav_domain.llp)
+        kw = {"included": {rel: text}}          # a file the program includes (rddl's nav_domain.llp; a bundle's ../x.llp)
+        if d not in p.parents:
+            kw["within"] = str(bundle)
     else:
         raise ValueError(f"{name}: {rel} is not one of the domain's files an edit changes (its program, "
                          "extensions/*.llp, the files they include, README.md, intent.yaml, domain.yaml, its host, its corpus)")
@@ -922,13 +929,17 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
                 if rel in inc and prog is not None and not found[0][2]:
                     # the program that includes it, with the edited file in its place: the domain's .llp
                     # files mirrored (their includes are the domain's own), the one replaced
+                    # (a bundle's file: the bundle mirrored, so the member's ../ includes resolve as they do)
+                    mroot = d if d in p.parents or bundle is None else bundle
                     with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
-                        for f in d.rglob("*.llp"):
-                            t = Path(tmp) / f.relative_to(d)
+                        for f in mroot.rglob("*.llp"):
+                            if "build" in f.relative_to(mroot).parts:
+                                continue
+                            t = Path(tmp) / f.relative_to(mroot)
                             t.parent.mkdir(parents=True, exist_ok=True)
                             _write(t, text if f.resolve() == p else _text(f))
                         found.append((rp(prog), "program",
-                                      _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(d)))))
+                                      _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(mroot)))))
                 findings += [_finding(f, x, as_, True) for f, as_, a in found for x in a]
             if p == prog and not findings:                  # the lint with the manifest: what the edit adds, shown
                 findings += [_finding(rel, x, "lint", False, "lint")
@@ -1138,17 +1149,35 @@ def intents_status(name, r=None):
 INCLUDE = r'^\s*include\s+"([^"]+)"\s*(?:hiding\s*\([^)]*\)\s*)?\.'
 
 
-def includes(d, files, r=None):
+def bundle_dir(d, r=None):
+    """The bundle a domain directory D is a member of: the nearest directory above D (not past the catalog root R)
+    holding a composition.yaml; None for a domain outside any bundle."""
+    d, root = Path(d).resolve(), Path(_r(r)).resolve()
+    for a in d.parents:
+        if (a / "composition.yaml").is_file():
+            return a
+        if a == root or root not in a.parents:
+            break
+    return None
+
+
+def includes(d, files, r=None, within=None):
     """{path relative to the domain directory d: text} of every file the .llp `files`
     include, transitively, by the compiler's include rule (metis.lang.compiler include_path, called here):
     beside the including file, else find() under the catalog root R, the standard units,
     METIS_HOME. A file beside it is the domain's own and is carried; one found by find()
     outside d is shared (a family's unit, an iface/ unit): never carried, and its own
     includes are its own business. Refused (ValueError): a file beside the including one
-    but outside d (take carries a domain's own files only), and an include found nowhere."""
+    but outside d (take carries a domain's own files only), and an include found nowhere.
+    WITHIN (edit's: the member's bundle, the composition's directory): a file beside the including one outside d
+    but inside WITHIN is the member's too, keyed by its path from d ("../tree/grasp_domain.llp"); a file whose first
+    line says `% DERIVED from SRC` (the bundle's generated tree/) brings SRC with it, the one an edit changes."""
     import re
     from metis.lang.compiler import include_path
+    derived = re.compile(r"^%\s*DERIVED from (\S+)")
     d, out, todo, seen = Path(d).resolve(), {}, list(files), set()
+    w = Path(within).resolve() if within is not None else None
+    key = lambda f: Path(os.path.relpath(f, d)).as_posix()      # noqa: E731
     while todo:
         f = Path(todo.pop()).resolve()
         if f in seen or not f.is_file():
@@ -1162,6 +1191,14 @@ def includes(d, files, r=None):
                                  f"(not under {str(e).split(': not under ', 1)[-1]})") from None
             if d not in inc.parents:
                 if (f.parent / m.group(1)).is_file():
+                    if w is not None and w in inc.parents:   # the bundle's: the member's too (edit)
+                        out[key(inc)] = _text(inc)
+                        todo.append(inc)
+                        head = _text(inc).split("\n", 1)[0]
+                        src = derived.match(head)
+                        if src and (inc.parent / src.group(1)).resolve().is_file() and w in (inc.parent / src.group(1)).resolve().parents:
+                            out[key((inc.parent / src.group(1)).resolve())] = _text((inc.parent / src.group(1)).resolve())
+                        continue
                     raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, outside its domain directory: "
                                      "take carries a domain's own files only")
                 continue                          # shared: the family's or the standard units', not carried
