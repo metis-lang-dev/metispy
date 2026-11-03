@@ -80,7 +80,8 @@ def test_a_generated_director_is_a_package_with_the_pass_host(kitchen):
 
 
 def test_the_link_finds_metisc_as_the_loop_does(monkeypatch, tmp_path):
-    """$METISC, else the metis-lang checkout beside metispy's, else PATH (the edit's diagnostics keep theirs)."""
+    """$METISC, else the metis-lang checkout beside metispy's, else PATH; the edit's diagnostics by the same rule (the
+    user's EDITOR save said 'no metisc' with metis-lang/src/metisc beside metispy: catalog.metisc is image.metisc)."""
     monkeypatch.delenv("METISC", raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))
     sib = tmp_path / "metis-lang" / "src" / "metisc"
@@ -89,7 +90,7 @@ def test_the_link_finds_metisc_as_the_loop_does(monkeypatch, tmp_path):
     sib.parent.mkdir(parents=True)
     sib.write_text("#!/bin/sh\n")
     sib.chmod(0o755)
-    assert I.metisc() == str(sib) and catalog.metisc() is None
+    assert I.metisc() == str(sib) and catalog.metisc() == str(sib)
     monkeypatch.setenv("METISC", "/opt/metisc")
-    assert I.metisc() == "/opt/metisc"
+    assert I.metisc() == "/opt/metisc" == catalog.metisc()
 

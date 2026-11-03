@@ -136,11 +136,13 @@ def test_installed_is_the_packages_own_never_the_root(monkeypatch, tmp_path):
 
 
 def test_metisc_is_the_env_else_path_else_a_refusal(monkeypatch, tmp_path):
+    from metis.catalog import image
     monkeypatch.delenv("METISC", raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setattr(image, "SIBLING_METISC", tmp_path / "metis-lang" / "src" / "metisc")   # no checkout beside
     assert catalog.metisc() is None
     (tmp_path / "x.llp").write_text(LAMP)
-    with pytest.raises(ValueError, match="set METISC or put metisc on PATH"):
+    with pytest.raises(ValueError, match="set METISC, build the metis-lang checkout beside metispy's, or put metisc on PATH"):
         catalog.diagnostics(tmp_path / "x.llp")
     monkeypatch.setenv("METISC", "/opt/metisc")
     assert catalog.metisc() == "/opt/metisc"

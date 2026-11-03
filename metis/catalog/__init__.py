@@ -674,11 +674,11 @@ def _journal(r, who, kind, name, files):
 # ── one exact edit of a file on disk ─────────────────────────────────────────
 
 def metisc():
-    """The metis compiler for an edit's diagnostics: $METISC, else metisc on PATH;
-    None when there is none (diagnostics() then refuses with NO_METISC). The link and the build resolve their own
-    (metis.catalog.image.metisc: the sibling checkout too)."""
-    import shutil
-    return os.environ.get("METISC") or shutil.which("metisc")
+    """The metis compiler for an edit's diagnostics: the link's and the build's own rule (metis.catalog.image.metisc):
+    $METISC, else the metis-lang checkout beside metispy's (src/metisc), else metisc on PATH; None when there is none
+    (diagnostics() then refuses with NO_METISC). One rule, so the EDITOR's save finds the compiler `make` finds."""
+    from metis.catalog import image
+    return image.metisc()
 
 
 def metisc_env():
@@ -687,7 +687,7 @@ def metisc_env():
     return dict(os.environ)
 
 
-NO_METISC = ("no metisc to check a program's edit: set METISC or put metisc on PATH "
+NO_METISC = ("no metisc to check a program's edit: set METISC, build the metis-lang checkout beside metispy's, or put metisc on PATH "
              "(build it: make -C <a metis-lang checkout> metisc, then src/metisc)")
 
 
