@@ -353,4 +353,5 @@ def test_the_cli_serves_the_table_and_the_argv(tmp_path):
     assert cli(tmp_path, "tools")[1] == W.tools()
     rc, out = cli(tmp_path, "argv", "trace_count", "--args", json.dumps({"trace": "t", "atom": "a", "by": ["b"]}))
     assert rc == 0 and out["argv"][3:] == ["count", "t", "a", "--by", "b"]
-    assert cli(tmp_path, "argv", "trace_sort")[0] == 1
+    rc, err = cli(tmp_path, "argv", "trace_no_such_verb")       # (trace_sort was the example until pascal's sort landed)
+    assert rc == 1 and "not a declared trace tool" in err["error"]
