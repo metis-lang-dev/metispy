@@ -231,3 +231,80 @@ def test_metis_worlds_road_is_a_workspace_read_and_its_run_dir_untouched():
     if before_state is not None:
         assert sorted(p.name for p in (road / ".metis").iterdir()) == before_state, "reads make nothing"
     assert not (road / ".gitignore").exists() or (road / ".git").exists(), "no .gitignore where road is not a checkout"
+
+
+# ── the locks (WORKSPACE.md §2.3) ──
+def test_one_pi_loop_a_second_is_refused_with_the_holders_line(tmp_path):
+    ws = W.workspace(tmp_path)
+    assert ws.loops() == {"pi": None, "backend": None}
+    ws.lock("pi", pid=os.getpid(), mode="tui", model="m", cwd=str(tmp_path))
+    with pytest.raises(ValueError, match=r"the pi loop holds this workspace: pid %d since .*: mode tui, model m" % os.getpid()):
+        ws.lock("pi", pid=os.getppid(), mode="rpc")
+    ws.lock("backend", pid=os.getppid(), port=8399)                   # the other kind: its own lock
+    lp = ws.loops()
+    assert (lp["pi"]["pid"], lp["pi"]["mode"], lp["pi"]["alive"]) == (os.getpid(), "tui", True)
+    assert (lp["backend"]["port"], lp["backend"]["alive"]) == (8399, True)
+    with pytest.raises(ValueError, match="pid %d's, not" % os.getpid()):
+        ws.unlock("pi", pid=os.getppid())
+    assert ws.unlock("pi", pid=os.getpid()) and ws.loops()["pi"] is None and not ws.unlock("pi")
+    assert [(e["who"], e["kind"]) for e in ws.events()] == [("pi", "lock"), ("backend", "lock"), ("pi", "unlock")]
+
+
+def test_a_dead_pids_lock_is_stale_and_taken_over(tmp_path):
+    ws = W.workspace(tmp_path)
+    gone = dead_pid()
+    ws.lock("pi", pid=gone, mode="rpc")
+    assert ws.loops()["pi"]["alive"] is False
+    ws.lock("pi", pid=os.getpid(), mode="tui")
+    assert ws.loops()["pi"]["pid"] == os.getpid() and ws.events()[-1]["stale_pid"] == gone
+    with pytest.raises(ValueError, match="one of pi, backend"):
+        ws.lock("judge")
+
+
+def test_the_cli_lock_is_the_callers(tmp_path):
+    rc, out = cli(tmp_path, "lock", "pi", "--fields", json.dumps({"mode": "rpc"}))
+    assert rc == 0 and out["pid"] == os.getpid() and out["mode"] == "rpc"      # the CLI's parent: this test
+    rc, err = cli(tmp_path, "lock", "pi")
+    assert rc == 0, "the same holder again: its own lock"
+    rc, err = cli(tmp_path, "lock", "pi", "--pid", str(os.getppid()))
+    assert rc == 1 and "the pi loop holds this workspace: pid %d" % os.getpid() in err["error"]
+    assert cli(tmp_path, "loops")[1]["pi"]["pid"] == os.getpid()
+    assert cli(tmp_path, "unlock", "pi") == (0, {"released": True})
+
+
+# ── the trace verbs as declared tools (WORKSPACE.md §3.1) ──
+def test_the_declaration_table_is_what_the_verbs_argparse_declares():
+    assert W.TOOLS_FILE.read_text() == W.tools_json(), "python tools/gen_trace_tools.py"
+    from metis import lint, trace
+    names = [t["name"] for t in W.tools()["tools"]]
+    sub = next(a for a in trace.parser()._actions if a.__class__.__name__ == "_SubParsersAction")
+    assert names == ["trace_" + v for v in sub.choices] + ["lint"]
+
+
+def sample(p, k):
+    return {"STRING": "x_" + k, "INTEGER": 3, "BOOLEAN": True, "ARRAY": ["a", "b"]}[p["type"]]
+
+
+@pytest.mark.parametrize("tool", [t["name"] for t in json.loads(W.TOOLS_FILE.read_text())["tools"]])
+def test_a_declared_tools_command_line_parses_back_to_its_arguments(tool):
+    from metis import lint, trace
+    t = next(x for x in W.tools()["tools"] if x["name"] == tool)
+    args = {k: sample(p, k) for k, p in t["parameters"]["properties"].items()}
+    argv = W.tool_argv(tool, args)
+    assert argv[:3] == [sys.executable, "-m", t["module"]]
+    ns = vars((trace if t["module"] == "metis.trace" else lint).parser().parse_args(argv[3:]))
+    assert {k: ns[k] for k in args} == args
+    req = {k: args[k] for k in t["parameters"]["required"]}
+    vars((trace if t["module"] == "metis.trace" else lint).parser().parse_args(W.tool_argv(tool, req)[3:]))
+    if req:
+        with pytest.raises(ValueError, match="required"):
+            W.tool_argv(tool, {})
+    with pytest.raises(ValueError, match="no parameter nope"):
+        W.tool_argv(tool, {**req, "nope": 1})
+
+
+def test_the_cli_serves_the_table_and_the_argv(tmp_path):
+    assert cli(tmp_path, "tools")[1] == W.tools()
+    rc, out = cli(tmp_path, "argv", "trace_count", "--args", json.dumps({"trace": "t", "atom": "a", "by": ["b"]}))
+    assert rc == 0 and out["argv"][3:] == ["count", "t", "a", "--by", "b"]
+    assert cli(tmp_path, "argv", "trace_sort")[0] == 1

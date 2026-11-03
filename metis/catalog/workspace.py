@@ -18,9 +18,14 @@ they meet here, in files, and the UI tails one journal.
     ws.journal(who, kind, **ptrs)     # append one row to .metis/loop/journal.jsonl (pointers, never bodies)
     ws.events(since=0)                # the journal's rows from row SINCE on (the UI keeps the count it read)
     ws.cost()                         # .metis/cost.jsonl summed: total, calls, by model, by who
+    ws.loops()                        # {pi: lock or None, backend: lock or None} (§2.3)
+    ws.lock(kind, pid=None, **f)      # one pi loop, one backend: a second is refused with the holder's line
+    ws.unlock(kind, pid=None)
+    tools(), tool_argv(name, args)    # the trace verbs and lint as declared tools (metis/trace_tools.json, §3.1)
 
     python -m metis.catalog.workspace [--root DIR] layout|bundle|context|traces|trace|surprises|drop|take|rule|
-                                      rulings|journal|events|cost … --json
+                                      rulings|journal|events|cost|loops|lock|unlock|tools|argv … --json
+    (a CLI lock/take's pid defaults to the caller's: the CLI's parent, a shell or the node face)
 
 The layout lives ONCE, in LAYOUT below: this module's paths are read from it, and the TypeScript face (metis-loop
 sdk/ts/workspace.ts) gets it from `layout --json`. The rules (WORKSPACE.md §2.2): every file is written whole then
@@ -114,6 +119,22 @@ def write_whole(path, text):
     return path
 
 
+def create_whole(path, text):
+    """Write TEXT to PATH whole, only if PATH is not there: a temporary file, then a hard link (which refuses an
+    existing name), so a reader never sees half and two writers never both win. → False when PATH was there."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / (".%s.%s.tmp" % (path.name, secrets.token_hex(4)))
+    tmp.write_text(text)
+    try:
+        os.link(tmp, path)
+        return True
+    except FileExistsError:
+        return False
+    finally:
+        tmp.unlink()
+
+
 def _json(path):
     try:
         return json.loads(Path(path).read_text())
@@ -147,6 +168,98 @@ def _alive(pid):
     except (TypeError, ValueError):
         return False
     return True
+
+
+# ── the trace verbs as declared tools (WORKSPACE.md §3.1): metis/trace_tools.json, generated from their argparse ──
+TOOLS_FORMAT = "metis-trace-tools/1"
+TOOLS_FILE = Path(__file__).resolve().parents[1] / "trace_tools.json"
+_TYPES = {int: "INTEGER", float: "NUMBER", None: "STRING", str: "STRING"}
+
+
+def _param(act, pos):
+    """One argparse action as a declared parameter: its type, its help, and how it goes on the command line
+    (positional: its place; else flag: its option string)."""
+    if act.nargs == 0:                                           # store_true
+        p = {"type": "BOOLEAN"}
+    elif act.__class__.__name__ == "_AppendAction":
+        p = {"type": "ARRAY", "items": {"type": _TYPES.get(act.type, "STRING")}}
+    else:
+        p = {"type": _TYPES.get(act.type, "STRING")}
+    if act.help:
+        p["description"] = act.help
+    if act.option_strings:
+        p["flag"] = max(act.option_strings, key=len)
+    else:
+        p["positional"] = pos
+    return p
+
+
+def _tool(name, module, verb, description, ap):
+    props, req, pos = {}, [], 0
+    for act in ap._actions:
+        if act.dest in ("help", "json") or act.__class__.__name__ == "_SubParsersAction":
+            continue
+        props[act.dest] = _param(act, pos)
+        if not act.option_strings:
+            pos += 1
+        if act.required:
+            req.append(act.dest)
+    return {"name": name, "module": module, "verb": verb, "description": description,
+            "parameters": {"type": "OBJECT", "properties": props, "required": req}}
+
+
+def declarations():
+    """The trace verbs and lint as tools, read off their argparse (metis.trace.parser, metis.lint.parser): what
+    tools/gen_trace_tools.py writes into metis/trace_tools.json and tests/catalog/test_workspace.py holds it to."""
+    from metis import lint, trace
+    out = []
+    ap = trace.parser()
+    sub = next(a for a in ap._actions if a.__class__.__name__ == "_SubParsersAction")
+    helps = {c.dest: c.help for c in sub._choices_actions}
+    for verb, p in sub.choices.items():
+        out.append(_tool("trace_" + verb, "metis.trace", verb, helps.get(verb) or "", p))
+    lp = lint.parser()
+    out.append(_tool("lint", "metis.lint", None, lp.description or "", lp))
+    return {"format": TOOLS_FORMAT, "tools": out}
+
+
+def tools_json():
+    return json.dumps(declarations(), indent=1, ensure_ascii=False) + "\n"
+
+
+def tools():
+    """The declaration table as committed (metis/trace_tools.json): what the backend's trace channel serves and
+    the pi loop's extension exposes, nothing more."""
+    return json.loads(TOOLS_FILE.read_text())
+
+
+def tool_argv(name, args):
+    """The command line of the declared tool NAME with ARGS {param: value}: [python, -m, module, verb?, ...]. An
+    argument the tool does not declare, or a required one missing, is refused."""
+    t = next((x for x in tools()["tools"] if x["name"] == name), None)
+    if t is None:
+        raise ValueError("%r: not a declared trace tool" % (name,))
+    props, args = t["parameters"]["properties"], dict(args or {})
+    extra = sorted(set(args) - set(props))
+    if extra:
+        raise ValueError("%s: no parameter %s" % (name, ", ".join(extra)))
+    missing = [k for k in t["parameters"]["required"] if args.get(k) in (None, "", [])]
+    if missing:
+        raise ValueError("%s: %s required" % (name, ", ".join(missing)))
+    pos = sorted((p["positional"], k) for k, p in props.items() if "positional" in p)
+    argv = [sys.executable, "-m", t["module"]] + ([t["verb"]] if t["verb"] else [])
+    argv += [str(args[k]) for _, k in pos]
+    for k, p in props.items():
+        if "flag" not in p or args.get(k) in (None, False, []):
+            continue
+        if p["type"] == "BOOLEAN":
+            argv.append(p["flag"])
+        elif p["type"] == "ARRAY":
+            for v in args[k]:
+                argv += [p["flag"], str(v)]
+        else:
+            argv += [p["flag"], str(args[k])]
+    return argv
 
 
 class Workspace:
@@ -377,20 +490,14 @@ class Workspace:
         pid = int(pid if pid is not None else os.getpid())
         f = self.path("taken", id=sid)
         body = json.dumps({"pid": pid, "ts": _ts()}) + "\n"
-        try:
-            fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            old = _json(f) or {}
-            if _alive(old.get("pid")):
-                raise ValueError("%s: taken by pid %s at %s" % (sid, old.get("pid"), old.get("ts")))
-            write_whole(f, body)
-            self.journal(who, "take", id=sid, pid=pid, stale_pid=old.get("pid"))
+        if create_whole(f, body):
+            self.journal(who, "take", id=sid, pid=pid)
             return sid
-        try:
-            os.write(fd, body.encode())
-        finally:
-            os.close(fd)
-        self.journal(who, "take", id=sid, pid=pid)
+        old = _json(f) or {}
+        if _alive(old.get("pid")):
+            raise ValueError("%s: taken by pid %s at %s" % (sid, old.get("pid"), old.get("ts")))
+        write_whole(f, body)
+        self.journal(who, "take", id=sid, pid=pid, stale_pid=old.get("pid"))
         return sid
 
     def rule(self, sid, ruling, verdict, who="pi", pack=None, **fields):
@@ -420,6 +527,56 @@ class Workspace:
         """Every ruling's json, oldest first."""
         d = self.path("rulings")
         return [r for r in (_json(f) for f in sorted(d.glob("*.json"))) if isinstance(r, dict)] if d.is_dir() else []
+
+    # ── the locks: one active pi loop, one backend (WORKSPACE.md §2.3) ──
+    def loops(self):
+        """{pi: lock or None, backend: lock or None}; a lock carries alive: false when its pid is gone (stale: the
+        next lock() of its kind takes it over)."""
+        out = {}
+        for k in LOCKS:
+            rec = _json(self.path("lock", kind=k))
+            out[k] = dict(rec, alive=_alive(rec.get("pid"))) if isinstance(rec, dict) else None
+        return out
+
+    def lock(self, kind, pid=None, **fields):
+        """Take KIND's lock (loop/<kind>.json {pid, started, **FIELDS}: pi's mode, cwd, model, socket; the
+        backend's port). Refused, in the holder's words, while a live pid holds it; a dead pid's lock is taken
+        over with a journal row. → the lock."""
+        if kind not in LOCKS:
+            raise ValueError("lock %r: one of %s" % (kind, ", ".join(LOCKS)))
+        self.made()
+        pid = int(pid if pid is not None else os.getpid())
+        rec = {**fields, "pid": pid, "started": _ts()}
+        f = self.path("lock", kind=kind)
+        body = json.dumps(rec, indent=1) + "\n"
+        if create_whole(f, body):
+            self.journal(kind, "lock", lock=self.rel(f), pid=pid)
+            return rec
+        old = _json(f) or {}
+        if _alive(old.get("pid")) and int(old.get("pid")) != pid:
+            more = ", ".join("%s %s" % (k, old[k]) for k in ("mode", "model", "port", "cwd") if old.get(k) is not None)
+            raise ValueError("the %s loop holds this workspace: pid %s since %s%s (%s)"
+                             % (kind, old.get("pid"), old.get("started"), ": " + more if more else "", self.rel(f)))
+        write_whole(f, body)
+        self.journal(kind, "lock", lock=self.rel(f), pid=pid,
+                     **({"stale_pid": old.get("pid")} if old.get("pid") != pid else {}))
+        return rec
+
+    def unlock(self, kind, pid=None):
+        """Release KIND's lock: only its holder (PID, default this process) does, or anyone once the holder is
+        gone. → True when a lock went."""
+        if kind not in LOCKS:
+            raise ValueError("lock %r: one of %s" % (kind, ", ".join(LOCKS)))
+        f = self.path("lock", kind=kind)
+        old = _json(f)
+        if not isinstance(old, dict):
+            return False
+        pid = int(pid if pid is not None else os.getpid())
+        if int(old.get("pid") or 0) != pid and _alive(old.get("pid")):
+            raise ValueError("the %s lock is pid %s's, not %d's" % (kind, old.get("pid"), pid))
+        f.unlink(missing_ok=True)
+        self.journal(kind, "unlock", lock=self.rel(f), pid=old.get("pid"))
+        return True
 
     # ── cost ──
     def cost(self):
@@ -464,7 +621,7 @@ def main(argv=None):
     d.add_argument("--who", default="backend", choices=WHO)
     ps["take"] = tk = sub.add_parser("take", help="the pi loop takes a surprise")
     tk.add_argument("id")
-    tk.add_argument("--pid", type=int, help="the taker's pid (default: this process's)")
+    tk.add_argument("--pid", type=int, help="the taker's pid (default: the caller, this process's parent)")
     tk.add_argument("--who", default="pi", choices=WHO)
     ps["rule"] = r = sub.add_parser("rule", help="a surprise's ruling: the document, the verdict, the pack")
     r.add_argument("id")
@@ -481,6 +638,18 @@ def main(argv=None):
     ps["events"] = e = sub.add_parser("events", help="the journal's rows from row SINCE on")
     e.add_argument("--since", type=int, default=0)
     ps["cost"] = sub.add_parser("cost", help="cost.jsonl summed")
+    ps["loops"] = sub.add_parser("loops", help="the pi loop's and the backend's locks")
+    ps["lock"] = lk = sub.add_parser("lock", help="take a loop's lock (refused while a live pid holds it)")
+    lk.add_argument("kind", choices=LOCKS)
+    lk.add_argument("--pid", type=int, help="the holder (default: the caller, this process's parent)")
+    lk.add_argument("--fields", metavar="JSON", help="the lock's fields: pi {mode, cwd, model, socket}, backend {port}")
+    ps["unlock"] = ul = sub.add_parser("unlock", help="release a loop's lock (its holder, or anyone once it is gone)")
+    ul.add_argument("kind", choices=LOCKS)
+    ul.add_argument("--pid", type=int, help="the holder (default: the caller, this process's parent)")
+    ps["tools"] = sub.add_parser("tools", help="the trace verbs and lint as declared tools (metis/trace_tools.json)")
+    ps["argv"] = av = sub.add_parser("argv", help="a declared tool's command line from its arguments")
+    av.add_argument("name")
+    av.add_argument("--args", metavar="JSON", help="the arguments, as a JSON object")
     for p in (ap, *ps.values()):
         p.add_argument("--json", action="store_true", help="JSON on stdout (the only form; kept for the faces)")
     a = ap.parse_args(argv)
@@ -497,6 +666,10 @@ def main(argv=None):
     try:
         if a.cmd == "layout":
             out = layout()
+        elif a.cmd == "tools":
+            out = tools()
+        elif a.cmd == "argv":
+            out = {"argv": tool_argv(a.name, obj(a.args))}
         else:
             ws = workspace(a.root)
             if a.cmd == "root":
@@ -516,7 +689,7 @@ def main(argv=None):
             elif a.cmd == "drop":
                 out = {"id": ws.drop_surprise(obj(read(a.record)), who=a.who)}
             elif a.cmd == "take":
-                out = {"id": ws.take_surprise(a.id, a.pid, a.who)}
+                out = {"id": ws.take_surprise(a.id, a.pid or os.getppid(), a.who)}
             elif a.cmd == "rule":
                 ruling = read(a.ruling)
                 pack = read(a.pack) if a.pack else None
@@ -527,6 +700,12 @@ def main(argv=None):
                 out = ws.journal(a.who, a.kind, **obj(a.fields))
             elif a.cmd == "events":
                 out = ws.events(a.since)
+            elif a.cmd == "loops":
+                out = ws.loops()
+            elif a.cmd == "lock":
+                out = ws.lock(a.kind, a.pid or os.getppid(), **obj(a.fields))
+            elif a.cmd == "unlock":
+                out = {"released": ws.unlock(a.kind, a.pid or os.getppid())}
             else:
                 out = ws.cost()
     except (KeyError, ValueError, FileNotFoundError) as e:

@@ -1057,7 +1057,8 @@ def fired_on_seeds(path, rule, seeds, program, member):
     return out
 
 
-def main(argv=None):
+def parser():
+    """The verbs' argparse: the CLI's, and the one source of metis/trace_tools.json (tools/gen_trace_tools.py)."""
     import argparse
     ap = argparse.ArgumentParser(prog="python -m metis.trace", description="a composition's trace: one member's replay, a surprise as a case, and the instruments "
                                  "(blame, count, families, holds, diff, outcomes, fired): rows a ruling can quote, from the trace alone")
@@ -1119,7 +1120,11 @@ def main(argv=None):
     s.add_argument("--seeds", type=int, required=True)
     s.add_argument("--program", required=True)
     s.add_argument("--member", required=True)
-    a = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None):
+    a = parser().parse_args(argv)
     if a.verb == "replay":
         res = replay(a.trace, a.member, a.program)
         print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence}))
