@@ -227,7 +227,8 @@ KEYS = ("program", "extensions", "serves", "host", "intent", "clock", "reload", 
         "display", "line", "voice", "agent", "actor", "pair", "partner_of", "notch",
         "shared", "status", "world", "resources",      # metis-lang spec/15's interface (§2)
         "gating",                                      # who holds a resource's commands: host (default) | program
-        "beliefs", "levels", "evaluate")               # metis-lang spec/16 §2, §4, §5: the one-tick instrument's
+        "beliefs", "levels", "evaluate",               # metis-lang spec/16 §2, §4, §5: the one-tick instrument's
+        "safety", "belief", "commands")                # the lint's (patterns CHECKS.md §3: L7, L9): read by it only
 DIRECTIONS = ("in", "out", "resource", "world-private")
 INTENT_KEYS = ("spec",)
 ACTOR_KEYS = ("acts", "max_steps", "task")
