@@ -36,7 +36,6 @@ stage b {
 # every loop/runtime code and the test below that emits it
 COVERED = {
     "provenance-shape": "test_loop_codes_on_the_gate_report",
-    "rule-name-collision": "test_loop_codes_on_the_gate_report",
     "state-budget": "test_state_budget_query_and_map",
     "exact-unreachable": "test_exact_unreachable_on_trace",
     "horn-nonground": "test_horn_nonground_rides_the_exception",
@@ -58,9 +57,7 @@ def _repl(path, monkeypatch=None):
 
 def test_loop_codes_on_the_gate_report():
     """A pack without text provenance whose rule reuses a base rule's short name: a discipline
-    warning, each a diagnostic, and the name is refused (dup-rule-names, spec/18 §4). The collision
-    warning stays only for a catalog that never went through resolve_includes, like the base here."""
-    from metis.lang import compile_catalog, parse
+    warning, each a diagnostic, and the name is refused (dup-rule-names, spec/18 §4)."""
     from metis.lang.compiler import load_llp
     from metis.lang.formalize import admit_text_pack
     here = os.getcwd()
@@ -71,17 +68,22 @@ def test_loop_codes_on_the_gate_report():
             "obs [pack]", "h [pack]")
         r = admit_text_pack("a market note observes the coin.", src,
                             base=base)
-        codes = [d.code for d in r.diagnostics]
-        assert "provenance-shape" in codes and "pack-redeclares" in codes
-        unresolved = compile_catalog(parse(TWO_STAGES))
-        ok = "catalog p 1.\nextends two.\nstage b {\n  %% New.\n  fresh [dyn] : q -o p.\n}\n"
-        r = admit_text_pack("a note.", ok, base=unresolved)
     finally:
         os.chdir(here)
-    (rc,) = [d for d in r.diagnostics if d.code == "rule-name-collision"]
-    assert dict(rc.data) == {"rule": "h", "count": "2"}
-    assert rc.loc.decl == "b/h"             # the newcomer owns the slice
-    assert rc.text in r.warnings
+    codes = [d.code for d in r.diagnostics]
+    assert "provenance-shape" in codes and "pack-redeclares" in codes
+
+
+def test_a_catalog_compiled_without_resolve_is_held_to_one_space_of_names():
+    """compile_catalog(parse(text)), which never goes through resolve_includes, refuses a name in two stages
+    as load_llp does (rule-duplicate): so no base reaches the gate with one, and the loop's old short-name
+    warning (rule-name-collision) had nothing left to see; it is gone from the registry."""
+    from metis.lang import LangError, compile_catalog, parse
+    with pytest.raises(LangError) as e:
+        compile_catalog(parse(TWO_STAGES))
+    (d,) = e.value.diagnostics
+    assert d.code == "rule-duplicate" and d.text == "rule h is named twice in stages a and b: a rule is final, and a second one is not added"
+    assert "rule-name-collision" not in REGISTRY
 
 
 def test_state_budget_query_and_map(monkeypatch):

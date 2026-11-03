@@ -109,7 +109,6 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     # ground (spec 12)
     "type-incomplete": ("error", "ground"),
     # loop / runtime (step 3)
-    "rule-name-collision": ("warning", "loop"),
     "provenance-shape": ("warning", "loop"),
     # a read outside the declared scope RAISES (factorize): an error
     "reads-undeclared": ("error", "runtime"),
@@ -295,9 +294,6 @@ HINTS: Dict[str, str] = {
         "ground the instance that includes this file, or complete {type} "
         "here with `type {type} {{…}}.`",
     # loop (the gate cascade) — metispy only: metisc has no loop
-    "rule-name-collision":
-        "rename one of the {count} rules named {rule}: trace events and "
-        "the debug sidecar read SHORT names",
     "provenance-shape":
         "declare `provenance text \"<ref>\" \"<date>\".`: the "
         "formalization contract records its source",

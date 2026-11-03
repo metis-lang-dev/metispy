@@ -268,6 +268,62 @@ def include_path(spec, base):
             "%s (%s)" % (d, why) for d, why in [(Path(base), "the including file's directory")] + catalog.places()))) from None
 
 
+def check_duplicate(decls):
+    """A stage's rule names are unique across its blocks and its
+    includes, across stages, with links in the one space of names
+    (spec/18 §4): the parser sees one block. A rule with alternative
+    heads holds its name and each <name>-<k>. Run by resolve_includes on
+    each splice AND by compile_catalog on what it is given, so a catalog
+    parsed and compiled without resolve_includes is held to it too."""
+    from metis.kernel.diagnostics import Loc, Source, make
+    seen, heads, links, rules = {}, {}, set(), set()
+
+    def mixed(n, node, decl, subject):
+        text = (f"rule {n} is named twice, as a rule and a stage link: "
+                f"a rule is final, and a second one is not added")
+        raise LangError([text], [make(
+            "rule-duplicate", text,
+            Source(Loc(node.file, node.line, node.col, decl), (subject,), ()),
+            (("rule", n), ("stage", "links")))])
+
+    for s in decls:
+        if isinstance(s, ast.LinkDecl):
+            if s.name in rules:
+                mixed(s.name, s, f"qui/{s.name}", ast.decl_line(s))
+            if s.name in links:
+                text = (f"rule {s.name} is named twice among the stage links: "
+                        f"a rule is final, and a second one is not added")
+                raise LangError([text], [make(
+                    "rule-duplicate", text,
+                    Source(Loc(s.file, s.line, s.col, f"qui/{s.name}"),
+                           (ast.decl_line(s),), ()),
+                    (("rule", s.name), ("stage", "links")))])
+            links.add(s.name)
+        if isinstance(s, ast.Stage):
+            for r in s.rules:
+                base = ast.rule_base(r.name)
+                first = seen.get(r.name)
+                if first is None:
+                    first = seen.get(base) if base != r.name else heads.get(r.name)
+                if first is not None:
+                    where = (f"in stage {s.name}" if first == s.name
+                             else f"in stages {first} and {s.name}")
+                    text = (f"rule {r.name} is named twice {where}: "
+                            f"a rule is final, and a second one is not added")
+                    raise LangError([text], [make(
+                        "rule-duplicate", text,
+                        Source(Loc(r.file, r.line, r.col, f"{s.name}/{r.name}"),
+                               (ast.rule_line(r),), ()),
+                        (("rule", r.name), ("stage", s.name)))])
+                for n in (r.name, ast.rule_base(r.name)):
+                    if n in links:
+                        mixed(n, r, f"{s.name}/{r.name}", ast.rule_line(r))
+                rules.update((r.name, ast.rule_base(r.name)))
+                if base != r.name:
+                    heads[base] = s.name
+                seen[r.name] = s.name
+
+
 def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
     """Splice included catalogs' DECLS in place of each include (the
     literal-inclusion semantics; nested includes resolve recursively,
@@ -311,59 +367,6 @@ def resolve_includes(cat: ast.Catalog, base_dir) -> ast.Catalog:
                         refuse("hiding-shadow",
                                f"rule {n} is hidden from '{d.path}' and named "
                                f"again: a rule is not replaced", d, n)
-
-    def check_duplicate(decls):
-        """A stage's rule names are unique across its blocks and its
-        includes, across stages, with links in the one space of names
-        (spec/18 §4): the parser sees one block. A rule with alternative
-        heads holds its name and each <name>-<k>."""
-        from metis.kernel.diagnostics import Loc, Source, make
-        seen, heads, links, rules = {}, {}, set(), set()
-
-        def mixed(n, node, decl, subject):
-            text = (f"rule {n} is named twice, as a rule and a stage link: "
-                    f"a rule is final, and a second one is not added")
-            raise LangError([text], [make(
-                "rule-duplicate", text,
-                Source(Loc(node.file, node.line, node.col, decl), (subject,), ()),
-                (("rule", n), ("stage", "links")))])
-
-        for s in decls:
-            if isinstance(s, ast.LinkDecl):
-                if s.name in rules:
-                    mixed(s.name, s, f"qui/{s.name}", ast.decl_line(s))
-                if s.name in links:
-                    text = (f"rule {s.name} is named twice among the stage links: "
-                            f"a rule is final, and a second one is not added")
-                    raise LangError([text], [make(
-                        "rule-duplicate", text,
-                        Source(Loc(s.file, s.line, s.col, f"qui/{s.name}"),
-                               (ast.decl_line(s),), ()),
-                        (("rule", s.name), ("stage", "links")))])
-                links.add(s.name)
-            if isinstance(s, ast.Stage):
-                for r in s.rules:
-                    base = ast.rule_base(r.name)
-                    first = seen.get(r.name)
-                    if first is None:
-                        first = seen.get(base) if base != r.name else heads.get(r.name)
-                    if first is not None:
-                        where = (f"in stage {s.name}" if first == s.name
-                                 else f"in stages {first} and {s.name}")
-                        text = (f"rule {r.name} is named twice {where}: "
-                                f"a rule is final, and a second one is not added")
-                        raise LangError([text], [make(
-                            "rule-duplicate", text,
-                            Source(Loc(r.file, r.line, r.col, f"{s.name}/{r.name}"),
-                                   (ast.rule_line(r),), ()),
-                            (("rule", r.name), ("stage", s.name)))])
-                    for n in (r.name, ast.rule_base(r.name)):
-                        if n in links:
-                            mixed(n, r, f"{s.name}/{r.name}", ast.rule_line(r))
-                    rules.update((r.name, ast.rule_base(r.name)))
-                    if base != r.name:
-                        heads[base] = s.name
-                    seen[r.name] = s.name
 
     def resolve(c, base, seen):
         layers, stages = c.layers, c.stages
@@ -415,6 +418,7 @@ def compile_catalog(cat: ast.Catalog,
     if any(isinstance(d, ast.IncludeDecl) for d in cat.decls):
         raise LangError(["unresolved include — call resolve_includes "
                          "(or load_llp, which does)"])
+    check_duplicate(cat.decls)      # spec/18 §4 on every path, not only load_llp's
     if cat.extends and base is None:
         from metis.kernel.diagnostics import Loc, Source, make
         text = (f"catalog extends '{cat.extends}' but no base catalog "
