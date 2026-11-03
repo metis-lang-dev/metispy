@@ -1,0 +1,393 @@
+{
+ "format": "metis-trace-tools/1",
+ "tools": [
+  {
+   "name": "trace_replay",
+   "module": "metis.trace",
+   "verb": "replay",
+   "description": "one member alone over the trace, no world",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "member": {
+      "type": "STRING",
+      "positional": 1
+     },
+     "program": {
+      "type": "STRING",
+      "positional": 2
+     }
+    },
+    "required": [
+     "trace",
+     "member",
+     "program"
+    ]
+   }
+  },
+  {
+   "name": "trace_case",
+   "module": "metis.trace",
+   "verb": "case",
+   "description": "the window to tick K as a case of the member's package",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "member": {
+      "type": "STRING",
+      "positional": 1
+     },
+     "at": {
+      "type": "INTEGER",
+      "flag": "--at"
+     },
+     "k0": {
+      "type": "INTEGER",
+      "flag": "--from"
+     },
+     "after": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "flag": "--after"
+     },
+     "out": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "an atom, or kind:PATTERN, not:PATTERN",
+      "flag": "--out"
+     },
+     "note": {
+      "type": "STRING",
+      "flag": "--note"
+     },
+     "unit": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "a family's case: a unit it exercises (a consumer without it skips the case)",
+      "flag": "--unit"
+     },
+     "into": {
+      "type": "STRING",
+      "description": "the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout",
+      "flag": "--into"
+     }
+    },
+    "required": [
+     "trace",
+     "member",
+     "at"
+    ]
+   }
+  },
+  {
+   "name": "trace_blame",
+   "module": "metis.trace",
+   "verb": "blame",
+   "description": "who last moved what is missing or stale at tick K: the member's rule, the world, or a take (Blame first)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     },
+     "k": {
+      "type": "INTEGER",
+      "flag": "--k"
+     },
+     "atoms": {
+      "type": "STRING",
+      "description": "comma-separated: `atom` should hold, `atom 0` should not, `atom 3` should hold thrice",
+      "flag": "--atoms"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace",
+     "member",
+     "k",
+     "atoms"
+    ]
+   }
+  },
+  {
+   "name": "trace_count",
+   "module": "metis.trace",
+   "verb": "count",
+   "description": "the cross-tab: the ticks on which ATOM holds, by the value of each --by atom at the same tick (Measure the class first; A norm with its domain)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "atom": {
+      "type": "STRING",
+      "description": "a pred name (any instance), or one ground atom with its parentheses",
+      "positional": 1
+     },
+     "by": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "an atom to tabulate by: holds / absent, or a pred's instances present",
+      "flag": "--by"
+     },
+     "member": {
+      "type": "STRING",
+      "description": "the member whose state is read (the trace's one member when it has one)",
+      "flag": "--member"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace",
+     "atom"
+    ]
+   }
+  },
+  {
+   "name": "trace_families",
+   "module": "metis.trace",
+   "verb": "families",
+   "description": "exactly one of each family holds at every tick, and the flicker: a family or a rule toggling a-b-a-b (Exclusive family; Steady reading)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "family": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "p,q,r: pred names of which exactly one holds; the program's declared families are read too",
+      "flag": "--family"
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace"
+    ]
+   }
+  },
+  {
+   "name": "trace_holds",
+   "module": "metis.trace",
+   "verb": "holds",
+   "description": "every window where ATOM is held past N consecutive ticks, with the rules that fired within it (Bounded yield)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "atom": {
+      "type": "STRING",
+      "positional": 1
+     },
+     "max": {
+      "type": "INTEGER",
+      "description": "the ticks a hold may last",
+      "flag": "--max"
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace",
+     "atom",
+     "max"
+    ]
+   }
+  },
+  {
+   "name": "trace_diff",
+   "module": "metis.trace",
+   "verb": "diff",
+   "description": "two runs of the same command: the first tick where the fired rules differ, and where the state differs (Sim race in the log)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace_a": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "trace_b": {
+      "type": "STRING",
+      "positional": 1
+     },
+     "member": {
+      "type": "STRING",
+      "description": "one member; else every member of the trace",
+      "flag": "--member"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace_a",
+     "trace_b"
+    ]
+   }
+  },
+  {
+   "name": "trace_outcomes",
+   "module": "metis.trace",
+   "verb": "outcomes",
+   "description": "the windows of a commitment atom and how each ended: done, cancel, or neither (Time to spare; Committed action)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "commit": {
+      "type": "STRING",
+      "description": "the atom held while the action runs",
+      "flag": "--commit"
+     },
+     "done": {
+      "type": "STRING",
+      "flag": "--done"
+     },
+     "cancel": {
+      "type": "STRING",
+      "flag": "--cancel"
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace",
+     "commit",
+     "done",
+     "cancel"
+    ]
+   }
+  },
+  {
+   "name": "trace_fired",
+   "module": "metis.trace",
+   "verb": "fired",
+   "description": "how many of seeds 1..N the rule fires on when the member is replayed over the trace's inputs (Search the seeds for a firing)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "rule": {
+      "type": "STRING",
+      "description": "a rule's name, or one firing with its bindings: rule[X=a]",
+      "positional": 1
+     },
+     "seeds": {
+      "type": "INTEGER",
+      "flag": "--seeds"
+     },
+     "program": {
+      "type": "STRING",
+      "flag": "--program"
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     }
+    },
+    "required": [
+     "trace",
+     "rule",
+     "seeds",
+     "program",
+     "member"
+    ]
+   }
+  },
+  {
+   "name": "lint",
+   "module": "metis.lint",
+   "verb": null,
+   "description": "shape findings over a program that compiles (patterns CHECKS.md §3); exit 1 with --strict when any fires",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "file": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "manifest": {
+      "type": "STRING",
+      "description": "the member's domain.yaml",
+      "flag": "--manifest"
+     },
+     "strict": {
+      "type": "BOOLEAN",
+      "flag": "--strict"
+     }
+    },
+    "required": [
+     "file"
+    ]
+   }
+  }
+ ]
+}

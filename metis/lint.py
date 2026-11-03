@@ -260,11 +260,9 @@ def init_counts(text: str) -> Dict[str, int]:
     return counts
 
 
-def main(argv=None):
+def parser():
+    """The verb's argparse: the CLI's, and its row of metis/trace_tools.json (tools/gen_trace_tools.py)."""
     import argparse
-    import sys
-    from metis.kernel.diagnostics import render_text
-    from metis.lang.compiler import CatalogError, LangError, load_llp
     ap = argparse.ArgumentParser(
         prog="python -m metis.lint",
         description="shape findings over a program that compiles "
@@ -273,7 +271,14 @@ def main(argv=None):
     ap.add_argument("file")
     ap.add_argument("--manifest", help="the member's domain.yaml")
     ap.add_argument("--strict", action="store_true")
-    a = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None):
+    import sys
+    from metis.kernel.diagnostics import render_text
+    from metis.lang.compiler import CatalogError, LangError, load_llp
+    a = parser().parse_args(argv)
     try:
         doc = load_llp(a.file)
     except (LangError, CatalogError) as e:

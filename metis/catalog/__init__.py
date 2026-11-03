@@ -27,6 +27,8 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
     catalog.take("lamp", src)       # apply()'s arguments that bring a domain over from another catalog
     catalog.readme("lamp", src, run, summary=…)  # a README for a domain an agentic-loop run made
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
+    metis.catalog.workspace         # the workspace over a root: its bundle, surprises, rulings, journal, the .metis/
+                                    #   LAYOUT table (loop-workspace s-5b4be5fa; metis-loop docs/WORKSPACE.md §2)
 
     python -m metis.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|root|state|installed … --json
 
