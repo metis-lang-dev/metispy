@@ -1182,7 +1182,8 @@ def parser():
     c.add_argument("--out", action="append", default=[], help="an atom, or kind:PATTERN, not:PATTERN")
     c.add_argument("--note")
     c.add_argument("--unit", action="append", default=[], help="a family's case: a unit it exercises (a consumer without it skips the case)")
-    c.add_argument("--into", help="the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout")
+    c.add_argument("--into", help="NAME.yaml: that file; any other name: the package's cases/ directory, the file "
+                                  "surprise-<member>-<K>.yaml there; else stdout")
     # the instruments (CHECKS.md §5): each prints its notes, a header line, then one row a line
     state_help = "the member's .llp: with it the rules' effects are applied to the state; without, only the do-lines from each segment's checkpoint"
     b = sub.add_parser("blame", help="who last moved what is missing or stale at tick K: the member's rule, the world, or a take (Blame first)")
@@ -1273,7 +1274,15 @@ def main(argv=None):
     out = [{x.split(":", 1)[0]: x.split(":", 1)[1]} if x.split(":", 1)[0] in ("kind", "not") else x for x in a.out]
     text = case(a.trace, a.member, a.at, after=a.after, out=out, k0=a.k0, note=a.note, units=a.unit)
     if a.into:
-        f = Path(a.into) / ("surprise-%s-%d.yaml" % (a.member, a.at))
+        f = Path(a.into)
+        if f.suffix == ".yaml":                   # a file's name: that file (the pi loop gave one, and got a directory)
+            if f.is_dir():
+                import sys
+                print("metis.trace case: --into %s is a directory, not the case's file: name a NAME.yaml that is "
+                      "not a directory, or give the directory itself" % f, file=sys.stderr)
+                return 2
+        else:
+            f = f / ("surprise-%s-%d.yaml" % (a.member, a.at))
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(text)
         print(f)

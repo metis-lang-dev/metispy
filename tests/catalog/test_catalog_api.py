@@ -725,6 +725,30 @@ def test_a_family_unit_under_metis_home_is_shared_not_carried(scratch, tmp_path,
         catalog.includes(d, [d / "inc.llp"], scratch)
 
 
+def test_units_lists_own_shared_and_std_with_their_real_paths(scratch, tmp_path, monkeypatch):
+    """Read-only: every .llp the member serves and includes, transitively, by the compiler's rule: own (beside, in
+    the domain), shared (the family's, under METIS_HOME, and what it includes), std (iface/); the CLI the same."""
+    d = _inc_domain(scratch)
+    home = tmp_path / "home"
+    home.mkdir()
+    (d / "inc_rules.llp").rename(home / "inc_rules.llp")
+    (home / "inc_rules.llp").write_text((home / "inc_rules.llp").read_text() + 'include "iface/protocol_domain.llp".\n'
+                                        'include "inc_more.llp".\n')
+    (home / "inc_more.llp").write_text("% the family's second unit\n")
+    (d / "inc_own.llp").write_text("% the member's own\n")
+    (d / "inc.llp").write_text((d / "inc.llp").read_text() + 'include "inc_own.llp".\n')
+    monkeypatch.setenv("METIS_HOME", str(home))
+    u = catalog.units("inc", scratch)
+    assert u == {str((d / "inc.llp").resolve()): "own", str((home / "inc_rules.llp").resolve()): "shared",
+                 str((d / "inc_own.llp").resolve()): "own", str((home / "inc_more.llp").resolve()): "shared",
+                 str((catalog.std() / "iface" / "protocol_domain.llp").resolve()): "std"}
+    assert list(u)[0] == str((d / "inc.llp").resolve()), "the program first"
+    assert cli(["--root", str(scratch), "units", "inc", "--json"], scratch) == u
+    (d / "inc.llp").write_text((d / "inc.llp").read_text() + 'include "gone.llp".\n')
+    with pytest.raises(ValueError, match="includes 'gone.llp', which is not there"):
+        catalog.units("inc", scratch)
+
+
 @needs_metisc
 def test_an_edit_of_a_member_that_includes_its_family(scratch, tmp_path, monkeypatch):
     """The gate's edit of a program whose include is the family's (METIS_HOME): no refusal, and metisc, which

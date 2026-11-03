@@ -82,7 +82,7 @@
      },
      "into": {
       "type": "STRING",
-      "description": "the package's cases/: the file surprise-<member>-<K>.yaml there; else stdout",
+      "description": "NAME.yaml: that file; any other name: the package's cases/ directory, the file surprise-<member>-<K>.yaml there; else stdout",
       "flag": "--into"
      }
     },

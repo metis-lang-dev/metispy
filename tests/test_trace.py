@@ -482,6 +482,20 @@ def test_the_cli_writes_the_case_and_replays(tmp_path, program, capsys):
     assert f.is_file() and c["boundaries"][-1]["expect"] == {"after": ["a"], "out": [{"kind": "yield_*"}]}
 
 
+def test_case_into_a_yaml_name_writes_that_file_and_refuses_a_directory_of_that_name(tmp_path, program, capsys):
+    """loop-workspace (nina's paid round): `--into cases/surprise-planner-2.yaml` made a DIRECTORY of that name and the
+    judge failed on it. A NAME.yaml is that file; any other name is still the cases/ directory."""
+    d = write(tmp_path, program, GOOD)
+    f = tmp_path / "pkg" / "cases" / "brakes-late.yaml"
+    assert T.main(["case", str(d), "m", "--at", "2", "--after", "a", "--into", str(f)]) == 0
+    assert f.is_file() and yaml.safe_load(f.read_text())["boundaries"][-1]["expect"] == {"after": ["a"]}
+    assert capsys.readouterr().out.strip() == str(f)
+    (tmp_path / "taken.yaml").mkdir()
+    assert T.main(["case", str(d), "m", "--at", "2", "--after", "a", "--into", str(tmp_path / "taken.yaml")]) == 2
+    assert "is a directory, not the case's file" in capsys.readouterr().err
+    assert list((tmp_path / "taken.yaml").iterdir()) == [], "nothing written into it"
+
+
 def test_a_pack_is_appended_and_its_drops_taken_out():
     pack = "drop b_to_c\npred d : small.\nstage main {\n  %% C becomes d.\n  c_to_d [dyn] : c -o d.\n}\n"
     text, info = T.apply_pack(PROGRAM, pack)

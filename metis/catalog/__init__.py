@@ -26,11 +26,12 @@ module and no consumer. metis_loop_sdk.catalog and metis_catalog re-export it fo
     catalog.edit("dog", "dog.llp", old, new)   # apply()'s arguments for one exact edit of a file on disk
     catalog.take("lamp", src)       # apply()'s arguments that bring a domain over from another catalog
     catalog.readme("lamp", src, run, summary=…)  # a README for a domain an agentic-loop run made
+    catalog.units("planner")        # {path: own|shared|std}: every .llp it serves and includes (read-only)
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
     metis.catalog.workspace         # the workspace over a root: its bundle, surprises, rulings, journal, the .metis/
                                     #   LAYOUT table (loop-workspace s-5b4be5fa; metis-loop docs/WORKSPACE.md §2)
 
-    python -m metis.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|root|state|installed … --json
+    python -m metis.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|units|root|state|installed … --json
 
 The TypeScript face and the catalog widget stay metis-loop's (metis_loop_sdk.catalog: TS_DIR,
 WIDGET_DIR, widget_file, and its CLI's `ts` and `widget` verbs over this one).
@@ -985,6 +986,40 @@ def includes(d, files, r=None):
     return out
 
 
+def units(name, r=None):
+    """{path: own | shared | std} of every .llp the domain `name` serves (its program, its extensions) and every
+    unit they include, transitively, by the compiler's include rule (include_path, as includes() walks it), the
+    paths absolute: own = inside the domain directory, std = the language's standard units (iface/), shared =
+    anywhere else (a family's unit under METIS_HOME or the root). Read-only: what a loop shows a brain so it
+    reads the rules a member includes; the gate's includes() still carries own files only. Raises ValueError for
+    an include found nowhere."""
+    import re
+    from metis.lang.compiler import include_path
+    dom = get(name, r)
+    d = Path(dom.dir).resolve()
+    iface = (std() / "iface").resolve()
+    out, todo = {}, [Path(f).resolve() for f in [dom.program, *dom.extensions()] if f]
+    for f in todo:
+        out.setdefault(str(f), "own" if d in f.parents else "shared")
+    i = 0
+    while i < len(todo):
+        f = todo[i]
+        i += 1
+        if not f.is_file():
+            continue
+        for m in re.finditer(INCLUDE, f.read_text(), re.M):
+            try:
+                inc = include_path(m.group(1), f.parent, r)
+            except FileNotFoundError as e:
+                raise ValueError(f"{name}: {f.name} includes {m.group(1)!r}, which is not there "
+                                 f"(not under {str(e).split(': not under ', 1)[-1]})") from None
+            if str(inc) in out:
+                continue
+            out[str(inc)] = "own" if d in inc.parents else "std" if iface in inc.parents else "shared"
+            todo.append(inc)
+    return out
+
+
 def readme(name, src, run=None, summary=None, title=None):
     """A README for the domain `name` of the catalog `src`, written from what an
     agentic-loop run left. The SDK writes every mechanical part: the title line, where it
@@ -1177,10 +1212,12 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
     hm = sub.add_parser("home", help="METIS_HOME: the shared packages")
     fd = sub.add_parser("find", help="a package: <root>/domains/NAME, else <home>/domains/NAME; its domains")
     fd.add_argument("name")
+    un = sub.add_parser("units", help="every .llp a domain serves and includes, transitively: {path: own|shared|std}")
+    un.add_argument("name")
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     more = [sub.add_parser(v, help=h) for v, (h, _) in extra.items()]
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, lk, cs, gd, rt, hm, fd, st, inst, *more):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, lk, cs, gd, rt, hm, fd, un, st, inst, *more):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1230,6 +1267,8 @@ def main(argv=None, extra=None, prog="python -m metis.catalog"):
                    "domains": [x.name for x in package_domains(a.name, r)]}
         elif a.cmd == "state":
             out = {"state": str(state(r))}
+        elif a.cmd == "units":
+            out = units(a.name, r)
         elif a.cmd == "installed":
             out = {k: str(v) for k, v in installed().items()}
         elif a.cmd in extra:
