@@ -1049,7 +1049,7 @@ def fired_on_seeds(path, rule, seeds, program, member):
                         got = [sh._sample() for _ in item["step"]]
                     else:
                         got = []
-                    if any(x and (x == rule or pred_of(x) == rule) for x in got):
+                    if any(x and (x == rule or rule_base(x) == rule) for x in got):    # a ground event is go[P=door]
                         first = t["k"]
                         break
         out.rows.append([seed, first is not None, first])

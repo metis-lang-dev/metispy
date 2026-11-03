@@ -156,6 +156,37 @@ def test_fired_searches_the_seeds(tmp_path, program):
         T.fired_on_seeds(d, "left", 2, program, "nobody")
 
 
+GROUND = """
+catalog ground 1.
+provenance text "a ground event for fired" "2026-11-03".
+layers (dyn).
+stages (main).
+type place {door sofa}.
+namespace g produce (dyn).
+pred want(place) : g.
+pred at(place) : g.
+stage main {
+  %% I go to {P}.
+  go [dyn] : want(P) -o at(P).
+}
+#steps 20
+#seeds 1
+"""
+
+
+def test_fired_finds_a_ground_event_by_its_rule_after_a_take(tmp_path):
+    """loop-chat F2 (a console session on dog): the input is a take, the rule fires as a ground event go[P=door] at
+    the next tick; fired names it by its rule (`go`) as by the firing itself."""
+    p = tmp_path / "ground.llp"
+    p.write_text(GROUND)
+    d = write(tmp_path / "t", [{"k": 1, "members": {"m": {"why": "command", "seq": [{"take": ["+want(door)"], "by": "person"}]}}},
+                               {"k": 2, "members": {"m": {"why": "command", "seq": [{"step": ["go[P=door]"], "by": "tool"}]}}}],
+              program=p)
+    for name in ("go", "go[P=door]"):
+        t = T.fired_on_seeds(d, name, 1, p, "m")
+        assert t.rows == [[1, True, 2]] and t.notes == ["%s fired on 1 of 1 seeds" % name], (name, t.rows)
+
+
 def test_the_cli_prints_notes_a_header_and_rows(trace, tmp_path, capsys):
     assert T.main(["blame", str(trace), "--member", "m", "--k", "3", "--atoms", "red, green 0"]) == 0
     lines = capsys.readouterr().out.splitlines()
