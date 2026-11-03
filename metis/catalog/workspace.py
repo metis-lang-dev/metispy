@@ -422,7 +422,7 @@ class Workspace:
         if not d.is_dir():
             return []
         return [{"run": t.name, "path": self.rel(t), "segments": len(list(t.glob("seg-*.jsonl")))}
-                for t in sorted(d.iterdir()) if t.is_dir()]
+                for t in sorted(d.iterdir()) if t.is_dir() and not t.name.startswith(".")]   # a keep_window copy in progress
 
     def trace(self, run):
         """One trace: {run, path, k0, k1, checkpoints, header} read by metis.trace (k1: the last tick written)."""
@@ -450,8 +450,9 @@ class Workspace:
     def keep_window(self, run, k0, k1, name, who="backend"):
         """The window [K0, K1] of traces/<RUN>/ kept past the writer's ring: the segments that hold it, each with the
         checkpoint it starts from, and the run's marks.jsonl and config.yaml when there are, copied to
-        traces/<RUN>-<NAME>/ (whole, then renamed). Refused when the window is not in the trace any more, with the k
-        range it holds, or when the copy is there already. → "traces/<RUN>-<NAME>"."""
+        traces/<RUN>-<NAME>/ (whole, then renamed; the marks inside the window only). Refused when the window is not in the
+        trace any more, with the k range it holds (also when a live writer's ring drops a segment during the copy), or when
+        the copy is there already; a refused copy leaves nothing. → "traces/<RUN>-<NAME>"."""
         import shutil
         from metis import trace as T
         src = self.path("trace", run=_check_run(run))
@@ -471,14 +472,29 @@ class Workspace:
         self.made()
         tmp = dst.with_name(".%s.tmp%d" % (dst.name, os.getpid()))
         shutil.rmtree(tmp, ignore_errors=True)
-        (tmp / "checkpoints").mkdir(parents=True)
-        for sg in keep:
-            shutil.copy2(src / ("seg-%d.jsonl" % sg.k0), tmp / ("seg-%d.jsonl" % sg.k0))
-            shutil.copy2(src / sg.header["checkpoint"], tmp / sg.header["checkpoint"])
-        for f in ("marks.jsonl", "config.yaml"):
-            if (src / f).is_file():
-                shutil.copy2(src / f, tmp / f)
-        os.rename(tmp, dst)
+        try:
+            (tmp / "checkpoints").mkdir(parents=True)
+            for sg in keep:
+                f = "seg-%d.jsonl" % sg.k0
+                try:
+                    shutil.copy2(src / f, tmp / f)
+                    shutil.copy2(src / sg.header["checkpoint"], tmp / sg.header["checkpoint"])
+                except FileNotFoundError:          # a live writer's ring dropped it while it was copied
+                    raise ValueError("the ring dropped %s while it was copied: the window [%d, %d] is not in traces/%s any more"
+                                     % (f, k0, k1, run)) from None
+            if (src / "config.yaml").is_file():
+                shutil.copy2(src / "config.yaml", tmp / "config.yaml")
+            rows = [r for r in _rows(src / "marks.jsonl")            # the marks inside the window only
+                    if isinstance(r, dict) and isinstance(r.get("at_k"), int) and k0 <= r["at_k"] <= k1]
+            if rows:
+                (tmp / "marks.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            try:
+                os.rename(tmp, dst)
+            except OSError:                            # another keep of the same name made it meanwhile
+                raise ValueError("traces/%s is there already" % dst_run) from None
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
         self.journal(who, "keep", trace="traces/" + dst_run, source="traces/" + run, window=[k0, k1])
         return "traces/" + dst_run
 

@@ -388,7 +388,7 @@ def test_a_window_is_kept_past_the_ring_with_its_marks_and_config(tmp_path):
     kept = ws.state / "traces" / "r1-mark-1"
     assert sorted(p.name for p in kept.glob("seg-*.jsonl")) == ["seg-3.jsonl", "seg-6.jsonl"]
     assert sorted(p.name for p in (kept / "checkpoints").iterdir()) == ["k3.json", "k6.json"]
-    assert (kept / "marks.jsonl").read_text() == (d / "marks.jsonl").read_text() and (kept / "config.yaml").is_file()
+    assert [m["mark"] for m in ws.marks("r1-mark-1")] == [1] and (kept / "config.yaml").is_file()   # the marks inside only
     t = ws.trace("r1-mark-1")
     assert (t["k0"], t["k1"], t["checkpoints"]) == (3, 8, [3, 6])
     assert [r["kind"] for r in ws.events()][-1] == "keep"
@@ -403,3 +403,33 @@ def test_a_window_is_kept_past_the_ring_with_its_marks_and_config(tmp_path):
     with pytest.raises(ValueError):
         ws.keep_window("r1", 6, 7, "../x")
     assert len(T.read(kept)) == 2
+
+
+def test_a_window_the_ring_drops_during_the_copy_leaves_nothing(tmp_path, monkeypatch):
+    """metis's review of step 5 (1)-(3): a segment the live writer's ring drops while it is copied is the window's refusal, in
+    words, and the temp dir goes; traces() never lists a copy in progress; a rename onto a copy made meanwhile is 'there already'."""
+    import shutil
+    ws = W.workspace(tmp_path)
+    d = ring_trace(ws, "r1", 10, 3)
+    real = shutil.copy2
+
+    def ring(a, b, *k, **kw):
+        if str(a).endswith("seg-6.jsonl"):
+            (d / "seg-6.jsonl").unlink()
+        return real(a, b, *k, **kw)
+    monkeypatch.setattr(shutil, "copy2", ring)
+    with pytest.raises(ValueError, match=r"the ring dropped seg-6.jsonl while it was copied"):
+        ws.keep_window("r1", 4, 7, "m")
+    monkeypatch.setattr(shutil, "copy2", real)
+    assert sorted(p.name for p in (ws.state / "traces").iterdir()) == ["r1"]
+    (ws.state / "traces" / ".r1-x.tmp1").mkdir()
+    assert [t["run"] for t in ws.traces()] == ["r1"]
+    real_rename = os.rename
+
+    def raced(a, b):
+        os.makedirs(os.path.join(b, "seg-0.jsonl"))       # another keep made it, not empty
+        return real_rename(a, b)
+    monkeypatch.setattr(os, "rename", raced)
+    with pytest.raises(ValueError, match="there already"):
+        ws.keep_window("r1", 0, 1, "y")
+    assert not [p for p in (ws.state / "traces").iterdir() if p.name.startswith(".r1-y")]
