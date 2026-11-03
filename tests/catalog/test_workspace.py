@@ -21,7 +21,7 @@ def dead_pid():
     return p.pid
 
 
-def test_the_layout_is_one_table_of_relative_paths():
+def test_the_layout_is_one_table_of_relative_paths(tmp_path):
     lay = W.layout()
     assert lay["format"] == "metis-workspace/1" and lay["state"] == ".metis"
     assert lay["who"] == ["backend", "pi", "judge", "world"] and lay["locks"] == ["pi", "backend"]
@@ -30,6 +30,8 @@ def test_the_layout_is_one_table_of_relative_paths():
         assert not p.startswith("/") and ".." not in p.split("/"), name
         assert row["kind"] in ("dir", "json", "jsonl", "text") and (row["kind"] == "dir") == p.endswith("/"), name
     assert re.match(lay["id"], W.new_id()) and W.new_id() != W.new_id()
+    ws = W.workspace(tmp_path)
+    assert [n for n in lay["face"] if not hasattr(ws, n) and not callable(getattr(W, n, None))] == [], "py's names"
     ws_paths = {r["path"] for r in lay["paths"].values()}
     assert {"loop/journal.jsonl", "surprises/{id}.json", "surprises/{id}.taken", "rulings/{id}.md", "rulings/{id}.json",
             "packs/{id}.llp", "traces/{run}/", "cost.jsonl", "loop/{kind}.json"} <= ws_paths

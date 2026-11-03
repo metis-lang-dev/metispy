@@ -51,6 +51,11 @@ WHO = ("backend", "pi", "judge", "world")
 LOCKS = ("pi", "backend")
 ID = r"^\d{8}T\d{6}-[0-9a-f]{6}$"
 STATUS = ("open", "taken", "ruled")
+# The face: the names both faces have, py's (Workspace's methods, this module's functions) and the TypeScript
+# face's (metis-loop sdk/ts/workspace.ts), one for one: its test reads them from layout()["face"].
+FACE = ("layout", "root", "path", "bundle", "context", "traces", "trace", "surprises", "surprise", "drop_surprise",
+        "take_surprise", "rule", "rulings", "journal", "events", "cost", "loops", "lock", "unlock", "tools",
+        "tool_argv")
 
 # The layout: name → (path under .metis/, kind, who writes it, what it is). {id}, {run}, {kind} are filled in.
 LAYOUT = {
@@ -84,7 +89,7 @@ LAYOUT = {
 def layout():
     """The layout as data: what `layout --json` prints and the TypeScript face reads."""
     return {"format": FORMAT, "state": catalog.STATE, "id": ID, "who": list(WHO), "locks": list(LOCKS),
-            "status": list(STATUS),
+            "status": list(STATUS), "face": list(FACE),
             "paths": {n: {"path": p, "kind": k, "writer": w, "what": t} for n, (p, k, w, t) in LAYOUT.items()}}
 
 
