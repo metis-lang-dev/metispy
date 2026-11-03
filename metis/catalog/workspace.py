@@ -7,7 +7,7 @@ they meet here, in files, and the UI tails one journal.
     ws = workspace(DIR=None)          # DIR, else metis.catalog.root(): one object, no daemon
     ws.root, ws.state                 # DIR, DIR/.metis/ (made by the first write, through metis.catalog.state:
                                       #   git-ignored in a checkout; a read never makes it)
-    ws.bundle(name=None)              # {name, composition, members, image, golden, build, stale, why} or None
+    ws.bundle(name=None)              # {name, composition, members, image, golden, config, build, stale, why} or None
     ws.context(patterns=None)         # the text a brain is given first (paths, never the patterns' text)
     ws.traces(), ws.trace(run)        # .metis/traces/<run>/ (metis.trace's Segments layout as it is)
     ws.surprises(status=None)         # .metis/surprises/<id>.json, each with its status: open | taken | ruled
@@ -301,7 +301,9 @@ class Workspace:
 
     def bundle(self, name=None):
         """The workspace's bundle: DIR/domains/composition.yaml, else the one composition under domains/*/ (NAME:
-        that package's); None when there is none (several and no NAME: None too). image: the hash of the last
+        that package's); None when there is none (several and no NAME: None too). config: the service config a
+        run of the bundle takes (propose.sh --config), absolute: the path the composition names under `service:`
+        (relative to it), else service.yaml beside it, else None; the bundle's, never .metis/'s. image: the hash of the last
         `metisc build` (build/<name>.build); golden: image.golden beside the composition; stale: no build yet, or
         a member's .llp or domain.yaml, the composition or its own .llp newer than the build record (the
         project Makefile's test, spec/17 §7: metisc build itself compares hashes, so a touched file reads stale
@@ -325,6 +327,9 @@ class Workspace:
                 if p:
                     dirs[m] = Path(p)
         golden = (cdir / "image.golden").read_text().strip() if (cdir / "image.golden").is_file() else None
+        svc = spec.get("service")
+        config = (cdir / str(svc)).resolve() if svc else (cdir / "service.yaml").resolve() \
+            if (cdir / "service.yaml").is_file() else None
         why = None
         if not record.is_file():
             why = "no build yet (%s)" % record.relative_to(self.root)
@@ -341,7 +346,8 @@ class Workspace:
                 why = "%s is newer than the build" % newer[0].relative_to(self.root) if newer[0].is_relative_to(self.root) \
                     else "%s is newer than the build" % newer[0]
         return {"name": bname, "composition": str(comp.relative_to(self.root)), "members": members, "image": image,
-                "golden": golden, "build": str(record.relative_to(self.root)) if record.is_file() else None,
+                "golden": golden, "config": str(config) if config else None,
+                "build": str(record.relative_to(self.root)) if record.is_file() else None,
                 "stale": why is not None, "why": why}
 
     # ── the context ──

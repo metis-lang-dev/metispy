@@ -174,6 +174,18 @@ def test_one_composition_under_domains_is_the_bundle_and_a_name_picks_one(tmp_pa
         ws.bundle("a")
 
 
+def test_the_bundles_service_config_is_named_or_beside_it(tmp_path):
+    d = composition(tmp_path)
+    ws = W.workspace(tmp_path)
+    assert ws.bundle()["config"] is None
+    (d / "service.yaml").write_text("trace: {}\n")
+    assert ws.bundle()["config"] == str((d / "service.yaml").resolve())
+    (d / "conf").mkdir()
+    (d / "composition.yaml").write_text((d / "composition.yaml").read_text() + "service: conf/run.yaml\n")
+    assert ws.bundle()["config"] == str((d / "conf" / "run.yaml").resolve()), "the named one wins, absolute"
+    assert not (ws.state).exists(), "config is the bundle's, not .metis/'s"
+
+
 def test_cost_is_summed_by_model_and_by_who(tmp_path):
     ws = W.workspace(tmp_path)
     ws.made()
