@@ -189,6 +189,8 @@ def test_seed_first(root, tmp_path):
     g = gate.Gate()
     with pytest.raises(gate.Refused, match=r"a seeded run makes the seed first \(catalog_new domain=lamp program=served\)"):
         g.propose("new", "other", root, run=run, text=LAMP.replace("lamp", "other"))
+    with pytest.raises(gate.Refused, match=r"a seeded run makes the seed first \(catalog_new domain=lamp program=served\)"):
+        g.propose("new", "lamp", root, run=run, text=LAMP)              # the seed's own name, but not the seed
     with pytest.raises(gate.Refused, match="the REPL serves a blank world"):
         g.propose("new", "lamp", root, run=run, served=True)
     g.confirm(g.propose("new", "lamp", root, run=run, text=LAMP, served=True, display="the lamp")["token"])
@@ -210,6 +212,11 @@ def test_a_package_seed_comes_whole_and_says_its_display_is_its_own(root, tmp_pa
     assert "was not" not in pl.get("say", "") and 'display "the pigs" and line "three pigs"' in pl["say"]
     out = g.confirm(pl["token"])
     assert sorted(out["written"]) == ["domains/pigs/domain.yaml", "domains/pigs/pigs.llp"] and out["serve"]["program"]
+    # a package that brings no README gets one drafted around the summary, its own files as they are
+    (root / "domains/pigs").rename(root / "pigs-taken")
+    pl = g.propose("new", "pigs", root, run=run, served=True, readme={"text": "Three pigs.", "title": "the pigs"})
+    rd = next(f for f in pl["files"] if f["path"] == "domains/pigs/README.md")["text"]
+    assert rd.startswith("# pigs — the pigs\n\nThree pigs.\n") and "seeded from" in rd
 
 
 def test_take_into_another_catalog_with_the_runs_readme(root, tmp_path):

@@ -651,17 +651,25 @@ class Gate:
         seed = _seed(run)
         served = bool(a.get("served"))
         shown = {k: a[k] for k in ("display", "line") if a.get(k) is not None}
-        if seed and not _known(seed.get("name", ""), root) and domain != seed.get("name"):
+        if seed and not _known(seed.get("name", ""), root) and (domain != seed.get("name") or not served):
             raise Refused(f"a seeded run makes the seed first (catalog_new domain={seed['name']} program=served); "
                           "a change to it is then an edit")
+        intents, readme = a.get("intents"), a.get("readme")
         if served and seed and seed.get("package"):          # a package seed comes whole from run/seed/
             src = Path(run) / "seed"
-            say = None
+            say = ""
             if shown:
                 own = catalog.get(domain, src)
                 say = (f" The package's own domain.yaml is used as it is, so the display and line given here were not: "
                        f"it has display {json.dumps(own.display)} and line {json.dumps(own.line)}.")
-            return planned(catalog._take_spec(domain, src, root), True, say=say)
+            kw = catalog._take_spec(domain, src, root)
+            # its own intent.yaml and README are kept; a draft only of what it lacks
+            want_i, want_r = intents is True and kw.get("intents") is None, isinstance(readme, dict) and kw.get("readme") is None
+            if want_i or want_r:
+                it, rd, note = self._draft(domain, root, run, kw, True if want_i else None, readme if want_r else None)
+                kw.update({k: v for k, v in (("intents", it), ("readme", rd)) if v is not None})
+                say += note or ""
+            return planned(kw, True, say=say or None)
         text = a.get("text")
         if text is None:
             raise Refused("the REPL serves a blank world: there is no program to make a package of (loop.sh --seed starts it on one)"
@@ -671,7 +679,6 @@ class Gate:
             if not NAME.match(k):
                 raise Refused(f"extension {json.dumps(k)}: lowercase letters, digits, _ (domains/<domain>/extensions/<name>.llp)")
         manifest = (f"# written by the loop's catalog_new (docs/LOOP-AGENT.md)\n" + catalog._new_manifest(domain, Path(root)))
-        intents, readme = a.get("intents"), a.get("readme")
         if intents is True or isinstance(readme, dict):
             intents, readme, note = self._draft(domain, root, run, dict(program=text, extensions=exts or None,
                                                                          manifest=manifest, **shown), intents, readme)
