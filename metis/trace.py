@@ -1057,6 +1057,111 @@ def fired_on_seeds(path, rule, seeds, program, member):
     return out
 
 
+
+# ── sort: each response violation of a run, by why it is one (pascal's road sort, lifted: CHECKS.md §5; checks-open s-17e557f0) ──
+SORT_CLASSES = {1: "checker", 2: "projection", 3: "competing", 4: "responder", 5: "gap", 6: "unseen, the other's duty"}
+SORT_BOUND = {"brake_min": -4.0, "brake_min_correct": -3.0}     # the road's passenger ego: the bound each response gives
+SORT_RECENT = 60                                                 # rows looked back for a release's lane change (settled_to holds 2 s)
+
+
+def _sort_bound(pairs, bounds):
+    return min((bounds[p["resp"]] for p in pairs if p["resp"] in bounds), default=None)
+
+
+def sort_violations(rows, bounds=SORT_BOUND):
+    """(the row a command was decided on, the row it was applied in), where the applied acceleration is above the bound of the TRUTH's
+    dangerous pairs and the car moves (a standing car meets any brake). ROWS: the log's world rows, in order."""
+    return [(a, b) for a, b in zip(rows, rows[1:]) if b["a"] is not None and _sort_bound(a["truth"], bounds) is not None
+            and b["v"] > 0 and b["a"] > _sort_bound(a["truth"], bounds) + 1e-9]
+
+
+def _edge(lane):
+    return lane.rsplit("_", 1)[0]
+
+
+def changed_lane(rows, pair):
+    """Did the truth see PAIR's body change lanes on one road in ROWS? True, False, or None when no row names it."""
+    car = pair["id"].split(":")[0]
+    seen = [p["lane"] for r in rows for p in r["truth"] if p["id"].split(":")[0] == car and p["lane"]]
+    return any(a != b and _edge(a) == _edge(b) for a, b in zip(seen, seen[1:] + [pair["lane"]])) if seen else None
+
+
+def sort_row(before, row, facts, recent=(), bounds=SORT_BOUND, danger_pred="resp_lon", release_pred="settled_to",
+             holder=":xing_ego_prio"):
+    """One violation → (class, the reason in words). FACTS: the member's atoms once BEFORE's projection reached it; RECENT: the rows
+    before BEFORE. Class 2 is the sorter's call on the truth rows: it says what the belief lacked, not why. HOLDER marks a pair id
+    whose way is the ego's (class 6, the other's duty when the sensor does not see it)."""
+    ids = lambda r: ", ".join(p["id"] for p in r["truth"] if p["resp"] in bounds)
+    cmd = row["cmd"][0] if row["cmd"] else None
+    braking = [a for a in facts if a.startswith("%s(brake" % danger_pred)]
+    believed = [p for p in before["danger"] if p["resp"] in bounds]
+    seen = before.get("seen_ids")
+    bound_pairs = [p for p in before["truth"] if p["resp"] in bounds]
+    if seen is not None and bound_pairs and all(holder in p["id"] and p["id"].split(":")[0] not in seen for p in bound_pairs):
+        return 6, ("the truth has %s dangerous, the ego has the way over it and the sensor does not see it: the yielder's violation, "
+                   "listed, as sumo_host.account does" % ids(before))
+    if cmd == "brake" and row["cmd"][1] in bounds:
+        return 4, "the command is the shield's, and the acceleration is above the bound only by rounding or the car's limit"
+    if braking:
+        return 3, "the responder's fact held (%s) and the command is %s: another rule held the controls" % (braking[0], cmd)
+    if believed:
+        settled = [a for a in facts if a.startswith("%s(%s," % (release_pred, believed[0]["role"]))]
+        real = next((p for p in before["truth"] if (p["lane"], p["s"]) == (believed[0]["lane"], believed[0]["s"])), None)
+        if settled and real is not None and changed_lane(recent, real) is False:
+            return 2, "the fold released %s on %s, and %s is false: the truth saw that car change no lane" % (believed[0]["id"], settled[0], settled[0])
+        if settled:
+            return 1, ("the belief has %s dangerous, the fold released it (%s): the projection's ruled release, which the truth's fold "
+                       "does not have" % (believed[0]["id"], settled[0]))
+        return 5, "the belief has %s dangerous, no response in the facts and no release: nothing read it" % believed[0]["id"]
+    return 2, "the truth has %s dangerous, the belief no dangerous pair: the projection's facts are false against the world" % ids(before)
+
+
+def member_atoms(path, member, ticks):
+    """MEMBER's atoms at each of TICKS: its checkpoint, then its takes and beats, tick by tick."""
+    wanted, out = set(ticks), {}
+    segs = read(path)
+    counts = dict(segs[0].checkpoint["sessions"][member]["counts"])
+    for seg in segs:
+        for t in seg.ticks:
+            for item in (t["members"].get(member) or {}).get("seq") or ():
+                for line in list(item.get("take", ())) + list(item.get("beat", ())):
+                    if line[0] == "+":
+                        counts[line[1:].split(" ")[0]] = 1
+                    else:
+                        counts.pop(line[1:].split(" ")[0], None)
+            if t["k"] in wanted:
+                out[t["k"]] = sorted(counts)
+    return out
+
+
+def sort(path, log, member="responder", shift=1, bounds=SORT_BOUND, danger_pred="resp_lon", release_pred="settled_to",
+         holder=":xing_ego_prio", cases=None):
+    """The verdict rows of a run, one per response violation: {tick, norm, class, name, why, command, a, v, zone, truth, belief}.
+    LOG: the world's rows (each with tick, cmd, a, v, zone, danger and truth: pairs {id, role, resp, lane, s}, and seen_ids); the
+    facts are MEMBER's on the trace at the decided row's tick + SHIFT (a row's facts reach the trace when the member beats on them).
+    CASES: a directory: a surprise case per violation, the member's `brake_lon*` asked at the tick."""
+    rows = [r for r in map(json.loads, open(log)) if "resp" in r]
+    found = sort_violations(rows, bounds)
+    facts = member_atoms(path, member, [a["tick"] + shift for a, _ in found])
+    at = {r["tick"]: i for i, r in enumerate(rows)}
+    out = []
+    for a, b in found:
+        n, why = sort_row(a, b, facts.get(a["tick"] + shift, ()), rows[max(0, at[a["tick"]] - SORT_RECENT):at[a["tick"]]], bounds,
+                          danger_pred, release_pred, holder)
+        out.append({"tick": b["tick"], "norm": "rss_response", "class": n, "name": SORT_CLASSES[n], "why": why, "command": b["cmd"],
+                    "a": b["a"], "v": a["v"], "zone": a["zone"], "truth": [p["id"] for p in a["truth"] if p["resp"] in bounds],
+                    "belief": [p["id"] for p in a["danger"] if p["resp"] in bounds]})
+    if cases:
+        Path(cases).mkdir(parents=True, exist_ok=True)
+        for r in out:
+            (Path(cases) / ("surprise-%d.yaml" % r["tick"])).write_text(
+                case(path, member, r["tick"], out=["brake_lon*"], note="class %d %s: %s" % (r["class"], r["name"], r["why"])))
+    return out
+
+
+def sort_summary(rows):
+    return {"violations": len(rows), "by_class": {SORT_CLASSES[n]: sum(r["class"] == n for r in rows) for n in SORT_CLASSES}}
+
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser(prog="python -m metis.trace", description="a composition's trace: one member's replay, a surprise as a case, and the instruments "
@@ -1113,6 +1218,16 @@ def main(argv=None):
     o.add_argument("--cancel", required=True)
     o.add_argument("--member")
     o.add_argument("--program", help=state_help)
+    so = sub.add_parser("sort", help="each response violation of a run's log, by why it is one: checker, projection, competing, responder, gap, unseen (Sort before rule)")
+    so.add_argument("trace")
+    so.add_argument("log", help="the world's log: rows with tick, cmd, a, v, zone, danger, truth, seen_ids")
+    so.add_argument("--member", default="responder")
+    so.add_argument("--shift", type=int, default=1, help="ticks from a row to its facts on the trace (the road's: 1)")
+    so.add_argument("--bound", action="append", default=[], metavar="RESP=A", help="a response and its acceleration bound (the road's: brake_min=-4, brake_min_correct=-3)")
+    so.add_argument("--danger-pred", default="resp_lon")
+    so.add_argument("--release-pred", default="settled_to")
+    so.add_argument("--holder", default=":xing_ego_prio", help="the mark in a pair id of a way the ego holds")
+    so.add_argument("--cases", help="a directory: a surprise case per violation")
     s = sub.add_parser("fired", help="how many of seeds 1..N the rule fires on when the member is replayed over the trace's inputs (Search the seeds for a firing)")
     s.add_argument("trace")
     s.add_argument("rule", help="a rule's name, or one firing with its bindings: rule[X=a]")
@@ -1137,6 +1252,13 @@ def main(argv=None):
         tables = diff(a.trace_a, a.trace_b, a.member, a.program)
     elif a.verb == "outcomes":
         tables = [outcomes(a.trace, a.commit, a.done, a.cancel, a.member, a.program)]
+    elif a.verb == "sort":
+        bounds = {k: float(v) for k, _, v in (b.partition("=") for b in a.bound)} or SORT_BOUND
+        rows = sort(a.trace, a.log, a.member, a.shift, bounds, a.danger_pred, a.release_pred, a.holder, a.cases)
+        for r in rows:
+            print(json.dumps(r))
+        print(json.dumps(sort_summary(rows)))
+        return 0
     elif a.verb == "fired":
         tables = [fired_on_seeds(a.trace, a.rule, a.seeds, a.program, a.member)]
     if tables is not None:
