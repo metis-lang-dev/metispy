@@ -929,3 +929,39 @@ def test_an_edit_shows_the_lint_it_adds_and_a_workspace_journals_it(scratch):
     assert out["ok"] and out["findings"] == dry["findings"]
     rows = [json.loads(x) for x in (scratch / ".metis/loop/journal.jsonl").read_text().splitlines()]
     assert [(r["who"], r["kind"], r["domain"], r["files"]) for r in rows] == [("pi", "edit", "plant", ["domains/plant/plant.llp"])]
+
+
+@needs_metisc
+def test_an_edit_of_a_bundle_member_reaches_its_bundle_never_outside(tmp_path):
+    """The alf drive's M1: a bundle member's program includes the bundle's files (../tree/x.llp, generated from
+    ../x.llp): edit() reaches them inside the composition's directory, a DERIVED file brings its source; a file
+    outside the bundle, or one the member does not include, is refused; take still carries a domain's own only."""
+    h = tmp_path / "domains" / "hier"
+    (h / "lamp").mkdir(parents=True)
+    (h / "tree").mkdir()
+    (h / "composition.yaml").write_text("name: lampset\ndirect: lamp\n")
+    rules = LAMP.split("layers (dyn).\nstages (main).\n", 1)[1].split("#init", 1)[0]
+    (h / "lamp_rules.llp").write_text("% the lamp's rules, the one copy\n" + rules)
+    (h / "tree" / "lamp_rules.llp").write_text("% DERIVED from ../lamp_rules.llp by the test: edit that file, never this one.\n" + rules)
+    (h / "lamp" / "domain.yaml").write_text("display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    (h / "lamp" / "lamp.llp").write_text('catalog lamp 1.\nprovenance text "a lamp" "2026-11-04".\nlayers (dyn).\nstages (main).\n'
+                                         'include "../tree/lamp_rules.llp".\n#init off 1\n')
+    (tmp_path / "domains" / "other.llp").write_text("% not the bundle's\n")
+    d = catalog.get("lamp", tmp_path).dir
+    assert catalog.bundle_dir(d, tmp_path) == h.resolve()
+    with pytest.raises(ValueError, match="outside its domain directory"):     # take's closure: the domain's own only
+        catalog.includes(d, [h / "lamp" / "lamp.llp"], tmp_path)
+    inc = catalog.includes(d, [h / "lamp" / "lamp.llp"], tmp_path, within=h)
+    assert sorted(inc) == ["../lamp_rules.llp", "../tree/lamp_rules.llp"]      # the DERIVED file's source with it
+    shell = catalog.edit("lamp", "lamp.llp", "#init off 1", "#init off 1\n% a comment", r=tmp_path, dry_run=True)
+    assert shell["ok"], shell["findings"]
+    src = catalog.edit("lamp", "../lamp_rules.llp", "%% I switch it on.", "%% I switch it on, now.", r=tmp_path, dry_run=True)
+    assert src["ok"] and [f["path"] for f in src["files"]] == ["domains/hier/lamp_rules.llp"], src
+    with pytest.raises(ValueError, match="not inside the domain's directory or its bundle"):
+        catalog.edit("lamp", "../../other.llp", "not", "now", r=tmp_path, dry_run=True)
+    with pytest.raises(ValueError, match=r"\.\./tree/lamp_rules\.llp is generated from \.\./lamp_rules\.llp by make: edit \.\./lamp_rules\.llp"):
+        catalog.edit("lamp", "../tree/lamp_rules.llp", "%% I switch it on.", "%% x", r=tmp_path, dry_run=True)   # nina
+    (h / "loose.llp").write_text("% in the bundle, included by nobody\n")
+    with pytest.raises(ValueError, match="in the bundle but not a file this member's program includes"):
+        catalog.edit("lamp", "../loose.llp", "nobody", "somebody", r=tmp_path, dry_run=True)
+
