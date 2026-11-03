@@ -854,6 +854,12 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
     if d not in p.parents and not (bundle is not None and bundle in p.parents):
         raise ValueError(f"{name}: {path!r} is not inside the domain's directory" + (" or its bundle" if bundle else ""))
     rel = Path(os.path.relpath(p, d)).as_posix()
+    if p.is_file() and p.suffix == ".llp":     # a generated file (the bundle's tree/): an edit there is lost at the next make
+        import re
+        m = re.match(r"^%\s*DERIVED from (\S+)", _text(p).split("\n", 1)[0])
+        if m:
+            src = Path(os.path.relpath((p.parent / m.group(1)).resolve(), d)).as_posix()
+            raise ValueError(f"{name}: {rel} is generated from {src} by make: edit {src}")
     if rel.startswith("intent/") and rel != f"intent/{name}-corpus.tsv":
         raise ValueError(f"{name}: {rel} is generated from intent.yaml: edit intent.yaml")
     prog = Path(dom.program).resolve() if dom.program else None

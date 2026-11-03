@@ -959,6 +959,8 @@ def test_an_edit_of_a_bundle_member_reaches_its_bundle_never_outside(tmp_path):
     assert src["ok"] and [f["path"] for f in src["files"]] == ["domains/hier/lamp_rules.llp"], src
     with pytest.raises(ValueError, match="not inside the domain's directory or its bundle"):
         catalog.edit("lamp", "../../other.llp", "not", "now", r=tmp_path, dry_run=True)
+    with pytest.raises(ValueError, match=r"\.\./tree/lamp_rules\.llp is generated from \.\./lamp_rules\.llp by make: edit \.\./lamp_rules\.llp"):
+        catalog.edit("lamp", "../tree/lamp_rules.llp", "%% I switch it on.", "%% x", r=tmp_path, dry_run=True)   # nina
     (h / "loose.llp").write_text("% in the bundle, included by nobody\n")
     with pytest.raises(ValueError, match="in the bundle but not a file this member's program includes"):
         catalog.edit("lamp", "../loose.llp", "nobody", "somebody", r=tmp_path, dry_run=True)
