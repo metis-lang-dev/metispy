@@ -91,9 +91,13 @@ def test_a_dead_takers_take_is_taken_over(tmp_path):
     sid = ws.drop_surprise({"member": "m", "reading": "x(1) expected"})
     gone = dead_pid()
     ws.take_surprise(sid, pid=gone)
+    s = ws.surprise(sid)
+    assert s["status"] == "open" and s["stale_take"]["pid"] == gone and "taken" not in s, "a dead pid's take is stale"
+    assert [x["id"] for x in ws.surprises("open")] == [sid] and ws.surprises("taken") == []
     ws.take_surprise(sid, pid=os.getpid())
-    assert ws.surprise(sid)["taken"]["pid"] == os.getpid()
-    assert ws.events()[-1] == {**ws.events()[-1], "kind": "take", "stale_pid": gone}
+    assert ws.surprise(sid)["status"] == "taken" and ws.surprise(sid)["taken"]["pid"] == os.getpid()
+    assert "stale_take" not in ws.surprise(sid)
+    assert [(e["kind"], e.get("dead_pid")) for e in ws.events()[-2:]] == [("take", None), ("retake", gone)]
 
 
 @pytest.mark.parametrize("rec, why", [

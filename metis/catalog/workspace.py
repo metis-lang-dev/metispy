@@ -425,9 +425,19 @@ class Workspace:
 
     # ── surprises and rulings ──
     def status(self, sid):
+        """ruled (its ruling's json exists), taken (a .taken whose pid lives), else open: a take whose pid is gone
+        is stale, the lock's own rule, and the surprise is open again (the next take_surprise re-takes it)."""
         if self.path("ruling", id=sid).is_file():
             return "ruled"
-        return "taken" if self.path("taken", id=sid).is_file() else "open"
+        tk = _json(self.path("taken", id=sid))
+        return "taken" if isinstance(tk, dict) and _alive(tk.get("pid")) else "open"
+
+    def _with_take(self, rec):
+        """REC with its take: `taken` {pid, ts} when taken, `stale_take` when open over a dead pid's .taken."""
+        tk = _json(self.path("taken", id=rec["id"]))
+        if isinstance(tk, dict) and rec["status"] != "ruled":
+            rec["taken" if rec["status"] == "taken" else "stale_take"] = tk
+        return rec
 
     def surprises(self, status=None):
         """Every surprise, oldest first, each with its status (open | taken | ruled) read from the files."""
@@ -439,9 +449,7 @@ class Workspace:
             rec = _json(f)
             if not isinstance(rec, dict) or not re.match(ID, f.stem):
                 continue
-            rec = dict(rec, id=f.stem, status=self.status(f.stem))
-            if rec["status"] == "taken":
-                rec["taken"] = _json(self.path("taken", id=f.stem))
+            rec = self._with_take(dict(rec, id=f.stem, status=self.status(f.stem)))
             if status is None or rec["status"] == status:
                 out.append(rec)
         return out
@@ -452,11 +460,9 @@ class Workspace:
         rec = _json(f)
         if not isinstance(rec, dict):
             raise KeyError("no surprise %s" % sid)
-        rec = dict(rec, id=sid, status=self.status(sid))
+        rec = self._with_take(dict(rec, id=sid, status=self.status(sid)))
         if rec["status"] == "ruled":
             rec["ruling"] = _json(self.path("ruling", id=sid))
-        elif rec["status"] == "taken":
-            rec["taken"] = _json(self.path("taken", id=sid))
         return rec
 
     def drop_surprise(self, rec, who="backend"):
@@ -494,7 +500,8 @@ class Workspace:
 
     def take_surprise(self, sid, pid=None, who="pi"):
         """The pi loop starts on SID: surprises/<id>.taken {pid, ts}. Refused when it is ruled, or taken by a
-        live pid (a dead pid's take is taken over, with a journal row)."""
+        live pid. A dead pid's take is stale (the surprise reads open) and is re-taken: journal kind `retake`,
+        naming the dead pid."""
         rec = self.surprise(sid)
         if rec["status"] == "ruled":
             raise ValueError("%s: ruled already" % sid)
@@ -508,7 +515,7 @@ class Workspace:
         if _alive(old.get("pid")):
             raise ValueError("%s: taken by pid %s at %s" % (sid, old.get("pid"), old.get("ts")))
         write_whole(f, body)
-        self.journal(who, "take", id=sid, pid=pid, stale_pid=old.get("pid"))
+        self.journal(who, "retake", id=sid, pid=pid, dead_pid=old.get("pid"))
         return sid
 
     def rule(self, sid, ruling, verdict, who="pi", pack=None, **fields):
