@@ -126,6 +126,9 @@ REGISTRY: Dict[str, Tuple[str, str]] = {
     "rules-twin-body": ("warning", "lint"),
     "report-ungated": ("warning", "lint"),
     "stages-twice": ("warning", "lint"),
+    "belief-in-safety": ("warning", "lint"),
+    "enter-equals-hold": ("warning", "lint"),
+    "name-not-a-command": ("warning", "lint"),
     "llm-endpoint": ("note", "runtime"),
     # internal (defensive invariants, unreachable from source)
     "guard-not-bwd": ("error", "internal"),
@@ -247,6 +250,15 @@ HINTS: Dict[str, str] = {
     "stages-twice":
         "keep one `{decl}` line in the spliced unit: the first met wins "
         "and the second ({where}) is ignored",
+    "belief-in-safety":
+        "a safety rule reads what is seen: read an observed class here, "
+        "and leave {pred} to a rule of another stage",
+    "enter-equals-hold":
+        "let {rule} hold {state} on what the act does not move: drop "
+        "{cls} from it, and enter on a harder member of its family",
+    "name-not-a-command":
+        "rename {rule} to begin with a command of the manifest's "
+        "`commands`, or give it a head",
     "decl-duplicate":
         "a name is declared once per kind: remove this {kind} "
         "declaration of {name}, or rename it (first at {first})",

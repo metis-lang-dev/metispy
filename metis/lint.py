@@ -25,6 +25,18 @@ that COMPILES, never gating. Each is a spec/08 diagnostic of phase
 - stages-twice: an included unit states `stages` or `layers` that the
   includer also states, differently: the includer's wins silently (Stage
   block merge).
+- belief-in-safety: with the manifest's `safety: [stages]`, a rule of
+  one of them reads or consumes a belief pred: the manifest's `belief:`
+  list and the keys of its spec/16 `beliefs:` and `levels:` maps
+  (Intent-blind safety).
+- enter-equals-hold: a HOLD rule (it reads `$S` and its head is empty:
+  an act) and the ENTRY rule of S (it makes S and does not read it) both
+  read a member of one declared `family`: the act can move that class,
+  and the hold lets go mid-act (Begin hard, hold firm). Silent with no
+  family.
+- name-not-a-command: with the manifest's `commands: [...]`, a rule with
+  an empty head (acted on by its name) whose name is no entry and does
+  not begin with an entry and `_` (The name is the command).
 - invariant-init (runtime phase, error): the session's or the file's
   `#init` holds a sum over an invariant's members other than the
   declared one (the init half of `invariant`; the rules' half is the
@@ -62,6 +74,21 @@ def manifest_exempt(manifest) -> Tuple[set, set]:
     for v in (m.get("status") or {}).values():
         taken.update(v or ())
     return supplied, taken
+
+
+def manifest_lists(manifest) -> Tuple[List[str], List[str], Optional[List[str]]]:
+    """(safety stages, belief preds, commands or None) from a manifest:
+    belief = its `belief:` list and the keys of `beliefs:` and `levels:`."""
+    if not manifest:
+        return [], [], None
+    import yaml
+    m = yaml.safe_load(open(manifest)) or {}
+    belief = list(m.get("belief") or [])
+    for key in ("beliefs", "levels"):
+        belief += [p for p in (m.get(key) or {}) if p not in belief]
+    cmds = m.get("commands")
+    return list(m.get("safety") or []), belief, \
+        (list(cmds) if cmds is not None else None)
 
 
 def _iface_pred(d) -> bool:
@@ -187,6 +214,51 @@ def lint(doc, text: str = "", manifest=None, path=None) -> List[Diagnostic]:
                     f"$tick__gen for its generation {a.terms[-1].value}",
                     _src(node, f"{stage}/{node.name}", line, node.doc),
                     (("rule", node.name), ("pred", a.pred))))
+    safety, belief, commands = manifest_lists(manifest)
+    # belief-in-safety
+    for stage, node, body, head, line in clauses:
+        if stage not in safety:
+            continue
+        for p in dict.fromkeys(a.pred for a in body if a.pred in belief):
+            out.append(make(
+                "belief-in-safety",
+                f"{node.name}: a safety-stage rule reads the belief {p}",
+                _src(node, f"{stage}/{node.name}", line, node.doc),
+                (("rule", node.name), ("pred", p), ("stage", stage))))
+    # enter-equals-hold
+    family_of = {m: n for n, ms in doc.families for m in ms}
+    acts = [c for c in clauses                    # `-o ()`: the head is `one`
+            if c[0] != "qui" and all(a.pred == "one" for a in c[3])]
+    for stage, node, body, head, line in acts:
+        for s in dict.fromkeys(a.pred for a in body
+                               if a.persist and a.pred not in bwd):
+            for _, enode, ebody, ehead, _ in clauses:
+                if s not in {a.pred for a in ehead} \
+                        or s in {a.pred for a in ebody}:
+                    continue
+                theirs = {a.pred for a in ebody}
+                for c in dict.fromkeys(a.pred for a in body):
+                    if c != s and c in theirs and c in family_of:
+                        out.append(make(
+                            "enter-equals-hold",
+                            f"{node.name} holds {s} on {c}, which "
+                            f"{enode.name} tests to enter {s}: the act can "
+                            f"move {c}, so the hold lets go mid-act",
+                            _src(node, f"{stage}/{node.name}", line,
+                                 node.doc),
+                            (("rule", node.name), ("entry", enode.name),
+                             ("state", s), ("cls", c))))
+    # name-not-a-command
+    if commands is not None:
+        for stage, node, body, head, line in acts:
+            n = node.name
+            if not any(n == e or n.startswith(e + "_") for e in commands):
+                out.append(make(
+                    "name-not-a-command",
+                    f"{n}: acts by its name, and no command the host "
+                    f"takes begins it: the rule fires and nothing moves",
+                    _src(node, f"{stage}/{n}", line, node.doc),
+                    (("rule", n),)))
     # stages-twice, across the file's includes
     if path:
         out.extend(_stages_twice(Path(path)))

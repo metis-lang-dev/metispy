@@ -324,6 +324,65 @@
    }
   },
   {
+   "name": "trace_sort",
+   "module": "metis.trace",
+   "verb": "sort",
+   "description": "each response violation of a run's log, by why it is one: checker, projection, competing, responder, gap, unseen (Sort before rule)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "log": {
+      "type": "STRING",
+      "description": "the world's log: rows with tick, cmd, a, v, zone, danger, truth, seen_ids",
+      "positional": 1
+     },
+     "member": {
+      "type": "STRING",
+      "flag": "--member"
+     },
+     "shift": {
+      "type": "INTEGER",
+      "description": "ticks from a row to its facts on the trace (the road's: 1)",
+      "flag": "--shift"
+     },
+     "bound": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "a response and its acceleration bound (the road's: brake_min=-4, brake_min_correct=-3)",
+      "flag": "--bound"
+     },
+     "danger_pred": {
+      "type": "STRING",
+      "flag": "--danger-pred"
+     },
+     "release_pred": {
+      "type": "STRING",
+      "flag": "--release-pred"
+     },
+     "holder": {
+      "type": "STRING",
+      "description": "the mark in a pair id of a way the ego holds",
+      "flag": "--holder"
+     },
+     "cases": {
+      "type": "STRING",
+      "description": "a directory: a surprise case per violation",
+      "flag": "--cases"
+     }
+    },
+    "required": [
+     "trace",
+     "log"
+    ]
+   }
+  },
+  {
    "name": "trace_fired",
    "module": "metis.trace",
    "verb": "fired",

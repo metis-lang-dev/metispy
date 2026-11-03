@@ -220,3 +220,38 @@ def test_lint_cli_is_quiet_on_the_road_responder():
                        env={**os.environ, "PYTHONPATH": str(LANG.parent / "metispy")})
     assert r.returncode == 0, r.stdout + r.stderr
     assert "no lint finding" in r.stdout
+
+
+def _lint_both(where, args):
+    py = subprocess.run(["python3", "-m", "metis.lint", *args], cwd=where, capture_output=True, text=True, timeout=120,
+                        env={**os.environ, "PYTHONPATH": str(LANG.parent / "metispy")})
+    return py
+
+
+def test_lint_checks_fixture_fires_l7_l8_l9():
+    """checks-open s-17e557f0: the lights' first shape held a stop on the class it entered on; with its manifest a safety
+    rule reads a belief and two acts no command begins (stop is none, stop_lat is). metisc's bytes are the corpus golden."""
+    where = LANG / "corpus/lint"
+    if not (where / "lint_checks.llp").is_file():
+        pytest.skip("no metis-lang beside")
+    bare = _lint_both(where, ["lint_checks.llp"]).stdout
+    full = _lint_both(where, ["lint_checks.llp", "--manifest", "lint_checks.yaml"]).stdout
+    codes = lambda out: [ln.split()[1] for ln in out.splitlines() if ln.startswith("warning ")]
+    assert codes(bare) == ["state-unproduced", "state-unproduced", "enter-equals-hold"]
+    assert codes(full) == ["belief-in-safety", "enter-equals-hold", "name-not-a-command", "name-not-a-command"]
+    assert "(act/stop_here)" in full and "(act/slow_down)" in full
+    golden = (LANG / "corpus/goldens/lint_goldens.txt").read_text()
+    assert ("== metisc --lint lint_checks.llp --manifest lint_checks.yaml\n" + full) in golden
+
+
+@pytest.mark.parametrize("member", ["responder", "planner", "signals"])
+def test_lint_is_quiet_on_the_road_members_with_their_manifest_lines(member):
+    road = LANG.parent / "metis-catalog/domains/road" / member
+    if not (road / ("%s.llp" % member)).is_file():
+        pytest.skip("no metis-catalog beside")
+    if "commands:" not in (road / "domain.yaml").read_text():
+        pytest.skip("the catalog before its lint lines (checks-open s-17e557f0)")
+    r = _lint_both(road, ["%s.llp" % member, "--manifest", "domain.yaml", "--strict"])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no lint finding" in r.stdout
+
