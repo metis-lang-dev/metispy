@@ -40,6 +40,7 @@ import re
 import secrets
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -93,13 +94,36 @@ def layout():
             "paths": {n: {"path": p, "kind": k, "writer": w, "what": t} for n, (p, k, w, t) in LAYOUT.items()}}
 
 
+_LAST_ID = [""]
+
+
 def new_id(now=None):
-    """YYYYMMDDTHHMMSS-<6 hex>: sorts by time; the hex keeps two in one second apart."""
-    return time.strftime("%Y%m%dT%H%M%S", time.localtime(now)) + "-" + secrets.token_hex(3)
+    """YYYYMMDDTHHMMSS-<6 hex>: the second, then random hex that keeps two writers in one second apart. Monotonic
+    within a process: an id in the same second as this process's last one is that one's hex plus one, so a
+    process's ids sort in the order it made them. Across processes the order is the record's ts (sub-second):
+    surprises() sorts by (ts, id)."""
+    sec = time.strftime("%Y%m%dT%H%M%S", time.localtime(now))
+    hx = secrets.token_hex(3)
+    last = _LAST_ID[0]
+    if last[:15] == sec and int(hx, 16) <= int(last[16:], 16):
+        hx = "%06x" % min(int(last[16:], 16) + 1, 0xFFFFFF)
+    _LAST_ID[0] = sec + "-" + hx
+    return _LAST_ID[0]
 
 
 def _ts():
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    """Now, ISO 8601 with microseconds and the offset: what orders records written in one second."""
+    return datetime.now().astimezone().isoformat(timespec="microseconds")
+
+
+def _order(rec):
+    """(when, id): a record's ts as an instant (an older ts without sub-seconds, or none, sorts at its second),
+    then its id."""
+    try:
+        when = datetime.fromisoformat(str(rec.get("ts"))).timestamp()
+    except ValueError:
+        when = float("inf")
+    return (when, str(rec.get("id") or ""))
 
 
 def _check_id(i):
@@ -425,12 +449,22 @@ class Workspace:
 
     # ── surprises and rulings ──
     def status(self, sid):
+        """ruled (its ruling's json exists), taken (a .taken whose pid lives), else open: a take whose pid is gone
+        is stale, the lock's own rule, and the surprise is open again (the next take_surprise re-takes it)."""
         if self.path("ruling", id=sid).is_file():
             return "ruled"
-        return "taken" if self.path("taken", id=sid).is_file() else "open"
+        tk = _json(self.path("taken", id=sid))
+        return "taken" if isinstance(tk, dict) and _alive(tk.get("pid")) else "open"
+
+    def _with_take(self, rec):
+        """REC with its take: `taken` {pid, ts} when taken, `stale_take` when open over a dead pid's .taken."""
+        tk = _json(self.path("taken", id=rec["id"]))
+        if isinstance(tk, dict) and rec["status"] != "ruled":
+            rec["taken" if rec["status"] == "taken" else "stale_take"] = tk
+        return rec
 
     def surprises(self, status=None):
-        """Every surprise, oldest first, each with its status (open | taken | ruled) read from the files."""
+        """Every surprise, oldest first (by its ts, sub-second, then its id), each with its status (open | taken | ruled) read from the files."""
         if status is not None and status not in STATUS:
             raise ValueError("status %r: one of %s" % (status, ", ".join(STATUS)))
         d = self.path("surprises")
@@ -439,12 +473,10 @@ class Workspace:
             rec = _json(f)
             if not isinstance(rec, dict) or not re.match(ID, f.stem):
                 continue
-            rec = dict(rec, id=f.stem, status=self.status(f.stem))
-            if rec["status"] == "taken":
-                rec["taken"] = _json(self.path("taken", id=f.stem))
+            rec = self._with_take(dict(rec, id=f.stem, status=self.status(f.stem)))
             if status is None or rec["status"] == status:
                 out.append(rec)
-        return out
+        return sorted(out, key=_order)
 
     def surprise(self, sid):
         """One surprise with its status, and its ruling when ruled."""
@@ -452,11 +484,9 @@ class Workspace:
         rec = _json(f)
         if not isinstance(rec, dict):
             raise KeyError("no surprise %s" % sid)
-        rec = dict(rec, id=sid, status=self.status(sid))
+        rec = self._with_take(dict(rec, id=sid, status=self.status(sid)))
         if rec["status"] == "ruled":
             rec["ruling"] = _json(self.path("ruling", id=sid))
-        elif rec["status"] == "taken":
-            rec["taken"] = _json(self.path("taken", id=sid))
         return rec
 
     def drop_surprise(self, rec, who="backend"):
@@ -494,7 +524,8 @@ class Workspace:
 
     def take_surprise(self, sid, pid=None, who="pi"):
         """The pi loop starts on SID: surprises/<id>.taken {pid, ts}. Refused when it is ruled, or taken by a
-        live pid (a dead pid's take is taken over, with a journal row)."""
+        live pid. A dead pid's take is stale (the surprise reads open) and is re-taken: journal kind `retake`,
+        naming the dead pid."""
         rec = self.surprise(sid)
         if rec["status"] == "ruled":
             raise ValueError("%s: ruled already" % sid)
@@ -508,7 +539,7 @@ class Workspace:
         if _alive(old.get("pid")):
             raise ValueError("%s: taken by pid %s at %s" % (sid, old.get("pid"), old.get("ts")))
         write_whole(f, body)
-        self.journal(who, "take", id=sid, pid=pid, stale_pid=old.get("pid"))
+        self.journal(who, "retake", id=sid, pid=pid, dead_pid=old.get("pid"))
         return sid
 
     def rule(self, sid, ruling, verdict, who="pi", pack=None, **fields):
@@ -535,9 +566,10 @@ class Workspace:
         return j
 
     def rulings(self):
-        """Every ruling's json, oldest first."""
+        """Every ruling's json, oldest first (by its ts, then id)."""
         d = self.path("rulings")
-        return [r for r in (_json(f) for f in sorted(d.glob("*.json"))) if isinstance(r, dict)] if d.is_dir() else []
+        return sorted([r for r in (_json(f) for f in d.glob("*.json")) if isinstance(r, dict)], key=_order) \
+            if d.is_dir() else []
 
     # ── the locks: one active pi loop, one backend (WORKSPACE.md §2.3) ──
     def loops(self):
