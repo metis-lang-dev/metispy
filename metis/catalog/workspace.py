@@ -701,6 +701,10 @@ class Workspace:
         return True
 
     # ── cost ──
+    def spend(self):
+        """The workspace's spend line, the same in the REPL's status and the pi loop's /status (spend_of)."""
+        return spend_of(self.events(), self.cost())
+
     def cost(self):
         """cost.jsonl summed: {total, calls, by_model, by_who}."""
         rows = _rows(self.path("cost"))
@@ -714,6 +718,22 @@ class Workspace:
                 out[k][key] = out[k].get(key, 0.0) + c
         out["total"] = round(out["total"], 6)
         return out
+
+
+LOCAL_MODELS = ("ollama/",)              # a pi model on the person's own server: 0 USD, no key
+
+
+def spend_of(events, cost):
+    """The one spend count (loop-ui I8), every face's: EVENTS' `usage` rows (pi's own journal row per model call,
+    paid or local, TUI or rpc) for the calls, COST (cost.jsonl summed: pi's paid rows, the kernel's formalize, the
+    brain's) for the USD. {usd, calls, local, line}: local when every call was on a local model and nothing was paid."""
+    rows = [r for r in events if r.get("kind") == "usage" and r.get("who") == "pi"]
+    usd, calls = float(cost["total"]), len(rows)
+    local = calls > 0 and usd == 0 and all(str(r.get("model") or "").startswith(LOCAL_MODELS) for r in rows)
+    s = "s" if calls != 1 else ""
+    line = (f"0 USD, local ({calls} call{s})" if local else
+            f"{usd:.4f} USD spent by pi's estimate ({calls} call{s}; the key's bill runs higher)")
+    return {"usd": round(usd, 6), "calls": calls, "local": local, "line": line}
 
 
 def find(start=None):

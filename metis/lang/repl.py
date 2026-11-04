@@ -3437,10 +3437,9 @@ class Repl(LoopVerbs, Cmd):
             pi = ws.loops().get("pi")
             pl = (f"pi: held elsewhere, pid {pi.get('pid')} ({pi.get('mode') or '?'})" if pi and pi.get("alive")
                   else "pi: none")
-            c = ws.cost()
             n = {k: len(ws.surprises(k)) for k in W.STATUS}
-            self._say(f"{bl} · {pl} · {c['total']:.4f} USD spent by pi's estimate ({c['calls']} calls; the key's bill "
-                      f"runs higher)\nsurprises: {n['open']} open, {n['taken']} taken, {n['ruled']} ruled")
+            self._say(f"{bl} · {pl} · {ws.spend()['line']}"            # the one count (loop-ui I8)
+                      f"\nsurprises: {n['open']} open, {n['taken']} taken, {n['ruled']} ruled")
         except ValueError as e:
             self._say(str(e))
 

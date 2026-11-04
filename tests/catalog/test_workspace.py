@@ -458,3 +458,19 @@ def test_a_window_the_ring_drops_during_the_copy_leaves_nothing(tmp_path, monkey
     with pytest.raises(ValueError, match="there already"):
         ws.keep_window("r1", 0, 1, "y")
     assert not [p for p in (ws.state / "traces").iterdir() if p.name.startswith(".r1-y")]
+
+
+def test_the_spend_line_is_one_count_from_the_journal(tmp_path):
+    """loop-ui I8: the calls are the journal's `usage` rows (pi's own, one per model call, TUI or rpc), the USD
+    cost.jsonl's; on a local model the line says so instead of '0.0000 USD … (0 calls …)' after eleven calls."""
+    ws = W.workspace(tmp_path)
+    assert ws.spend()["line"] == "0.0000 USD spent by pi's estimate (0 calls; the key's bill runs higher)"
+    for _ in range(2):
+        ws.journal("pi", "usage", model="ollama/qwen3:4b", cost=0, input=5000, output=300)
+    ws.journal("backend", "usage", model="x", cost=1)                  # not pi's: not a call of the loop
+    sp = ws.spend()
+    assert (sp["calls"], sp["local"], sp["line"]) == (2, True, "0 USD, local (2 calls)")
+    ws.journal("pi", "usage", model="openrouter/deepseek/deepseek-v4-pro", cost=0.01)
+    ws.path("cost").write_text(json.dumps({"who": "pi", "model": "deepseek/deepseek-v4-pro", "cost": 0.01}) + "\n")
+    sp = ws.spend()
+    assert not sp["local"] and sp["line"] == "0.0100 USD spent by pi's estimate (3 calls; the key's bill runs higher)"
