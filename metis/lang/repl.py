@@ -2564,7 +2564,8 @@ class Repl(LoopVerbs, Cmd):
         import os
         import shlex
         import shutil
-        from metis.loop.llm import cost_log_path, max_tokens, ollama_show, resolve, unset_line
+        from metis.loop.llm import (context_clause, cost_log_path, max_tokens, ollama_context, ollama_show, resolve,
+                                    unset_line)
         shown = spec or "(unset)"
         lead = "llm" if seat == "narrate" else f"llm {seat}"
         via = f" ({where})" if where and where != f"[llm] {'endpoint' if seat == 'narrate' else seat}" else ""
@@ -2623,10 +2624,7 @@ class Repl(LoopVerbs, Cmd):
                                     f"pi loop runs on tool calls; one that can: "
                                     + (", ".join(n for n in names if n != ep.arg)[:120] or "pull one"),
                                     f"{ep.arg} cannot call tools")
-                ctx = ("" if not info or "num_ctx" in str(info.get("parameters") or "") else
-                       "; the server's context must hold pi's prompt (~6k tokens): Ollama's /v1 takes no num_ctx, so "
-                       "run the server with OLLAMA_CONTEXT_LENGTH=32768 (its default on an 8 GB GPU is 4096: the "
-                       "prompt is cut and the model never sees its tools)")
+                ctx = "; " + context_clause(*ollama_context(ep, info)) if info else ""
                 return f"{lead}: {shown} (no key, 0 USD" + (", tools" if "tools" in caps else "") + ctx + ")"
             return f"{lead}: {shown}"
         try:

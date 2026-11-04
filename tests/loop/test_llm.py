@@ -297,12 +297,24 @@ def test_repl_llm_sets_and_shows_the_three_seats(stub, monkeypatch, tmp_path):
     assert "gemma3:4b cannot call tools (Ollama: completion, vision)" in out and "saved to" in out
     _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"]}
     out = _say(r, f"llm loop ollama phi4-mini {stub}")
-    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools; the server's context must hold")
-    assert "OLLAMA_CONTEXT_LENGTH=32768" in out                    # the model carries no num_ctx of its own
+    # qwen-loop F2: one clause, and only what Ollama says: no num_ctx and not loaded -> the server's, as a condition
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools; context: the server's "
+                          "OLLAMA_CONTEXT_LENGTH, pi needs 16384+ (the model sets no num_ctx)) — saved")
+    assert out.count("\n") == 1
+    _Stub.reply = {"models": [{"name": "phi4-mini:latest", "context_length": 32768}],
+                   "capabilities": ["completion", "tools"]}          # /api/ps: loaded now, at the server's 32768
+    out = _say(r, f"llm loop ollama phi4-mini {stub}")
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools; context 32768 (served now)) — saved")
+    _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"],
+                   "parameters": "num_ctx 4096\nstop <eos>"}         # the model's own num_ctx wins, and is too small
+    out = _say(r, f"llm loop ollama phi4-mini {stub}")
+    assert ("context 4096 (the model's num_ctx), under pi's 16384: the prompt is cut, set OLLAMA_CONTEXT_LENGTH=32768"
+            in out)
     _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"],
                    "parameters": "num_ctx 32768"}
     out = _say(r, f"llm loop ollama phi4-mini {stub}")
-    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools) — saved")
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools; context 32768 (the model's "
+                          "num_ctx)) — saved")
     assert f'loop = "ollama:phi4-mini@{stub}"' in f.read_text() and "endpoint" not in f.read_text()
     shown = _say(r, "llm").splitlines()
     assert shown[0].startswith("llm: (unset)") and shown[1].startswith(f"llm loop: ollama:phi4-mini@{stub} (no key")

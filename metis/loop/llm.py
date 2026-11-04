@@ -362,6 +362,38 @@ def ollama_show(ep, timeout=2):
         raise
 
 
+PI_CONTEXT = 16384          # a take's prompt: ~4k tokens at its first call, ~10k by its fifth (qwen-loop s-75ecbab5)
+
+
+def ollama_context(ep, info, timeout=2):
+    """The context the server gives the model, as far as Ollama says it: (N, where) from the model's own num_ctx
+    (it wins over the server's OLLAMA_CONTEXT_LENGTH), else from /api/ps when the model is loaded now; (None, None)
+    when neither says. The server's environment is not visible over HTTP, so an unloaded model without a num_ctx is
+    unknown, never guessed."""
+    import re
+    m = re.search(r"(?m)^\s*num_ctx\s+(\d+)", str((info or {}).get("parameters") or ""))
+    if m:
+        return int(m.group(1)), "the model's num_ctx"
+    try:
+        with urllib.request.urlopen(ep.url + "/api/ps", timeout=timeout) as r:
+            loaded = json.load(r).get("models") or []
+    except Exception:  # noqa: BLE001 — a server that does not say
+        return None, None
+    for mo in loaded:
+        if mo.get("name") in (ep.arg, ep.arg + ":latest") and isinstance(mo.get("context_length"), int):
+            return mo["context_length"], "served now"
+    return None, None
+
+
+def context_clause(n, where):
+    """The loop seat's context, in one clause of `llm loop`'s line."""
+    if n is None:
+        return f"context: the server's OLLAMA_CONTEXT_LENGTH, pi needs {PI_CONTEXT}+ (the model sets no num_ctx)"
+    if n < PI_CONTEXT:
+        return f"context {n} ({where}), under pi's {PI_CONTEXT}: the prompt is cut, set OLLAMA_CONTEXT_LENGTH=32768"
+    return f"context {n} ({where})"
+
+
 def main(argv=None):
     """python -m metis.loop.llm pi [loop|formalize] — the seat's model for loop.sh, as JSON on stdout ({seat, where,
     spec, backend, model, id, paid, base_url?}); unset or a spec pi cannot run: the line on stderr, exit 2."""
