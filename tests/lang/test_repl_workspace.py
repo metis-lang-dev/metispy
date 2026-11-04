@@ -118,6 +118,8 @@ def test_the_terminal_repl_in_a_workspace_traces_and_drops(tmp_path, monkeypatch
     assert "(gossip3, window [1, 2])" in _say(r, "mark 1..2 the window")
     assert "ticks 1..2" in _say(r, "mark 5 too far")
     assert "mark K WORDS" in _say(r, "mark nothing")
+    assert _say(r, "status") == ("no bundle · pi: none · 0.0000 USD spent by pi's estimate (0 calls; the key's bill "
+                                 "runs higher)\nsurprises: 2 open, 0 taken, 0 ruled\n")
     listed = _say(r, "surprises")
     assert listed.count("open") == 2 and "the window" in listed
     head = T.read(tr.path)[0].header

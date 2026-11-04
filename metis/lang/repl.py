@@ -292,7 +292,7 @@ def _now_s():
 
 
 # the workspace's own verbs and the ones that leave a session where it is: no tick of the session's trace
-_WS_QUIET = frozenset(["drop", "mark", "surprises", "quit", "exit", "EOF", "help", "transcript", ""])
+_WS_QUIET = frozenset(["drop", "mark", "surprises", "status", "quit", "exit", "EOF", "help", "transcript", ""])
 
 
 def _first_sentence(words):
@@ -3360,6 +3360,25 @@ class Repl(LoopVerbs, Cmd):
                 raise ValueError(f"mark: ticks 1..{tr.last_k()} in this session's trace (K0 <= K1)")
             at = {"k": k0} if k0 == k1 else {"window": [k0, k1], "k": k1}
             self._ws_drop(tr, " ".join(words.split()), **at)
+        except ValueError as e:
+            self._say(str(e))
+
+    def do_status(self, arg):
+        """status — the workspace as the pi loop's /status says it: the bundle (BUILT/STALE), the pi loop holding it,
+        the spend, the surprises by status."""
+        try:
+            ws, _ = self._ws_need("surprises")
+            from metis.catalog import workspace as W
+            b = ws.bundle()
+            bl = "no bundle" if b is None else f"{b['name']} · v-{(b['image'] or '')[:12] or '(not built)'} " + (
+                f"STALE ({b['why']})" if b["stale"] else "BUILT")
+            pi = ws.loops().get("pi")
+            pl = (f"pi: held elsewhere, pid {pi.get('pid')} ({pi.get('mode') or '?'})" if pi and pi.get("alive")
+                  else "pi: none")
+            c = ws.cost()
+            n = {k: len(ws.surprises(k)) for k in W.STATUS}
+            self._say(f"{bl} · {pl} · {c['total']:.4f} USD spent by pi's estimate ({c['calls']} calls; the key's bill "
+                      f"runs higher)\nsurprises: {n['open']} open, {n['taken']} taken, {n['ruled']} ruled")
         except ValueError as e:
             self._say(str(e))
 
