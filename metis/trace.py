@@ -1371,5 +1371,16 @@ def main(argv=None):
     return 0
 
 
+def _main(argv=None):
+    """main, with a TraceError said as one line on stderr, exit 2 (qwen-loop F4: the pi loop's trace_case showed a
+    small model a 30-line traceback whose one useful line, "grasp did not beat in the window to tick 2", was last)."""
+    import sys
+    try:
+        return main(argv)
+    except TraceError as e:
+        print("metis.trace: %s" % e, file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_main())

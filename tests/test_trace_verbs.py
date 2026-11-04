@@ -237,3 +237,12 @@ def test_a_trace_of_several_members_needs_the_member_named(tmp_path):
     with pytest.raises(T.TraceError, match="--member: the trace has m, n"):
         T.count(d, "a")
     assert T.count(d, "a", member="m").rows == [[1, 0]] and T.count(d, "a", member="n").rows == [[0, 1]]
+
+
+def test_the_cli_says_a_trace_error_in_one_line(tmp_path, capsys):
+    """qwen-loop F4: `python -m metis.trace` says a TraceError as one stderr line, exit 2, never a traceback (the pi
+    loop's trace_case showed a small model the traceback, its one useful line last)."""
+    d = write(tmp_path / "t", [tick(0, ["+a"], [])], members=("m", "n"))
+    assert T._main(["count", str(d), "a"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("metis.trace: --member: the trace has m, n") and "Traceback" not in err and err.count("\n") == 1
