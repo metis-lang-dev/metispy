@@ -164,7 +164,7 @@ def test_repl_llm_saves_and_the_next_repl_reads_it(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     config.load(reload=True)
     r = _repl()
-    assert "llm (unset: llm ollama MODEL | llm openrouter MODEL) · OpenRouter key not set" in r.intro
+    assert "llm (unset: llm ollama MODEL | llm openrouter MODEL) · loop unset · formalize unset · OpenRouter key not set" in r.intro
     out = _say(r, "llm ollama phi3 http://127.0.0.1:9")
     assert f"saved to {f}" in out and "not reachable" in out
     assert 'endpoint = "ollama:phi3@http://127.0.0.1:9"' in f.read_text()
@@ -175,7 +175,7 @@ def test_repl_llm_saves_and_the_next_repl_reads_it(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-never-shown")
     r2 = _repl()
     assert r2.llm == "ollama:phi3"
-    assert "llm ollama:phi3 · OpenRouter key set (OPENROUTER_API_KEY)" in r2.intro
+    assert "llm ollama:phi3 · loop unset · formalize unset · OpenRouter key set (OPENROUTER_API_KEY)" in r2.intro
     assert "sk-never-shown" not in r2.intro
     assert "unknown LLM backend" in _say(r2, "llm sorcery x")
     assert 'endpoint = "ollama:phi3"' in f.read_text()        # a refused set saves nothing
@@ -189,8 +189,8 @@ def test_repl_llm_openrouter_without_the_key_is_one_line_and_a_note(monkeypatch,
     out = _say(r, "llm openrouter deepseek/deepseek-v4.1-flash-1017")
     assert out.count("\n") == 1 and "OPENROUTER_API_KEY is not set" in out
     assert 'endpoint = "openrouter:deepseek/deepseek-v4.1-flash-1017"' in (tmp_path / "c.toml").read_text()
-    out = _say(r, "llm")
-    assert out.count("\n") == 1 and "OPENROUTER_API_KEY is not set" in out
+    out = _say(r, "llm").splitlines()[0]                  # narrate's line first, then the loop's and formalize's
+    assert "OPENROUTER_API_KEY is not set" in out
     notes = [d for d in r.notes if d.code == "llm-endpoint"]
     assert notes and dict(notes[-1].data)["problem"] == "OPENROUTER_API_KEY not set"
     r.onecmd("run 3")
@@ -239,3 +239,74 @@ def test_openrouter_http_error_is_one_line_without_the_key(stub, monkeypatch, tm
         llm.complete("openrouter:m", "p")
     assert str(e.value) == "openrouter: HTTP 402 Insufficient credits"
     assert "sk-test" not in str(e.value) and not (tmp_path / "metis" / "cost.jsonl").exists()
+
+
+# ── llm-config s-07a070ad: one configuration for every seat ──────────────────────────────────────────────────────
+
+def test_the_seats_and_pi_model(monkeypatch, tmp_path):
+    f = tmp_path / "c.toml"
+    monkeypatch.setenv("METIS_CONFIG", str(f))
+    f.write_text("")
+    config.load(reload=True)
+    assert llm.seat("loop") == ("", None) and llm.seat("formalize") == ("", None)
+    assert "`llm loop ollama MODEL [URL]`" in llm.unset_line("loop")
+    f.write_text('[llm]\nendpoint = "ollama:gemma3:4b"\nloop = "ollama:phi4-mini@http://box:11434"\n')
+    config.load(reload=True)
+    assert llm.seat("narrate") == ("ollama:gemma3:4b", "[llm] endpoint")
+    assert llm.seat("formalize") == ("ollama:phi4-mini@http://box:11434", "[llm] loop (formalize's default)")
+    assert llm.pi_model("ollama:phi4-mini@http://box:11434") == {
+        "spec": "ollama:phi4-mini@http://box:11434", "backend": "ollama", "model": "ollama/phi4-mini", "id": "phi4-mini",
+        "base_url": "http://box:11434/v1", "paid": False}
+    assert llm.pi_model("openrouter:deepseek/deepseek-v4.1-flash-1017")["model"] == "openrouter/deepseek/deepseek-v4.1-flash-1017"
+    assert llm.pi_model("anthropic")["model"] == "anthropic/claude-opus-5-5" and llm.pi_model("anthropic")["paid"]
+    with pytest.raises(ValueError, match="a command has no pi model"):
+        llm.pi_model("command:cat")
+
+
+def test_the_pi_cli_says_the_seat_to_loop_sh(monkeypatch, tmp_path, capsys):
+    f = tmp_path / "c.toml"
+    f.write_text('[llm]\nloop = "openrouter:deepseek/deepseek-v4.1-flash-1017"\nformalize = "ollama:phi4-mini"\n')
+    monkeypatch.setenv("METIS_CONFIG", str(f))
+    config.load(reload=True)
+    assert llm.main(["pi"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert (out["seat"], out["model"], out["paid"], out["where"]) == (
+        "loop", "openrouter/deepseek/deepseek-v4.1-flash-1017", True, "[llm] loop")
+    assert llm.main(["pi", "formalize"]) == 0
+    assert json.loads(capsys.readouterr().out)["model"] == "ollama/phi4-mini"
+    f.write_text('[llm]\nloop = "command:cat"\n')
+    config.load(reload=True)
+    assert llm.main(["pi", "loop"]) == 2 and "a command has no pi model" in capsys.readouterr().err
+    monkeypatch.setenv("METIS_CONFIG", "")
+    config.load(reload=True)
+    assert llm.main(["pi", "loop"]) == 2 and "no loop model" in capsys.readouterr().err   # no default
+
+
+def test_repl_llm_sets_and_shows_the_three_seats(stub, monkeypatch, tmp_path):
+    """`llm loop WORDS` / `llm formalize WORDS` save [llm] loop / formalize with narrate's words; `llm` alone shows
+    the three, checked: an Ollama model that cannot call tools is said for the loop (Ollama's /api/show)."""
+    f = tmp_path / "c.toml"
+    monkeypatch.setenv("METIS_CONFIG", str(f))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    config.load(reload=True)
+    r = _repl()
+    assert "· loop unset · formalize unset ·" in r.intro
+    _Stub.reply = {"models": [{"name": "gemma3:4b"}, {"name": "phi4-mini:latest"}],
+                   "capabilities": ["completion", "vision"]}       # /api/tags and /api/show alike, from the stub
+    out = _say(r, f"llm loop ollama gemma3:4b {stub}")
+    assert "gemma3:4b cannot call tools (Ollama: completion, vision)" in out and "saved to" in out
+    _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"]}
+    out = _say(r, f"llm loop ollama phi4-mini {stub}")
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools)")
+    assert f'loop = "ollama:phi4-mini@{stub}"' in f.read_text() and "endpoint" not in f.read_text()
+    shown = _say(r, "llm").splitlines()
+    assert shown[0].startswith("llm: (unset)") and shown[1].startswith(f"llm loop: ollama:phi4-mini@{stub}")
+    assert shown[2] == f"llm formalize: ollama:phi4-mini@{stub} ([llm] loop (formalize's default))"
+    out = _say(r, "llm formalize openrouter deepseek/deepseek-v4.1-flash-1017")
+    assert "llm formalize: openrouter:deepseek/deepseek-v4.1-flash-1017 — OPENROUTER_API_KEY is not set" in out
+    assert 'formalize = "openrouter:deepseek/deepseek-v4.1-flash-1017"' in f.read_text()
+    out = _say(r, "llm loop command:cat")
+    assert "a command has no pi model" in out and out.rstrip().endswith("— not saved")
+    config.load(reload=True)
+    r2 = _repl()
+    assert f"· loop ollama:phi4-mini@{stub} · formalize openrouter:deepseek/deepseek-v4.1-flash-1017 ·" in r2.intro

@@ -10,11 +10,14 @@ Search order (first hit wins, no merging):
 
 Recognized today:
 
-  [llm]
-  endpoint = "ollama:phi3"     # ollama:MODEL[@URL] | openrouter:MODEL |
-                               # anthropic[:MODEL] | command:ARGV;
-                               # no default: unset is an error; the
-                               # REPL's `llm` writes it here (set)
+  [llm]                        # ONE configuration for every seat (llm-config), one grammar:
+                               # ollama:MODEL[@URL] | openrouter:MODEL | anthropic[:MODEL] | command:ARGV
+  endpoint = "ollama:gemma3:4b"   # the REPL's narrate (`llm WORDS`)
+  loop = "ollama:phi4-mini"       # the pi loop's model (`llm loop WORDS`): loop.sh and the console's
+                                  #   loop start take it when MODEL is not given; no command
+  formalize = "ollama:phi4-mini"  # the pi loop's formalize (`llm formalize WORDS`); default: loop's
+                               # no default anywhere: unset says how to set it; the REPL's
+                               # `llm` writes these (set), `llm` alone shows the three, checked
   max_tokens = 1024            # the per-request cap of every paid call
   [narrate]                    # narrate seat only; formalize stays
   temperature = 0.3            # at temperature 0

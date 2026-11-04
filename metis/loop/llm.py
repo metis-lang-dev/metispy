@@ -31,6 +31,13 @@ and the OpenRouter backend appends one row per call to the cost log
 (~/.config/metis/cost.jsonl: ts, seat, model, tokens, cost in USD as
 the API reports it), the standing rule for paid runs.
 
+ONE configuration for every seat (llm-config s-07a070ad, the user, 2026-11-05: "harmonize config for narration and
+formalization. both path can be configured to ollama or openroute"): the dot file's [llm] carries, each in this
+grammar, `endpoint` (the REPL's narrate), `loop` (the pi loop's model: loop.sh and the console's loop start read it
+when MODEL is not given) and `formalize` (the kernel's formalize seat in the pi loop; default the loop's). `seat`
+reads one, `pi_model` maps a spec to the name pi runs (openrouter/M, ollama/M over URL/v1, anthropic/M), and
+`python -m metis.loop.llm pi [loop|formalize]` says it to loop.sh as JSON.
+
 `resolve` parses a spec, `complete` runs one prompt through it. The
 completion is UNTRUSTED text either way: the narrate path labels it as
 narration — it never feeds back into the semantics."""
@@ -300,6 +307,84 @@ def _openrouter(prompt: str, model: str, timeout: int,
     return str(msg.get("content") or "").strip()
 
 
+# the seats of the one configuration: seat -> its key under [llm]
+SEATS = {"narrate": "endpoint", "loop": "loop", "formalize": "formalize"}
+
+
+def seat(name):
+    """(spec, where) of the seat NAME from the dot file's [llm]: formalize falls back to the loop's ("" when unset)."""
+    from . import config
+    key = SEATS[name]
+    spec = str(config.get("llm", key, "") or "").strip()
+    if spec:
+        return spec, f"[llm] {key}"
+    if name == "formalize":
+        spec = str(config.get("llm", "loop", "") or "").strip()
+        if spec:
+            return spec, "[llm] loop (formalize's default)"
+    return "", None
+
+
+def unset_line(name):
+    """What an unset seat says: how to set it (no model is called that the person did not name)."""
+    if name == "narrate":
+        return UNSET
+    return (f"no {name} model: `llm {name} ollama MODEL [URL]` or `llm {name} openrouter MODEL` in the REPL "
+            f"(saved as [llm] {SEATS[name]} in the config dot file), or MODEL= for one start")
+
+
+def pi_model(spec):
+    """The model pi runs for SPEC: {spec, backend, model (pi's provider/id), paid, base_url?, id?}. ollama:M@URL is
+    pi's provider `ollama` over the server's OpenAI-compatible URL/v1 (no key, cost 0); openrouter:M is pi's
+    openrouter/M (the key and the budget, loop.sh's rules); anthropic[:M] is pi's anthropic/M. A command spec has no
+    pi model: refused."""
+    ep = resolve(spec)
+    if ep.backend == "ollama":
+        return {"spec": ep.spec, "backend": "ollama", "model": f"ollama/{ep.arg}", "id": ep.arg,
+                "base_url": ep.url + "/v1", "paid": False}
+    if ep.backend == "openrouter":
+        return {"spec": ep.spec, "backend": "openrouter", "model": f"openrouter/{ep.arg}", "id": ep.arg, "paid": True}
+    if ep.backend == "anthropic":
+        m = ep.arg or ANTHROPIC_DEFAULT_MODEL
+        return {"spec": ep.spec, "backend": "anthropic", "model": f"anthropic/{m}", "id": m, "paid": True}
+    raise ValueError(f"{spec}: a command has no pi model: the pi loop runs on ollama, openrouter or anthropic")
+
+
+def ollama_show(ep, timeout=2):
+    """Ollama's /api/show for the endpoint's model: its capabilities (completion, tools, thinking, vision ...).
+    OSError when the server does not answer; {} when it does not know the model."""
+    import urllib.error
+    try:
+        return _post(ep.url + "/api/show", {"model": ep.arg}, {}, timeout)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {}
+        raise
+
+
+def main(argv=None):
+    """python -m metis.loop.llm pi [loop|formalize] — the seat's model for loop.sh, as JSON on stdout ({seat, where,
+    spec, backend, model, id, paid, base_url?}); unset or a spec pi cannot run: the line on stderr, exit 2."""
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(prog="python -m metis.loop.llm")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("pi", help="the seat's pi model, from the dot file's [llm]")
+    p.add_argument("seat", nargs="?", default="loop", choices=("loop", "formalize"))
+    o = ap.parse_args(argv)
+    spec, where = seat(o.seat)
+    if not spec:
+        print(unset_line(o.seat), file=sys.stderr)
+        return 2
+    try:
+        out = pi_model(spec)
+    except ValueError as e:
+        print(f"[llm] {SEATS[o.seat]} = {spec!r}: {e}", file=sys.stderr)
+        return 2
+    print(json.dumps({"seat": o.seat, "where": where, **out}))
+    return 0
+
+
 def complete(spec, prompt: str, timeout: int = 600,
              options: dict = None, system: str = None,
              meta: dict = None) -> str:
@@ -329,3 +414,8 @@ def complete(spec, prompt: str, timeout: int = 600,
                            f"({proc.returncode}): "
                            f"{proc.stderr.strip()[:400]}")
     return proc.stdout.strip()
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

@@ -2544,46 +2544,63 @@ class Repl(LoopVerbs, Cmd):
         is in the environment (the user, 2026-11-04: `metis` checks the
         key in env; never its value)."""
         import os
+        from metis.loop.llm import seat as seat_of
         key = "set" if os.environ.get("OPENROUTER_API_KEY") else "not set"
+        loop, _ = seat_of("loop")
+        form, fwhere = seat_of("formalize")
+        form = "the loop's" if fwhere and fwhere.startswith("[llm] loop") else (form or "unset")
         return (f"llm {self.llm or '(unset: llm ollama MODEL | llm openrouter MODEL)'}"
+                f" · loop {loop or 'unset'} · formalize {form}"
                 f" · OpenRouter key {key} (OPENROUTER_API_KEY)")
 
-    def _llm_status(self, spec):
-        """One line on the endpoint, VALIDATED where that is cheap: an
-        unset endpoint, anthropic without its key in the environment,
-        a command whose program is not on PATH each leave an
-        llm-endpoint note — a failure at narrate time is too late."""
+    def _llm_status(self, spec, seat="narrate", where=None):
+        """One line on a seat's model (narrate: [llm] endpoint; loop,
+        formalize: llm-config), VALIDATED where that is cheap: unset,
+        anthropic or openrouter without its key in the environment, an
+        Ollama server that does not answer or lacks the model (for the
+        loop: a model that cannot call tools), a command not on PATH each
+        leave an llm-endpoint note — a failure at the call is too late."""
         import json
         import os
         import shlex
         import shutil
-        from metis.loop.llm import UNSET, cost_log_path, max_tokens, resolve
+        from metis.loop.llm import cost_log_path, max_tokens, ollama_show, resolve, unset_line
         shown = spec or "(unset)"
+        lead = "llm" if seat == "narrate" else f"llm {seat}"
+        via = f" ({where})" if where and where != f"[llm] {'endpoint' if seat == 'narrate' else seat}" else ""
         from metis.kernel.diagnostics import note as dnote
 
         def llm_note(text, problem):
+            text = text.replace("llm: ", f"{lead}: ", 1)
             _note(self, dnote(
-                "llm-endpoint", text, "llm", (f"llm {shown}",),
+                "llm-endpoint", text, "llm", (f"{lead} {shown}",),
                 (("endpoint", str(shown)), ("problem", problem))))
             return text
-        if not spec:
-            return llm_note(f"llm: (unset) — {UNSET}",
-                            "no LLM endpoint set")
+        if not spec:                     # the loop's and formalize's unset: a line, not a finding (a REPL alone is fine)
+            if seat != "narrate":
+                return f"{lead}: (unset) — {unset_line(seat)}"
+            return llm_note(f"llm: (unset) — {unset_line(seat)}", "no LLM endpoint set")
+        shown = spec + via
         try:
             ep = resolve(spec)
         except ValueError as e:          # a dot file's broken spec
             return llm_note(f"llm: {shown} — {e}", str(e))
+        if ep.backend == "command" and seat == "loop":
+            return llm_note(f"llm: {shown} — a command has no pi model: the pi loop runs on ollama, openrouter "
+                            f"or anthropic", "a command for the loop")
         if ep.backend == "anthropic":
             if not os.environ.get("ANTHROPIC_API_KEY"):
                 return llm_note(f"llm: {shown} — ANTHROPIC_API_KEY is "
                                 f"not set", "ANTHROPIC_API_KEY not set")
-            return f"llm: {shown}"
+            return f"{lead}: {shown}"
         if ep.backend == "openrouter":
             if not os.environ.get("OPENROUTER_API_KEY"):
                 return llm_note(f"llm: {shown} — OPENROUTER_API_KEY is "
                                 f"not set (the key is read from the "
                                 f"environment only)", "OPENROUTER_API_KEY not set")
-            return f"llm: {shown} (key set; cap {max_tokens()} tokens, cost log {cost_log_path()})"
+            if seat == "narrate":
+                return f"{lead}: {shown} (key set; cap {max_tokens()} tokens, cost log {cost_log_path()})"
+            return f"{lead}: {shown} (key set; paid: loop.sh's --budget)"
         if ep.backend == "ollama":
             import urllib.request
             try:
@@ -2595,7 +2612,18 @@ class Repl(LoopVerbs, Cmd):
             if names and not any(n == ep.arg or n.split(":")[0] == ep.arg for n in names):
                 return llm_note(f"llm: {shown} — model {ep.arg} is not pulled at {ep.url} "
                                 f"(it has: {', '.join(names[:8])})", f"model {ep.arg} not pulled")
-            return f"llm: {shown}"
+            if seat == "loop":                   # the pi loop runs on tool calls
+                try:
+                    caps = ollama_show(ep).get("capabilities") or []
+                except Exception:  # noqa: BLE001 — the tags answered; a show that does not is not a finding
+                    caps = []
+                if caps and "tools" not in caps:
+                    return llm_note(f"llm: {shown} — {ep.arg} cannot call tools (Ollama: {', '.join(caps)}): the "
+                                    f"pi loop runs on tool calls; one that can: "
+                                    + (", ".join(n for n in names if n != ep.arg)[:120] or "pull one"),
+                                    f"{ep.arg} cannot call tools")
+                return f"{lead}: {shown} (no key, 0 USD" + (", tools" if "tools" in caps else "") + ")"
+            return f"{lead}: {shown}"
         try:
             argv = shlex.split(ep.arg)
         except ValueError as e:          # an unbalanced quote
@@ -2603,33 +2631,53 @@ class Repl(LoopVerbs, Cmd):
         if not shutil.which(argv[0]):
             return llm_note(f"llm: {shown} — command '{argv[0]}' NOT "
                             f"found", f"command {argv[0]} not found")
-        return f"llm: {shown}"
+        return f"{lead}: {shown}"
 
     def do_llm(self, arg):
-        """show/set the model narrate uses, SAVED in the config dot file
-        ([llm] endpoint) for every REPL on this host: `llm ollama phi3`
-        [URL], `llm openrouter deepseek/deepseek-v4.1-flash-1017` (the
-        key from $OPENROUTER_API_KEY only), `llm http://host:11434
-        MODEL` (an Ollama server), `llm anthropic [MODEL]`, `llm
-        command:ARGV`; no default. `llm` alone shows it, checked."""
+        """show/set the models, SAVED in the config dot file's [llm] for
+        every REPL and pi loop on this host (llm-config: one configuration
+        for every seat): `llm WORDS` the model narrate uses ([llm]
+        endpoint), `llm loop WORDS` the pi loop's ([llm] loop: loop.sh and
+        the console's start take it when MODEL is not given), `llm
+        formalize WORDS` the pi loop's formalize ([llm] formalize, default
+        the loop's). WORDS: `ollama phi3 [URL]`, `openrouter
+        deepseek/deepseek-v4.1-flash-1017` (the key from
+        $OPENROUTER_API_KEY only), `http://host:11434 MODEL` (an Ollama
+        server), `anthropic [MODEL]`, `command:ARGV` (narrate only); no
+        default. `llm` alone shows the three, checked."""
         from metis.loop import config
-        from metis.loop.llm import spec_from_words
+        from metis.loop.llm import SEATS, seat as seat_of, spec_from_words
         a = arg.strip()
         if not a:
-            self._say(self._llm_status(self.llm))
+            for name in SEATS:
+                spec, where = (self.llm, "[llm] endpoint") if name == "narrate" else seat_of(name)
+                self._say(self._llm_status(spec, name, where))
             return
+        name, _, rest = a.partition(" ")
+        if name in ("loop", "formalize", "narrate"):
+            if not rest.strip():
+                spec, where = (self.llm, "[llm] endpoint") if name == "narrate" else seat_of(name)
+                self._say(self._llm_status(spec, name, where))
+                return
+            a = rest.strip()
+        else:
+            name = "narrate"
         try:
             spec = spec_from_words(a)
         except ValueError as e:
             self._say(str(e))
             return
-        self.llm = spec
+        if name == "loop" and spec.startswith("command:"):     # pi runs no command: never saved for the loop
+            self._say(self._llm_status(spec, name) + " — not saved")
+            return
+        if name == "narrate":
+            self.llm = spec
         try:
-            where = config.set("llm", "endpoint", spec)
+            where = config.set("llm", SEATS[name], spec)
             saved = f"saved to {where}"
         except (OSError, ValueError) as e:
             saved = f"not saved: {e}"
-        self._say(f"{self._llm_status(spec)} — {saved}")
+        self._say(f"{self._llm_status(spec, name)} — {saved}")
 
     def do_narrate(self, arg):
         """tell this session's fired events since the last reset/edit
