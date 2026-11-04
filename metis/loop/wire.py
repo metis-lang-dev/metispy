@@ -43,15 +43,21 @@ LOOP_VERBS = frozenset(
 
 INTENT_VERBS = LOOP_VERBS | frozenset(DECLARED)
 
+# The REPL's workspace verbs (two-terminals; loop-ui I6): served only to a shell a workspace is attached to — the
+# terminal's, and the console's in personal mode (its gateway attaches the session's own trace). A shared-mode
+# visitor's shell has none, so its whitelist is INTENT_VERBS as before (D4: nothing a visitor types is written).
+WORKSPACE_VERBS = frozenset(["drop", "mark", "surprises", "status"])
 
-def parse_intent(line: str):
+
+def parse_intent(line: str, workspace: bool = False):
     """One suggested ':verb arg' line -> (op, arg), or None if the
-    policy refuses it."""
+    policy refuses it. workspace: the shell has a workspace attached
+    (its workspace verbs are allowed)."""
     line = (line or "").strip()
     if not line.startswith(":"):
         return None
     op, _, arg = line[1:].partition(" ")
-    if op not in INTENT_VERBS:
+    if op not in INTENT_VERBS and not (workspace and op in WORKSPACE_VERBS):
         return None
     if op in ("formalize", "llm") and \
             arg.strip().startswith("command"):
@@ -570,11 +576,12 @@ def dispatch(shell, op: str, arg: str = "") -> dict:
 
 def run_intent(shell, line: str) -> dict:
     """Execute one page/chat-queued intent under the module policy."""
-    p = parse_intent(line)
+    ws = shell.__dict__.get("_ws") is not None
+    p = parse_intent(line, workspace=ws)
     if p is None:
         return {"ok": False, "cmd": line,
                 "error": "intent refused — allowed verbs: " +
-                         " ".join(sorted(INTENT_VERBS)) +
+                         " ".join(sorted(INTENT_VERBS | (WORKSPACE_VERBS if ws else frozenset()))) +
                          " (no command: specs)"}
     return dispatch(shell, *p)
 
@@ -674,6 +681,7 @@ def _op_reset(shell, arg):
     return _reset_session(shell, arg)
 
 
+_WIRE_OPS.update({v: _exec(v) for v in WORKSPACE_VERBS})     # the REPL's own do_drop/do_mark/... (loop-ui I6)
 _WIRE_OPS.update({"run": _exec("run"), "step": _exec("step"),
                   "reset": _op_reset, "undo": _exec("undo"),
                   "explain": _op_surprise("explain"),

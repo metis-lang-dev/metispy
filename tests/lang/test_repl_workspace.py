@@ -152,3 +152,55 @@ def test_not_in_a_workspace_says_so(tmp_path, monkeypatch):
     assert "not in a workspace" in _say(r, "surprises")
     r2 = Repl(GOSSIP, seed=1, stdout=io.StringIO())                  # the wire's / console's shell: no line, no trace
     assert "workspace" not in r2.intro and r2.__dict__.get("_ws_trace") is None
+
+
+def test_a_drop_records_the_unit_the_person_named(tmp_path, monkeypatch):
+    """loop-ui I1: `metis grasp_domain.llp` serves grasp/grasp.llp (its includer); the drop records the unit, so the
+    pi loop's pack_propose amends the file the rule is in, not the member's program."""
+    ws_dir = tmp_path / "ws"
+    (ws_dir / ".metis").mkdir(parents=True)
+    prog = ws_dir / "gossip3.llp"
+    shutil.copy(GOSSIP, prog)
+    (ws_dir / "units").mkdir()
+    (ws_dir / "units" / "rules.llp").write_text("% a unit\n")
+    monkeypatch.chdir(ws_dir)
+    ws = W.Workspace(ws_dir)
+    r = Repl(prog, seed=1, terminal=True, workspace=ws, unit=ws_dir / "units" / "rules.llp", stdout=io.StringIO())
+    _say(r, "run 1")
+    _say(r, "drop the unit's rule")
+    (rec,) = ws.surprises("open")
+    assert rec["unit"] == "units/rules.llp" and rec["member"] == "gossip3"
+    r2 = Repl(prog, seed=1, terminal=True, workspace=ws, stdout=io.StringIO())      # the program itself: no unit
+    _say(r2, "run 1")
+    _say(r2, "drop the program's")
+    assert [s.get("unit") for s in ws.surprises("open") if s["words"] == "the program's"] == [None]
+
+
+def test_the_wire_serves_the_workspace_verbs_only_to_a_shell_a_workspace_is_attached_to(tmp_path, monkeypatch):
+    """loop-ui I6: the console's REPL pane (personal mode) answers drop, mark, surprises and status as the terminal
+    does, on the session's own trace (the gateway attaches it); a shell without a workspace (a shared-mode visitor's)
+    keeps the whitelist."""
+    from metis.loop import wire
+    from metis.session_trace import SessionTrace
+    ws_dir = tmp_path / "ws"
+    (ws_dir / ".metis").mkdir(parents=True)
+    prog = ws_dir / "gossip3.llp"
+    shutil.copy(GOSSIP, prog)
+    monkeypatch.chdir(ws_dir)
+    ws = W.Workspace(ws_dir)
+    bare = Repl(prog, seed=1, stdout=io.StringIO())
+    res = wire.run_intent(bare, ":drop words")
+    assert not res["ok"] and res["error"].startswith("intent refused") and " drop " not in res["error"]
+    sh = Repl(prog, seed=1, stdout=io.StringIO())
+    tr = SessionTrace(ws.path("trace", run="wSESSION"), sh, "gossip3", program=prog)
+    sh.attach_workspace(ws, trace=tr)
+    assert sh._ws_trace is tr
+    tr.before(sh)                                          # the gateway's hook around one command (_traced)
+    assert wire.run_intent(sh, ":run 2")["ok"]
+    tr.after(sh, "run 2")
+    out = wire.run_intent(sh, ":drop alice heard nothing.")
+    assert out["ok"] and "dropped " in out["text"] and "(gossip3, k 1)" in out["text"]
+    (rec,) = ws.surprises("open")
+    assert rec["trace"] == "traces/wSESSION" and rec["k"] == 1
+    assert "1 open" in wire.run_intent(sh, ":status")["text"]
+    assert "alice heard nothing." in wire.run_intent(sh, ":surprises")["text"]

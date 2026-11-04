@@ -309,8 +309,11 @@ class Repl(LoopVerbs, Cmd):
 
     def __init__(self, path, seed=1, terminal=False, plugin=None,
                  registry=None, host=False, history=None, manifest=None,
-                 workspace=None, **kw):
+                 workspace=None, unit=None, **kw):
         super().__init__(**kw)
+        # the unit the person named when it is not the program served (loop-ui I1: `metis grasp_domain.llp` serves
+        # grasp/grasp.llp, which includes it): a drop records it, so pack_propose amends the file the rule is in
+        self.unit = Path(unit).resolve() if unit else None
         # manifest= (metis-lang spec/16 amendment 1): the package's domain.yaml, or its dict
         # (a loop's candidate levels): its levels' generated declarations join the program's
         self._manifest = manifest
@@ -3331,12 +3334,17 @@ class Repl(LoopVerbs, Cmd):
     #    workspace writes its trace to .metis/traces/<session>/ and drops surprises there, as the console's session
     #    does; the pi loop in another terminal takes them
 
-    def attach_workspace(self, ws):
+    def attach_workspace(self, ws, trace=None):
         """Trace this session into WS (metis.catalog.workspace.Workspace): .metis/traces/repl-<id>/, the session as
-        one member (metis.session_trace.SessionTrace, the console's writer). Terminal only."""
+        one member (metis.session_trace.SessionTrace, the console's writer). TRACE: a SessionTrace the caller writes
+        already (the console's gateway in personal mode, loop-ui I6): this session's drop and mark point at it. A
+        shell with a workspace serves the workspace verbs on the wire too (metis.loop.wire.WORKSPACE_VERBS)."""
         from metis.catalog import workspace as W
         from metis.session_trace import SessionTrace
         self._ws = ws
+        if trace is not None:
+            self._ws_trace = trace
+            return
         if self.prog is None:
             return
         ws.made()
@@ -3377,6 +3385,9 @@ class Repl(LoopVerbs, Cmd):
         ws = self._ws
         rec = {"member": tr.member, "trace": "traces/" + tr.path.name, "session": tr.path.name, "words": words,
                "reading": _first_sentence(words), **at}
+        unit = self.__dict__.get("unit")
+        if unit is not None and unit.is_relative_to(ws.root):
+            rec["unit"] = str(unit.relative_to(ws.root))      # loop-ui I1: the file the person named, root-relative
         sid = ws.drop_surprise(rec)
         self._say(f"dropped {sid} ({tr.member}, " + (f"window {at['window']}" if "window" in at else f"k {at['k']}")
                   + f"): the pi loop takes it from .metis/surprises/ (/surprises, /take in pi)")
@@ -3720,6 +3731,7 @@ def main(argv=None):
     if args.version:
         print("\n".join(version_lines()))
         return 0
+    unit = None
     if not args.json:                   # the person in a terminal: a unit, a package, the package here (two-terminals)
         from metis import catalog as _cat
         try:
@@ -3727,6 +3739,9 @@ def main(argv=None):
         except ValueError as e:
             print(f"cannot serve {args.llp}: {e}", file=sys.stderr)
             return 1
+        if target is not None and args.llp and Path(args.llp).is_file() \
+                and Path(args.llp).resolve() != Path(target).resolve():
+            unit = args.llp                 # a unit its includer is served for (loop-ui I1)
         if target is not None:
             args.llp = str(target)
         if how:
@@ -3779,7 +3794,7 @@ def main(argv=None):
         # terminal only (never the --json wire / web console: D4)
         from metis.catalog.workspace import find as _ws_find
         repl = Repl(args.llp, seed=args.seed, terminal=True,
-                    plugin=args.plugin, workspace=_ws_find())
+                    plugin=args.plugin, workspace=_ws_find(), unit=unit)
     except Exception as e:
         print("cannot serve %s:\n  %s"
               % (args.llp, "\n  ".join(located(e, args.llp))),
