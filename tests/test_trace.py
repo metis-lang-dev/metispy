@@ -183,6 +183,24 @@ def test_the_ring_keeps_at_least_its_ticks_and_each_segment_its_checkpoint(tmp_p
     assert sorted(p.name for p in (tmp_path / "t" / "checkpoints").iterdir()) == sorted("k%d.json" % s.k0 for s in segs)
 
 
+def test_a_start_removes_its_own_files_only(tmp_path):
+    """A new start begins the trace anew: its segments and checkpoints go, the files a world put beside them stay
+    (config.yaml, run.json: alf-bundle s-b53cc7ab step 2, the architect's ruling)."""
+    d = tmp_path / "t"
+    w = T.Segments(d, every=10)
+    for k in range(25):
+        if w.due(k):
+            w.open_segment(k, {"members": {}}, {"sessions": {}})
+        w.line({"k": k, "members": {}})
+    w.close()
+    (d / "config.yaml").write_text("domains: {}\n")
+    (d / "run.json").write_text("{}")
+    w = T.Segments(d, every=10)
+    assert sorted(p.name for p in d.iterdir()) == ["checkpoints", "config.yaml", "run.json"]
+    assert list((d / "checkpoints").iterdir()) == [] and (d / "config.yaml").read_text() == "domains: {}\n"
+    w.close()
+
+
 def test_ring_zero_keeps_it_all(tmp_path):
     w = T.Segments(tmp_path / "t", every=10, ring=0)
     for k in range(35):

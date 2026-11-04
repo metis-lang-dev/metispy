@@ -112,7 +112,11 @@ def build(name, display=None, voice="", root=None, module=None, fresh=False, dir
     the agent's own registry, metis-agent's metis_agent.domains.<name>, or
     metis.domain.day's; root: a domains/ directory, default the catalog's)."""
     d = Path(dir) if dir else Path(root or catalog_domains()) / name    # the domain's directory (the manifest's)
-    f = d / "intent.yaml"
+    try:                                       # the card the manifest names (intent: {spec}), else intent.yaml
+        spec_of = ((yaml.safe_load((d / "domain.yaml").read_text()) or {}).get("intent") or {}).get("spec")
+    except (OSError, yaml.YAMLError, AttributeError):
+        spec_of = None
+    f = d / (spec_of or "intent.yaml")
     spec = (yaml.safe_load(f.read_text()) or {}) if f.exists() else {}     # none: a host with no verbs
     hf, _, factory = (str(host) if host else "").partition(":")   # the manifest's host: file.py:factory, or pkg.mod:factory
     if hf and factory and not hf.endswith(".py"):
