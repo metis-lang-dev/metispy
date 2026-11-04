@@ -4,6 +4,7 @@ here, and on metis-worlds/road read only (its .metis/road/, the world runner's r
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -193,6 +194,30 @@ def test_the_bundle_is_stale_until_built_and_when_a_member_moves(tmp_path):
     ctx = ws.context(patterns=str(tmp_path / "patterns"))
     assert "composition — two members" in ctx and "- a: the a member" in ctx and "STALE" in ctx
     assert str(tmp_path / "patterns") in ctx
+
+
+def test_a_copied_workspace_reads_its_own_members_not_the_locks_original(tmp_path):
+    """qwen-loop F5: image.lock names each member's dir absolute, as built; in a copy (cp -a) that is the ORIGINAL
+    tree, and an edit in the copy read not stale. The lock's dir counts only inside the workspace."""
+    import json
+    orig, copy = tmp_path / "orig", tmp_path / "copy"
+    d = composition(orig)
+    (d / "build").mkdir()
+    rec = d / "build" / "duo.build"
+    rec.write_text("image duo.image.v-abc123\nmember boss x y\nmember a x y\n")
+    (d / "build" / "duo.image.v-abc123").mkdir()
+    (d / "build" / "duo.image.v-abc123" / "image.lock").write_text(json.dumps(
+        {"members": {m: {"dir": {"path": str(d / m)}} for m in ("boss", "a")}}))
+    t = rec.stat().st_mtime
+    for f in orig.rglob("*"):
+        if f != rec and f.is_file():
+            os.utime(f, (t - 10, t - 10))
+    shutil.copytree(orig, copy, copy_function=shutil.copy2)             # cp -a: the mtimes kept
+    assert W.workspace(copy).bundle()["stale"] is False
+    os.utime(copy / "domains" / "a" / "a.llp", (t + 10, t + 10))         # the copy's own member, edited
+    b = W.workspace(copy).bundle()
+    assert b["stale"] and b["why"] == "domains/a/a.llp is newer than the build"
+    assert W.workspace(orig).bundle()["stale"] is False                  # the original is untouched
 
 
 def test_one_composition_under_domains_is_the_bundle_and_a_name_picks_one(tmp_path):

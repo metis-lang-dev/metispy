@@ -370,7 +370,12 @@ class Workspace:
             built = record.stat().st_mtime
             files = [comp, *sorted(cdir.glob("*.llp"))]
             for m in members:
-                md = dirs.get(m) or cdir / m
+                # the lock's member dir is absolute, as built: a copied workspace's lock names the ORIGINAL tree
+                # (qwen-loop F5: an edit in the copy read not stale), so it counts only inside this workspace;
+                # else the member beside the composition, else the lock's (a member built from outside)
+                lk = dirs.get(m)
+                md = next((d for d in ([lk] if lk and lk.is_relative_to(self.root) else []) + [cdir / m, lk]
+                           if d is not None and d.is_dir()), cdir / m)
                 if md.is_dir():
                     files += [f for f in sorted(md.rglob("*")) if f.is_file() and (f.suffix == ".llp" or f.name == "domain.yaml")
                               and not {"build", "records", ".metis"} & set(f.relative_to(md).parts)]
