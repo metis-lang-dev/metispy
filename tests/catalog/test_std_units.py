@@ -32,6 +32,7 @@ def test_the_vendored_units_are_all_of_them():
 def test_an_iface_include_resolves_to_the_standard_units_without_metis_home(tmp_path, monkeypatch):
     monkeypatch.delenv("METIS_HOME", raising=False)
     monkeypatch.setenv("METIS_CATALOG", str(tmp_path))
+    monkeypatch.chdir(tmp_path)                 # the cwd is the root: it is not a place twice (two-terminals)
     from metis.lang.compiler import include_path
     assert include_path("iface/protocol_domain.llp", tmp_path) == catalog.std() / "iface/protocol_domain.llp"
     assert [why for _, why in catalog.places()] == ["the catalog root", "the standard units", "METIS_HOME"]

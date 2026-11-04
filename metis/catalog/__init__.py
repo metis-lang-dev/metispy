@@ -80,6 +80,7 @@ def home() -> Path:
 
 
 STD = "the standard units"
+CWD = "the current directory"
 
 
 def std() -> Path:
@@ -94,8 +95,16 @@ def places(r=None):
     iface/ path only), then METIS_HOME (the compiler's include rule after the including file's own directory:
     metis.lang.compiler include_path; metisc's include_place). The standard units answer iface/ paths only
     (find), so METIS_HOME unset (metispy's own catalog, the standard units' directory too) stays its own place
-    for every other path."""
-    return [(_r(r), "the catalog root"), (std(), STD), (home(), "METIS_HOME")]
+    for every other path. With no root given (the person's own search: the REPL, the compiler on a session) the
+    current directory joins after the root when it is another directory ("add pwd to metispath", the user,
+    2026-11-05: $METIS_CATALOG names the root, and a person in a package or a bundle's directory resolves from
+    where they stand)."""
+    out = [(_r(r), "the catalog root")]
+    if r is None:                       # the person's own search: where they stand joins it (two-terminals s-065d46d5)
+        cwd = Path.cwd().resolve()
+        if cwd != out[0][0]:
+            out.append((cwd, CWD))
+    return out + [(std(), STD), (home(), "METIS_HOME")]
 
 
 def find(rel, r=None, kind="file") -> Path:
@@ -977,6 +986,75 @@ def _includers(p, prog, d, bundle, r):
         if any((q.parent / k).resolve() == p for k in reach):
             out.append(q)
     return out
+
+
+def serve_target(arg=None, root=None):
+    """What `metis ARG` serves, the person standing in the cwd (two-terminals s-065d46d5): → (program path or None, a
+    note or None). ARG None: the package the cwd is (its domain.yaml's program), else None (a scratch world). A file
+    that is a domain's program: itself. A file a domain's program includes (a bundle member's unit, grasp_domain.llp,
+    which alone lacks the tick protocol its member includes): that program, with a note; several includers: refused,
+    naming them. A name that is no file: the package (ROOT's, default the workspace the cwd stands in, else the cwd),
+    or a package directory beside the cwd. Anything else: ARG as it is (the compiler says what is wrong)."""
+    cwd = Path.cwd().resolve()
+
+    def own(d):
+        mf = Path(d) / "domain.yaml"
+        if not mf.is_file():
+            return None
+        try:
+            prog = (yaml.safe_load(mf.read_text()) or {}).get("program")
+        except yaml.YAMLError:
+            return None
+        return (Path(d) / prog).resolve() if prog and (Path(d) / prog).is_file() else None
+
+    if root is None:
+        from .workspace import find as _ws_find
+        w = _ws_find()
+        root = w.root if w is not None else cwd
+    root = Path(root).resolve()
+    if not arg:
+        p = own(cwd)
+        return (p, f"serving {os.path.relpath(p)}: the package here ({cwd.name}/domain.yaml)") if p else (None, None)
+    f = Path(arg)
+    if f.is_dir():
+        p = own(f)
+        return (p, f"serving {os.path.relpath(p)}: the package {f.name}") if p else (f, None)
+    if f.is_file():
+        f = f.resolve()
+        progs = []
+        for dom in loader().domains(root):
+            q = Path(dom.program).resolve() if dom.program else None
+            if q is None or not q.is_file():
+                continue
+            if q == f:
+                return f, None
+            progs.append(q)
+        hits = []
+        for q in progs:
+            try:
+                reach = includes(q.parent, [q], None, within=root)
+            except ValueError:
+                continue
+            if any((q.parent / k).resolve() == f for k in reach):
+                hits.append(q)
+        if len(hits) == 1:
+            return hits[0], (f"{f.name} is a unit {os.path.relpath(hits[0])} includes: serving that program "
+                             f"(the unit alone lacks what its includer declares)")
+        if hits:
+            raise ValueError(f"{f.name} is a unit several programs include: name one of "
+                             + ", ".join(os.path.relpath(q) for q in hits))
+        return f, None
+    if os.sep not in str(arg) and not str(arg).endswith(".llp"):
+        try:
+            d = get(str(arg), root)
+            if d.program:
+                return Path(d.program).resolve(), f"serving {os.path.relpath(d.program)}: the package {arg}"
+        except (KeyError, ValueError):     # no such package, or a tree the loader cannot read: not a name then
+            pass
+        p = own(cwd / str(arg))
+        if p:
+            return p, f"serving {os.path.relpath(p)}: the package {arg} here"
+    return Path(arg), None
 
 
 # what take() carries: the manifest's keys whose files it brings, and the ones with no file

@@ -62,9 +62,12 @@ def test_metis_catalog_is_the_root_over_the_cwd(two, tmp_path, monkeypatch):
     other = tmp_path / "other"
     package(other, "lamp")
     monkeypatch.setenv("METIS_CATALOG", str(other))
-    assert catalog.find_package("lamp") == (other / "domains/lamp").resolve()
+    assert catalog.find_package("lamp") == (other / "domains/lamp").resolve()   # the root first
+    # the cwd is not the root now, but it joins the places after it (two-terminals s-065d46d5, the user: "add pwd to
+    # metispath"): the cwd's own package is found from where the person stands, the root's still wins a name in both
+    assert catalog.find_package("dog") == (tmp_path / "root" / "domains/dog").resolve()
     with pytest.raises(FileNotFoundError):
-        catalog.find_package("dog")            # the cwd is not the root now
+        catalog.find_package("dog", other)     # an explicit root: its own search, no cwd
 
 
 def test_a_miss_names_both_places(two):

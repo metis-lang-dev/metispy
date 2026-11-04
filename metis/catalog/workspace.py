@@ -711,6 +711,29 @@ class Workspace:
         return out
 
 
+def find(start=None):
+    """The workspace a terminal stands in (two-terminals s-065d46d5: `cd WS && metis FILE`): $METIS_CATALOG when set
+    (the console's rule), else the nearest of START (default the cwd) and its parents that holds .metis/ or a bundle
+    (domains/composition.yaml, or one domains/*/composition.yaml); None when there is none below the home
+    directory, the temp directory or the filesystem's root (those are never one)."""
+    import os
+    env = os.environ.get("METIS_CATALOG")
+    if env:
+        return Workspace(env)
+    import tempfile
+    p = Path(start or os.getcwd()).resolve()
+    stop = {Path.home().resolve(), Path(tempfile.gettempdir()).resolve(), Path(p.anchor)}
+    for d in [p, *p.parents]:
+        if d in stop:                     # never the home, the temp dir or / itself: a stray .metis/ there is no one's
+            return None
+        if (d / catalog.STATE).is_dir():
+            return Workspace(d)
+        ws = Workspace(d)
+        if (d / "domains").is_dir() and ws._composition() is not None:
+            return ws
+    return None
+
+
 def workspace(root=None):
     """The workspace at ROOT, else metis.catalog.root() ($METIS_CATALOG, else the cwd)."""
     return Workspace(root)

@@ -291,11 +291,25 @@ def _now_s():
     return _time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+# the workspace's own verbs and the ones that leave a session where it is: no tick of the session's trace
+_WS_QUIET = frozenset(["drop", "mark", "surprises", "quit", "exit", "EOF", "help", "transcript", ""])
+
+
+def _first_sentence(words):
+    """The reading a drop carries (metis-loop loop/chat.py first_sentence: the words' first sentence, one line, at
+    most 200 characters)."""
+    import re
+    one = " ".join(str(words or "").split())
+    m = re.match(r"^(.+?[.!?])(\s|$)", one)
+    return (m.group(1) if m else one)[:200]
+
+
 class Repl(LoopVerbs, Cmd):
     prompt = "llp> "
 
     def __init__(self, path, seed=1, terminal=False, plugin=None,
-                 registry=None, host=False, history=None, manifest=None, **kw):
+                 registry=None, host=False, history=None, manifest=None,
+                 workspace=None, **kw):
         super().__init__(**kw)
         # manifest= (metis-lang spec/16 amendment 1): the package's domain.yaml, or its dict
         # (a loop's candidate levels): its levels' generated declarations join the program's
@@ -369,6 +383,8 @@ class Repl(LoopVerbs, Cmd):
         self.llm = config.get("llm", "endpoint", "")  # spec (loop.llm)
         self.sys_prompts = {}  # per-seat session overrides (prompts)
         self._load(initial=True)
+        if workspace is not None and self.terminal:     # the terminal in a workspace: traced, drops (two-terminals)
+            self.attach_workspace(workspace)
         if self.prog is None:           # a lifted file (spec 12)
             warn = "".join(f"warning: {w}\n" for w in self.doc.warnings)
             self.intro = warn + (
@@ -398,7 +414,8 @@ class Repl(LoopVerbs, Cmd):
             f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
             f"stage {self.stage} | {flat}\n"
             f"{self._llm_line()}\n"
-            "type 'help' for commands, 'events' to see what can fire")
+            + (f"{self._ws_line()}\n" if self.terminal else "")
+            + "type 'help' for commands, 'events' to see what can fire")
 
     # -- catalog / session plumbing ------------------------------------
 
@@ -3150,7 +3167,11 @@ class Repl(LoopVerbs, Cmd):
             self._theredocs = []
             keep, tee = self.stdout, _Tee(self.stdout)
             self.stdout = tee
+        tr = self.__dict__.get("_ws_trace")
+        traced = tr is not None and depth == 0 and verb not in _WS_QUIET
         try:
+            if traced:
+                tr.before(self)
             return super().onecmd(line)
         except KeyboardInterrupt:
             self._say("(interrupted)")
@@ -3166,6 +3187,12 @@ class Repl(LoopVerbs, Cmd):
                          if type(e).__name__ == "ScopeViolation" else ""))
         finally:
             self._tdepth = depth
+            if traced:
+                try:
+                    tr.after(self, line)
+                except Exception as e:  # noqa: BLE001 — a trace that cannot be written never stops the shell
+                    self._say(f"(trace: {type(e).__name__}: {e}; the session goes on untraced)")
+                    self._ws_trace = None
             if logging:
                 self.stdout = keep
                 self._tlog_command(line, verb, tee.getvalue())
@@ -3249,8 +3276,114 @@ class Repl(LoopVerbs, Cmd):
         elif verb == "llm":
             f.write(f"\n_llm seat: {self.llm}_\n")
 
+    # -- the workspace (two-terminals s-065d46d5; metis-loop docs/WORKSPACE.md §10): the terminal REPL started in a
+    #    workspace writes its trace to .metis/traces/<session>/ and drops surprises there, as the console's session
+    #    does; the pi loop in another terminal takes them
+
+    def attach_workspace(self, ws):
+        """Trace this session into WS (metis.catalog.workspace.Workspace): .metis/traces/repl-<id>/, the session as
+        one member (metis.session_trace.SessionTrace, the console's writer). Terminal only."""
+        from metis.catalog import workspace as W
+        from metis.session_trace import SessionTrace
+        self._ws = ws
+        if self.prog is None:
+            return
+        ws.made()
+        run = "repl-" + W.new_id()
+        self._ws_trace = SessionTrace(ws.path("trace", run=run), self, self.path.stem, program=self.path)
+        atexit.register(self._ws_trace.close)
+
+    def _ws_line(self):
+        """The intro's line on the workspace: where, the bundle, the open surprises, the trace; or that there is none."""
+        ws = self.__dict__.get("_ws")
+        if ws is None:
+            return ("workspace: none (no .metis/ or bundle here or above): drop, mark and surprises need one; "
+                    "cd to the workspace and start metis there")
+        try:
+            b = ws.bundle()
+        except Exception as e:  # noqa: BLE001 — a broken composition is said, never fatal here
+            b, bl = None, f"bundle unreadable ({e})"
+        else:
+            bl = "no bundle" if b is None else (f"bundle {b['name']} v-{(b['image'] or '')[:12] or '(not built)'} "
+                                                + ("STALE" if b["stale"] else "BUILT"))
+        n = len(ws.surprises("open"))
+        tr = self.__dict__.get("_ws_trace")
+        where = os.path.relpath(ws.root) if os.path.relpath(ws.root) != "." else "."
+        return (f"workspace {where}: {bl} · {n} open surprise(s) · "
+                + (f"trace .metis/{ws.rel(tr.path)}" if tr else "no trace (no program)"))
+
+    def _ws_need(self, verb):
+        ws = self.__dict__.get("_ws")
+        if ws is None:
+            raise ValueError(f"{verb}: not in a workspace (no .metis/ or bundle here or above): cd there and start "
+                             "metis again")
+        tr = self.__dict__.get("_ws_trace")
+        if tr is None and verb != "surprises":
+            raise ValueError(f"{verb}: this session writes no trace")
+        return ws, tr
+
+    def _ws_drop(self, tr, words, **at):
+        ws = self._ws
+        rec = {"member": tr.member, "trace": "traces/" + tr.path.name, "session": tr.path.name, "words": words,
+               "reading": _first_sentence(words), **at}
+        sid = ws.drop_surprise(rec)
+        self._say(f"dropped {sid} ({tr.member}, " + (f"window {at['window']}" if "window" in at else f"k {at['k']}")
+                  + f"): the pi loop takes it from .metis/surprises/ (/surprises, /take in pi)")
+
+    def do_drop(self, arg):
+        """drop WORDS — this session's last tick as a surprise for the pi loop, with your words (their first
+        sentence is the reading): .metis/surprises/<id>.json, pointing at this session's trace. Needs the shell
+        started in a workspace (the directory holding .metis/ or a bundle)."""
+        try:
+            ws, tr = self._ws_need("drop")
+            words = " ".join(arg.split())
+            if not words:
+                raise ValueError("drop WORDS: what you saw, or what should have happened")
+            if tr.last_k() < 1:
+                raise ValueError("drop: nothing has happened in this session yet (step/run/do first), or mark K")
+            self._ws_drop(tr, words, k=tr.last_k())
+        except ValueError as e:
+            self._say(str(e))
+
+    def do_mark(self, arg):
+        """mark K WORDS | mark K0..K1 WORDS — a tick (or a window) of this session's trace as a surprise with your
+        words (`trace` shows the ticks: each command that moved the session is one)."""
+        import re
+        try:
+            ws, tr = self._ws_need("mark")
+            head, _, words = arg.strip().partition(" ")
+            m = re.match(r"^(\d+)(?:\.\.(\d+))?$", head)
+            if not m or not words.strip():
+                raise ValueError("mark K WORDS | mark K0..K1 WORDS")
+            k0, k1 = int(m.group(1)), int(m.group(2) or m.group(1))
+            if not 1 <= k0 <= k1 <= tr.last_k():
+                raise ValueError(f"mark: ticks 1..{tr.last_k()} in this session's trace (K0 <= K1)")
+            at = {"k": k0} if k0 == k1 else {"window": [k0, k1], "k": k1}
+            self._ws_drop(tr, " ".join(words.split()), **at)
+        except ValueError as e:
+            self._say(str(e))
+
+    def do_surprises(self, arg):
+        """surprises [open|taken|ruled] — the workspace's surprise records (the pi loop's queue)."""
+        try:
+            ws, _ = self._ws_need("surprises")
+            st = arg.strip() or None
+            rows = ws.surprises(st)
+            if not rows:
+                self._say(f"no {st + ' ' if st else ''}surprises in {os.path.relpath(ws.state)}")
+                return
+            for r in rows:
+                at = f"k {r['k']}" if r.get("k") is not None else (f"window {r['window']}" if r.get("window") else "")
+                self._say(f"{r['id']}  {r.get('status', '?'):6}  {r.get('member', '?')}  {at}  "
+                          f"{(r.get('words') or r.get('reading') or '')[:80]}")
+        except ValueError as e:
+            self._say(str(e))
+
     def do_quit(self, arg):
         """leave the shell"""
+        tr = self.__dict__.get("_ws_trace")
+        if tr is not None:
+            tr.close()
         return True
 
     do_exit = do_quit
@@ -3517,6 +3650,17 @@ def main(argv=None):
     if args.version:
         print("\n".join(version_lines()))
         return 0
+    if not args.json:                   # the person in a terminal: a unit, a package, the package here (two-terminals)
+        from metis import catalog as _cat
+        try:
+            target, how = _cat.serve_target(args.llp)
+        except ValueError as e:
+            print(f"cannot serve {args.llp}: {e}", file=sys.stderr)
+            return 1
+        if target is not None:
+            args.llp = str(target)
+        if how:
+            print(how, file=sys.stderr)
     if not args.llp:
         import tempfile
         fd, scratch = tempfile.mkstemp(suffix=".llp",
@@ -3563,8 +3707,9 @@ def main(argv=None):
         # terminal=True: `transcript` writes the OPERATOR's own disk and
         # `plugin`/#plugin imports operator code — the interactive
         # terminal only (never the --json wire / web console: D4)
+        from metis.catalog.workspace import find as _ws_find
         repl = Repl(args.llp, seed=args.seed, terminal=True,
-                    plugin=args.plugin)
+                    plugin=args.plugin, workspace=_ws_find())
     except Exception as e:
         print("cannot serve %s:\n  %s"
               % (args.llp, "\n  ".join(located(e, args.llp))),
