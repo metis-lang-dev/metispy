@@ -395,6 +395,7 @@ class Repl(LoopVerbs, Cmd):
             f"metis shell — {self.path.name} "
             f"(catalog {self.doc.catalog.name}, key {self.key[:12]}…)\n"
             f"stage {self.stage} | {flat}\n"
+            f"{self._llm_line()}\n"
             "type 'help' for commands, 'events' to see what can fire")
 
     # -- catalog / session plumbing ------------------------------------
@@ -2518,15 +2519,26 @@ class Repl(LoopVerbs, Cmd):
         lines += state_table(res["final"].items()) or ["  (empty)"]
         self._say("\n".join(lines))
 
+    def _llm_line(self):
+        """The intro's line on the model: the endpoint as set (not
+        validated: no call at a start) and whether the OpenRouter key
+        is in the environment (the user, 2026-11-04: `metis` checks the
+        key in env; never its value)."""
+        import os
+        key = "set" if os.environ.get("OPENROUTER_API_KEY") else "not set"
+        return (f"llm {self.llm or '(unset: llm ollama MODEL | llm openrouter MODEL)'}"
+                f" · OpenRouter key {key} (OPENROUTER_API_KEY)")
+
     def _llm_status(self, spec):
         """One line on the endpoint, VALIDATED where that is cheap: an
         unset endpoint, anthropic without its key in the environment,
         a command whose program is not on PATH each leave an
         llm-endpoint note — a failure at narrate time is too late."""
+        import json
         import os
         import shlex
         import shutil
-        from metis.loop.llm import UNSET, resolve
+        from metis.loop.llm import UNSET, cost_log_path, max_tokens, resolve
         shown = spec or "(unset)"
         from metis.kernel.diagnostics import note as dnote
 
@@ -2547,6 +2559,24 @@ class Repl(LoopVerbs, Cmd):
                 return llm_note(f"llm: {shown} — ANTHROPIC_API_KEY is "
                                 f"not set", "ANTHROPIC_API_KEY not set")
             return f"llm: {shown}"
+        if ep.backend == "openrouter":
+            if not os.environ.get("OPENROUTER_API_KEY"):
+                return llm_note(f"llm: {shown} — OPENROUTER_API_KEY is "
+                                f"not set (the key is read from the "
+                                f"environment only)", "OPENROUTER_API_KEY not set")
+            return f"llm: {shown} (key set; cap {max_tokens()} tokens, cost log {cost_log_path()})"
+        if ep.backend == "ollama":
+            import urllib.request
+            try:
+                with urllib.request.urlopen(ep.url + "/api/tags", timeout=2) as r:
+                    names = [m.get("name", "") for m in (json.load(r).get("models") or [])]
+            except Exception as e:  # noqa: BLE001 — a server that does not answer
+                return llm_note(f"llm: {shown} — ollama at {ep.url} not reachable "
+                                f"({type(e).__name__})", f"ollama at {ep.url} not reachable")
+            if names and not any(n == ep.arg or n.split(":")[0] == ep.arg for n in names):
+                return llm_note(f"llm: {shown} — model {ep.arg} is not pulled at {ep.url} "
+                                f"(it has: {', '.join(names[:8])})", f"model {ep.arg} not pulled")
+            return f"llm: {shown}"
         try:
             argv = shlex.split(ep.arg)
         except ValueError as e:          # an unbalanced quote
@@ -2557,21 +2587,30 @@ class Repl(LoopVerbs, Cmd):
         return f"llm: {shown}"
 
     def do_llm(self, arg):
-        """show/set the LLM endpoint (loop.llm): anthropic[:MODEL] |
-        command:ARGV (no default); seeded by [llm] endpoint in the
-        config dot file"""
-        from metis.loop.llm import resolve
+        """show/set the model narrate uses, SAVED in the config dot file
+        ([llm] endpoint) for every REPL on this host: `llm ollama phi3`
+        [URL], `llm openrouter deepseek/deepseek-v4.1-flash-1017` (the
+        key from $OPENROUTER_API_KEY only), `llm http://host:11434
+        MODEL` (an Ollama server), `llm anthropic [MODEL]`, `llm
+        command:ARGV`; no default. `llm` alone shows it, checked."""
+        from metis.loop import config
+        from metis.loop.llm import spec_from_words
         a = arg.strip()
         if not a:
             self._say(self._llm_status(self.llm))
             return
         try:
-            resolve(a)
+            spec = spec_from_words(a)
         except ValueError as e:
             self._say(str(e))
             return
-        self.llm = a
-        self._say(self._llm_status(a))
+        self.llm = spec
+        try:
+            where = config.set("llm", "endpoint", spec)
+            saved = f"saved to {where}"
+        except (OSError, ValueError) as e:
+            saved = f"not saved: {e}"
+        self._say(f"{self._llm_status(spec)} — {saved}")
 
     def do_narrate(self, arg):
         """tell this session's fired events since the last reset/edit
