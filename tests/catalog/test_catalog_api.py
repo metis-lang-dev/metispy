@@ -1002,3 +1002,39 @@ def test_an_edit_of_a_bundle_member_reaches_its_bundle_never_outside(tmp_path):
     with pytest.raises(ValueError, match="in the bundle but not a file this member's program includes"):
         catalog.edit("lamp", "../loose.llp", "nobody", "somebody", r=tmp_path, dry_run=True)
 
+
+
+def test_an_edit_names_a_members_file_as_the_loop_prints_it_and_reaches_its_lock(tmp_path):
+    """loop-ui I2: qwen3:4b's apply named the unit as surprise_next prints it (domains/hier/lamp_rules.llp) and by its
+    bare name, and was refused each time (paths were the member directory's only: ../lamp_rules.llp). Both forms now
+    name the file; and a file the member's last build includes (its image.lock), outside the bundle's directory but
+    inside the catalog, is the member's to edit too (without the lock such a member is not editable at all)."""
+    h = tmp_path / "domains" / "hier"
+    (h / "lamp").mkdir(parents=True)
+    (h / "composition.yaml").write_text("name: lampset\ndirect: lamp\n")
+    rules = LAMP.split("layers (dyn).\nstages (main).\n", 1)[1].split("#init", 1)[0]
+    (h / "lamp_rules.llp").write_text("% the lamp's rules\n" + rules)
+    (tmp_path / "domains" / "shared.llp").write_text("% a unit outside the bundle\n")
+    (h / "lamp" / "domain.yaml").write_text("display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    (h / "lamp" / "lamp.llp").write_text('catalog lamp 1.\nprovenance text "a lamp" "2026-11-04".\nlayers (dyn).\nstages (main).\n'
+                                         'include "../lamp_rules.llp".\ninclude "../../shared.llp".\n#init off 1\n')
+    with pytest.raises(ValueError, match="outside its domain directory"):            # no lock: the include is refused
+        catalog.edit("lamp", "domains/hier/lamp_rules.llp", "%% I switch it on.", "%% x", r=tmp_path, dry_run=True)
+    img = h / "build" / "lampset.image.v-abc123"          # the member's last build names its includes (metisc's shape)
+    img.mkdir(parents=True)
+    (h / "build" / "lampset.build").write_text("image lampset.image.v-abc123\n")
+    (img / "image.lock").write_text(json.dumps({"members": {"lamp": {"includes": [
+        {"name": "../lamp_rules.llp", "path": str(h / "lamp_rules.llp")},
+        {"name": "../../shared.llp", "path": str(tmp_path / "domains" / "shared.llp")}]}}}))
+    assert catalog.lock_includes("lamp", h / "lamp", tmp_path) == {(h / "lamp_rules.llp").resolve(),
+                                                                   (tmp_path / "domains" / "shared.llp").resolve()}
+    for path in ("domains/hier/lamp_rules.llp", "lamp_rules.llp", "../lamp_rules.llp"):   # as printed, bare, as before
+        assert catalog.edit_path("lamp", path, tmp_path) == "../lamp_rules.llp"
+        out = catalog.edit("lamp", path, "%% I switch it on.", "%% I switch it on, now.", r=tmp_path, dry_run=True)
+        assert out["ok"] and [f["path"] for f in out["files"]] == ["domains/hier/lamp_rules.llp"], (path, out)
+    assert catalog.edit_path("lamp", "lamp.llp", tmp_path) == "lamp.llp"                     # the member's own, as given
+    out = catalog.edit("lamp", "domains/shared.llp", "% a unit outside the bundle", "% a unit outside the bundle, edited",
+                       r=tmp_path, dry_run=True)                                  # the lock names it: the member's
+    assert out["ok"] and [f["path"] for f in out["files"]] == ["domains/shared.llp"], out
+    with pytest.raises(ValueError, match=r"there is no nope\.llp to edit .*paths are relative to domains/hier/lamp/"):
+        catalog.edit("lamp", "nope.llp", "x", "y", r=tmp_path, dry_run=True)

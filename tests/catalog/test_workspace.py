@@ -474,3 +474,31 @@ def test_the_spend_line_is_one_count_from_the_journal(tmp_path):
     ws.path("cost").write_text(json.dumps({"who": "pi", "model": "deepseek/deepseek-v4-pro", "cost": 0.01}) + "\n")
     sp = ws.spend()
     assert not sp["local"] and sp["line"] == "0.0100 USD spent by pi's estimate (3 calls; the key's bill runs higher)"
+
+
+def test_an_accepted_ruling_applies_as_the_judges_merge(tmp_path):
+    """loop-ui 2.3 (the user's /apply): the plan of an accepted ruling is its pack merged onto its unit by the judge's
+    own code (metis.trace.apply_pack), as an edit of the domain's file; refused when not accepted, and once applied."""
+    d = tmp_path / "domains" / "lamp"
+    d.mkdir(parents=True)
+    (d / "domain.yaml").write_text("program: lamp.llp\n")
+    (tmp_path / "domains" / "lamp_rules.llp").write_text("catalog lamp_rules 1.\nstage main {\n  go [dyn] : $on * idle -o busy.\n}\n")
+    (d / "lamp.llp").write_text('catalog lamp 1.\ninclude "../lamp_rules.llp".\n')
+    ws = W.workspace(tmp_path)
+    sid = ws.drop_surprise({"member": "lamp", "reading": "it went while off", "unit": "domains/lamp_rules.llp"})
+    with pytest.raises(ValueError, match="not ruled: nothing to apply"):
+        ws.apply_plan(sid)
+    pack = "drop go.\nstage main {\n  go [dyn] : $on * $ready * idle -o busy.\n}\n"
+    ws.rule(sid, "# Ruling: accepted\n", "accepted", pack=pack, member="lamp")
+    pl = ws.apply_plan(sid)
+    assert (pl["domain"], pl["unit"], pl["path"], pl["added"], pl["dropped"]) == (
+        "lamp", "domains/lamp_rules.llp", "../lamp_rules.llp", ["go"], ["go"])
+    from metis import trace as T
+    assert pl["new"] == T.apply_pack(pl["old"], pack)[0] and "$ready" in pl["new"] and "$on * idle" not in pl["new"]
+    (tmp_path / "domains" / "lamp_rules.llp").write_text(pl["new"])                 # written: the same plan again
+    with pytest.raises(ValueError, match="applied already"):
+        ws.apply_plan(sid)
+    other = ws.drop_surprise({"member": "lamp", "reading": "x"})
+    ws.rule(other, "# Ruling: refused\n", "refused", pack=pack, member="lamp")
+    with pytest.raises(ValueError, match="ruled REFUSED: only an accepted ruling is applied"):
+        ws.apply_plan(other)

@@ -853,15 +853,62 @@ def edit(name, path, old, new, replace_all=False, r=None, dry_run=False, since=N
     return _result(name, "edit", kw, findings, r, dry_run, since, who)
 
 
+def lock_includes(name, d, r=None):
+    """The files the member NAME's last build includes, as its bundle's image.lock names them (absolute, existing,
+    inside the catalog root R): {resolved path}. Empty for a domain outside a bundle or not built (loop-ui I2)."""
+    d, root = Path(d).resolve(), Path(_r(r)).resolve()
+    b = bundle_dir(d, root)
+    if b is None:
+        return set()
+    try:
+        spec = yaml.safe_load((b / "composition.yaml").read_text()) or {}
+        bname = str(spec.get("name") or b.name)
+        image = next((ln.split()[1].rpartition(".v-")[2] for ln in (b / "build" / f"{bname}.build").read_text().splitlines()
+                      if ln.startswith("image ")), None)
+        lock = json.loads((b / "build" / f"{bname}.image.v-{image}" / "image.lock").read_text()) if image else {}
+    except (OSError, ValueError, yaml.YAMLError):
+        return set()
+    out = set()
+    for inc in ((lock.get("members") or {}).get(name) or {}).get("includes") or []:
+        q = Path(str(inc.get("path") or "")).resolve() if isinstance(inc, dict) else None
+        if q is not None and q.is_file() and root in q.parents:
+            out.add(q)
+    return out
+
+
+def edit_path(name, path, r=None):
+    """PATH as an edit names a file of the member NAME: relative to its directory as given; else, as surprise_next and
+    the ruling print it, relative to the catalog root (domains/hier/grasp_domain.llp); else a bare file name that is
+    one of the member's includes, once (loop-ui I2: qwen3:4b tried all three forms and the first only reached
+    grasp/). → the path relative to the domain's directory (../grasp_domain.llp), or PATH as it was."""
+    r = Path(_r(r)).resolve()
+    d = Path(get(name, r).dir).resolve()
+    if (d / path).exists() or not path:
+        return path
+    q = (r / path).resolve()
+    if q.is_file():
+        return Path(os.path.relpath(q, d)).as_posix()
+    if "/" not in path:
+        hits = [f for f in lock_includes(name, d, r) if f.name == path]
+        if len(hits) == 1:
+            return Path(os.path.relpath(hits[0], d)).as_posix()
+    return path
+
+
 def _edit_spec(name, path, old, new, replace_all=False, r=None):
     """(_plan's arguments, the findings) of edit()."""
     r = _r(r)
     dom = get(name, r)
     d = Path(dom.dir).resolve()
+    path = edit_path(name, path, r)
     p = (d / path).resolve()
     bundle = bundle_dir(d, r)                   # the composition's directory: a member's includes may lie in it
+    locked = lock_includes(name, d, r)          # the files its last build includes (image.lock): reachable too (I2)
+    if any(not (bundle is not None and bundle in f.parents) for f in locked):
+        bundle = Path(r).resolve()              # a member's include outside its bundle (the director's ../x.llp): the lock's
     if d not in p.parents and not (bundle is not None and bundle in p.parents):
-        raise ValueError(f"{name}: {path!r} is not inside the domain's directory" + (" or its bundle" if bundle else ""))
+        raise ValueError(f"{name}: {path!r} is not inside the domain's directory" + (" or its bundle" if bundle else "")
+                         + " (paths are relative to " + Path(os.path.relpath(d, Path(r).resolve())).as_posix() + "/)")
     rel = Path(os.path.relpath(p, d)).as_posix()
     if p.is_file() and p.suffix == ".llp":     # a generated file (the bundle's tree/): an edit there is lost at the next make
         import re
@@ -882,7 +929,9 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
     made = not p.is_file()
     if made:
         if old:
-            raise ValueError(f"{name}: there is no {rel} to edit (old_string empty makes a file the domain lacks)")
+            raise ValueError(f"{name}: there is no {rel} to edit (old_string empty makes a file the domain lacks; "
+                             f"paths are relative to {Path(os.path.relpath(d, Path(r).resolve())).as_posix()}/, "
+                             "or from the catalog root as surprise_next prints them)")
         if not new:
             raise ValueError(f"{name}/{rel}: a file made by an edit has some text (new_string is empty)")
         is_ext = rel.startswith("extensions/") and rel.count("/") == 1 and rel.endswith(".llp") \

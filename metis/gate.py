@@ -631,6 +631,7 @@ class Gate:
             return planned(catalog._take_spec(domain, src, root, text))
         if kind == "edit":
             d = catalog.get(domain, root)
+            a = {**a, "path": catalog.edit_path(domain, a["path"], root)}    # a root-relative or bare name too (loop-ui I2)
             import posixpath
             # the file as the plan names it: relative to the root, wherever the package sits (rule 9: DIR/lamp/ too)
             pkg = Path(d.dir).resolve().relative_to(Path(root).resolve()).as_posix()

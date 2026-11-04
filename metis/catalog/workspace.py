@@ -59,7 +59,7 @@ STATUS = ("open", "taken", "ruled")
 # face's (metis-loop sdk/ts/workspace.ts), one for one: its test reads them from layout()["face"].
 FACE = ("layout", "root", "path", "bundle", "context", "traces", "trace", "surprises", "surprise", "drop_surprise",
         "take_surprise", "rule", "rulings", "journal", "events", "cost", "loops", "lock", "unlock", "tools",
-        "tool_argv", "marks", "keep_window")
+        "tool_argv", "marks", "keep_window", "apply_plan")
 
 # The layout: name → (path under .metis/, kind, who writes it, what it is). {id}, {run}, {kind} are filled in.
 LAYOUT = {
@@ -644,6 +644,42 @@ class Workspace:
         self.journal(who, "ruling", id=sid, verdict=verdict, ruling=self.rel(j))
         return j
 
+    def apply_plan(self, sid):
+        """The apply of SID's accepted ruling, as an edit (loop-ui 2.3, the user's /apply: the judge's own merge, so
+        the apply writes exactly what was judged): its pack (packs/<id>.llp) merged onto its unit by the judge's code
+        (metis.trace.apply_pack). The unit: the ruling's, else the surprise's (the file the person had open), else the
+        member's program. → {id, domain, unit (root-relative), path (the domain directory's: the edit's), old (the
+        unit's text), new (the merged text), added, dropped}. Refused (ValueError): not ruled, not accepted, no pack,
+        or nothing left to apply (its rules are in the unit already)."""
+        from metis import catalog, trace as T
+        rec = self.surprise(sid)
+        r = rec.get("ruling") or {}
+        if rec.get("status") != "ruled" or not r:
+            raise ValueError("%s is %s, not ruled: nothing to apply (pack_propose rules it)" % (sid, rec.get("status")))
+        if not str(r.get("verdict") or "").startswith("accepted"):
+            raise ValueError("%s was ruled %s: only an accepted ruling is applied" % (sid, str(r.get("verdict")).upper()))
+        pf = self.state / str(r.get("pack") or "")
+        if not r.get("pack") or not pf.is_file():
+            raise ValueError("%s: its ruling has no pack to apply" % sid)
+        member = str(r.get("member") or rec.get("member") or "")
+        dom = catalog.get(member, self.root)
+        unit = r.get("unit") or rec.get("unit")
+        up = (self.root / unit).resolve() if unit else Path(dom.program).resolve()
+        if not up.is_file():
+            raise ValueError("%s: the unit %s is not in this workspace" % (sid, unit or dom.program))
+        old = up.read_text()
+        try:
+            new, info = T.apply_pack(old, pf.read_text())
+        except T.TraceError as e:
+            raise ValueError("%s: %s (the unit changed since the ruling?)" % (sid, e)) from None
+        if not T.new_rules(new, old) and not info.get("dropped"):
+            raise ValueError("%s: applied already: the unit %s has its rules" % (sid, up.relative_to(self.root)))
+        if info.get("dropped") and set(info["dropped"]) <= set(info.get("added") or ()) and not T.new_rules(new, old):
+            raise ValueError("%s: applied already: the unit %s has its rules" % (sid, up.relative_to(self.root)))
+        path = os.path.relpath(up, Path(dom.dir).resolve())
+        return {"id": sid, "domain": member, "unit": str(up.relative_to(self.root)), "path": Path(path).as_posix(),
+                "old": old, "new": new, "added": info.get("added") or [], "dropped": info.get("dropped") or []}
+
     def rulings(self):
         """Every ruling's json, oldest first (by its ts, then id)."""
         d = self.path("rulings")
@@ -803,6 +839,8 @@ def main(argv=None):
     r.add_argument("--fields", metavar="JSON", help="more of the ruling's json: moved, lint, reads_absent, spent …")
     r.add_argument("--who", default="pi", choices=WHO)
     ps["rulings"] = sub.add_parser("rulings", help="every ruling")
+    ps["apply-plan"] = apl = sub.add_parser("apply-plan", help="an accepted ruling's apply as an edit (the judge's merge)")
+    apl.add_argument("id")
     ps["journal"] = j = sub.add_parser("journal", help="append one row to the journal")
     j.add_argument("--who", required=True, choices=WHO)
     j.add_argument("--kind", required=True)
@@ -872,6 +910,8 @@ def main(argv=None):
                 out = {"ruling": ws.rel(ws.rule(a.id, ruling, a.verdict, a.who, pack, **obj(a.fields)))}
             elif a.cmd == "rulings":
                 out = ws.rulings()
+            elif a.cmd == "apply-plan":
+                out = ws.apply_plan(a.id)
             elif a.cmd == "journal":
                 out = ws.journal(a.who, a.kind, **obj(a.fields))
             elif a.cmd == "events":
