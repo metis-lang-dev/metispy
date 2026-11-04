@@ -927,30 +927,56 @@ def _edit_spec(name, path, old, new, replace_all=False, r=None):
                 after = diagnostics(cand, prog)
                 findings += [_finding(rel, x, "extension", not made or x["severity"] == "error")
                              for x in (after if made else _added(before, after))]
+            elif rel in inc and prog is not None and p != prog:
+                # a file the program includes is judged ONLY through the program(s) that include it, never alone (alf-bundle
+                # s-b53cc7ab step 4): alone it lacks what its includer declares (a bundle unit under ruling B uses the tick
+                # protocol its member's program includes), so every rule of it reads as an error there and a new one is
+                # "added". The includers: this member's program and, in a bundle, every other member's that includes it,
+                # each with the edited file in its place (the domain's .llp files mirrored, or the bundle's, so the ../
+                # includes resolve as they do)
+                mroot = d if d in p.parents or bundle is None else bundle
+                found = []
+                with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
+                    for f in mroot.rglob("*.llp"):
+                        if "build" in f.relative_to(mroot).parts:
+                            continue
+                        t = Path(tmp) / f.relative_to(mroot)
+                        t.parent.mkdir(parents=True, exist_ok=True)
+                        _write(t, text if f.resolve() == p else _text(f))
+                    for q in (_includers(p, prog, d, bundle, r) if mroot != d else [prog]):
+                        found.append((Path(os.path.relpath(q, d)).as_posix(), "program",       # ../dark/dark.llp: a member's
+                                      _added(diagnostics(q), diagnostics(Path(tmp) / q.relative_to(mroot)))))
+                findings += [_finding(f, x, as_, True) for f, as_, a in found for x in a]
             else:
                 found = [(rel, "program" if p == prog else "included", _added(diagnostics(p), diagnostics(cand)))]
                 if p == prog and not found[0][2]:           # the program's extensions, against the edited program
                     for e in exts:
                         found.append((rp(e), "extension", _added(diagnostics(e, prog), diagnostics(e, cand))))
-                if rel in inc and prog is not None and not found[0][2]:
-                    # the program that includes it, with the edited file in its place: the domain's .llp
-                    # files mirrored (their includes are the domain's own), the one replaced
-                    # (a bundle's file: the bundle mirrored, so the member's ../ includes resolve as they do)
-                    mroot = d if d in p.parents or bundle is None else bundle
-                    with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
-                        for f in mroot.rglob("*.llp"):
-                            if "build" in f.relative_to(mroot).parts:
-                                continue
-                            t = Path(tmp) / f.relative_to(mroot)
-                            t.parent.mkdir(parents=True, exist_ok=True)
-                            _write(t, text if f.resolve() == p else _text(f))
-                        found.append((rp(prog), "program",
-                                      _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(mroot)))))
                 findings += [_finding(f, x, as_, True) for f, as_, a in found for x in a]
             if p == prog and not findings:                  # the lint with the manifest: what the edit adds, shown
                 findings += [_finding(rel, x, "lint", False, "lint")
                              for x in _added([] if made else lint_rows(p, mf), lint_rows(cand, mf))]
     return kw, findings
+
+
+def _includers(p, prog, d, bundle, r):
+    """The programs an edit of the included file P is judged through: PROG (the edited domain's, D its directory), and
+    in a BUNDLE every other member's program whose includes reach P (a unit the members share: the capacity, the
+    family's crossing preds). Each once, PROG first."""
+    out = [prog]
+    if bundle is None:
+        return out
+    for dom in loader().domains(_r(r)):
+        q = Path(dom.program).resolve() if dom.program else None
+        if q is None or q == prog or bundle not in q.parents:
+            continue
+        try:
+            reach = includes(q.parent, [q], r, within=bundle)
+        except ValueError:
+            continue
+        if any((q.parent / k).resolve() == p for k in reach):
+            out.append(q)
+    return out
 
 
 # what take() carries: the manifest's keys whose files it brings, and the ones with no file

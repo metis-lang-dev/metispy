@@ -931,6 +931,43 @@ def test_an_edit_shows_the_lint_it_adds_and_a_workspace_journals_it(scratch):
     assert [(r["who"], r["kind"], r["domain"], r["files"]) for r in rows] == [("pi", "edit", "plant", ["domains/plant/plant.llp"])]
 
 
+def _two_members(tmp_path, dark=True):
+    """A bundle whose unit lamp_rules.llp is included by lamp (with ../proto.llp, which declares `lit`) and, with DARK,
+    by dark (without proto.llp): the shape of alfworld's tree bases under ruling B, whose rules use the tick protocol
+    their member's program includes."""
+    h = tmp_path / "domains" / "hier"
+    (h / "lamp").mkdir(parents=True)
+    (h / "composition.yaml").write_text("name: lampset\ndirect: lamp\n")
+    rules = LAMP.split("layers (dyn).\nstages (main).\n", 1)[1].split("#init", 1)[0]
+    (h / "lamp_rules.llp").write_text("% the lamp's rules, the one copy\ncatalog lamp_rules 1.\n" + rules)
+    (h / "proto.llp").write_text("% the protocol's pred, declared once for its includers\ncatalog proto 1.\npred lit : lamp.\n")
+    head = 'catalog %s 1.\nprovenance text "a lamp" "2026-11-04".\nlayers (dyn).\nstages (main).\n'
+    (h / "lamp" / "domain.yaml").write_text("display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    (h / "lamp" / "lamp.llp").write_text(head % "lamp" + 'include "../lamp_rules.llp".\ninclude "../proto.llp".\n#init off 1\n')
+    if dark:
+        (h / "dark").mkdir()
+        (h / "dark" / "domain.yaml").write_text("display: the dark lamp\nline: a lamp with no protocol\nprogram: dark.llp\n")
+        (h / "dark" / "dark.llp").write_text(head % "dark" + 'include "../lamp_rules.llp".\n#init off 1\n')
+    return h
+
+
+@needs_metisc
+def test_an_included_unit_is_judged_through_its_includers_never_alone(tmp_path):
+    """alf-bundle s-b53cc7ab step 4 (opus's F2): a bundle unit gaining a pred its member's program declares through
+    another include (alfworld's tick__done, the protocol) is accepted through that member, though the unit alone does
+    not declare it; the same text is refused through a member whose program does not declare it, named by that program."""
+    old, new = "  switch_on [dyn] : off -o on.", "  switch_on [dyn] : off -o on * lit."
+    _two_members(tmp_path, dark=False)
+    one = catalog.edit("lamp", "../lamp_rules.llp", old, new, r=tmp_path, dry_run=True)
+    assert one["ok"] and one["findings"] == [], one["findings"]
+    two = tmp_path / "two"
+    _two_members(two, dark=True)
+    both = catalog.edit("lamp", "../lamp_rules.llp", old, new, r=two, dry_run=True)
+    assert not both["ok"]
+    assert {(f["file"], f["as"], f["refuses"]) for f in both["findings"]} == {("../dark/dark.llp", "program", True)}, both["findings"]
+    assert all("lit" in (f["msg"] or "") for f in both["findings"])
+
+
 @needs_metisc
 def test_an_edit_of_a_bundle_member_reaches_its_bundle_never_outside(tmp_path):
     """The alf drive's M1: a bundle member's program includes the bundle's files (../tree/x.llp, generated from
