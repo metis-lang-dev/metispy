@@ -310,3 +310,31 @@ def test_repl_llm_sets_and_shows_the_three_seats(stub, monkeypatch, tmp_path):
     config.load(reload=True)
     r2 = _repl()
     assert f"· loop ollama:phi4-mini@{stub} · formalize openrouter:deepseek/deepseek-v4.1-flash-1017 ·" in r2.intro
+
+
+def test_the_repls_formalize_takes_its_own_seat(monkeypatch, tmp_path):
+    """llm-config: the kernel's formalize drafts on [llm] formalize (default [llm] loop), else narrate's endpoint."""
+    import metis.loop.core as core
+    seen = []
+
+    def fake(text, vocabulary, backend, *a, **kw):
+        seen.append(list(backend))
+        raise RuntimeError("stop here")
+    monkeypatch.setattr(core, "formalize_loop", fake)
+    f = tmp_path / "c.toml"
+    f.write_text('[llm]\nendpoint = "command:narrator"\nloop = "command:looper"\n')
+    monkeypatch.setenv("METIS_CONFIG", str(f))
+    config.load(reload=True)
+    r = _repl()
+    r.loop.text = "a lamp goes dark"
+    with pytest.raises(RuntimeError):
+        r.cmd_formalize("")
+    f.write_text('[llm]\nendpoint = "command:narrator"\nloop = "command:looper"\nformalize = "command:former"\n')
+    config.load(reload=True)
+    with pytest.raises(RuntimeError):
+        r.cmd_formalize("")
+    f.write_text('[llm]\nendpoint = "command:narrator"\n')
+    config.load(reload=True)
+    with pytest.raises(RuntimeError):
+        r.cmd_formalize("")
+    assert seen == [["looper"], ["former"], ["narrator"]]
