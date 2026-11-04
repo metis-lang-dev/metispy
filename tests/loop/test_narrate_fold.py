@@ -116,17 +116,20 @@ def test_anthropic_reports_the_cap(monkeypatch):
 
 
 def test_no_default_endpoint():
-    """loop-workspace: there is no default model. An unset endpoint is an
-    error naming both forms; a removed backend is refused by name, not
-    reached (replaces the Ollama think test: that adapter is gone)."""
+    """There is no default model: an unset endpoint is an error naming
+    the forms and where to set one; Ollama is back (the user, 2026-11-04:
+    "dropping ollama was mistake"), and an unknown backend is refused by
+    name, not reached."""
     import pytest
     from metis.loop import llm
     for spec in (None, "", "  "):
         with pytest.raises(ValueError) as e:
             llm.resolve(spec)
-        assert "anthropic[:MODEL] | command:ARGV" in str(e.value)
+        assert "ollama:MODEL[@URL] | openrouter:MODEL" in str(e.value)
         assert "[llm] endpoint" in str(e.value)
+    assert llm.resolve("ollama:m") == llm.Endpoint("ollama", "m", llm.OLLAMA_DEFAULT_URL)
+    assert llm.resolve("ollama:gemma3:4b").arg == "gemma3:4b"     # a tag stays the model's
     with pytest.raises(ValueError) as e:
-        llm.resolve("ollama:m")
-    assert "unknown LLM backend 'ollama'" in str(e.value)
+        llm.resolve("sorcery:m")
+    assert "unknown LLM backend 'sorcery'" in str(e.value)
     assert llm.resolve("command:echo x") == llm.Endpoint("command", "echo x")

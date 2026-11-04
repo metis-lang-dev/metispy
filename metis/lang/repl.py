@@ -106,11 +106,13 @@ gate                gate candidate as a PACK against the world
 revise              gate as a BASE EDIT (accept replaces the world)
 accept              admitted candidate joins the served world LIVE
 show [what]         loop state     export [DIR]   world as files
-llm [SPEC]          show/set + VALIDATE the LLM endpoint
-                    (anthropic[:MODEL] | command:ARGV, no
-                    default; seeded by the config dot file:
-                    $METIS_CONFIG | .metis.toml |
-                    ~/.config/metis/config.toml)
+llm [WORDS]         show (checked) or set the model narrate uses,
+                    SAVED in the config dot file ($METIS_CONFIG |
+                    .metis.toml | ~/.config/metis/config.toml):
+                    llm ollama phi3 [URL] | llm openrouter MODEL
+                    (key: $OPENROUTER_API_KEY only) | llm URL MODEL
+                    | llm anthropic [MODEL] | llm command:ARGV;
+                    no default
 narrate [SEED]      the session so far as prose — or, with a number, a
                     fresh trace SAMPLED with that seed (not N beats):
                     Foata beats + %% docs through the llm endpoint.

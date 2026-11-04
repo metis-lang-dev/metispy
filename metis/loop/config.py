@@ -20,7 +20,9 @@ Recognized today:
   temperature = 0.3            # at temperature 0
 
 Keys never live here: a backend reads its key from the environment
-($ANTHROPIC_API_KEY; the command's own variable). Unknown keys are ignored, a broken file
+($OPENROUTER_API_KEY, $ANTHROPIC_API_KEY; the command's own variable;
+the console's gateway loads the person's private key file into its own
+environment). `set` writes one key (the REPL's `llm`). Unknown keys are ignored, a broken file
 is reported once and treated as absent — a dot file must never
 stop the shell from serving."""
 import os

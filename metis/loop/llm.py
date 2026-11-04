@@ -68,9 +68,9 @@ class Endpoint:
         return f"{self.backend}:{self.arg}" if self.arg else self.backend
 
 
-UNSET = ("no LLM endpoint: set [llm] endpoint in the config dot file "
-         "($METIS_CONFIG | .metis.toml | ~/.config/metis/config.toml) or "
-         f"`llm SPEC` — {FORMS}")
+UNSET = ("no LLM endpoint: `llm ollama MODEL [URL]` or `llm openrouter MODEL` "
+         "(saved as [llm] endpoint in the config dot file: $METIS_CONFIG | "
+         f".metis.toml | ~/.config/metis/config.toml) — {FORMS}")
 
 
 def resolve(spec: str) -> Endpoint:
@@ -107,6 +107,11 @@ def spec_from_words(words) -> str:
     ws = [w for w in (words.split() if isinstance(words, str) else words) if w]
     if not ws:
         raise ValueError(UNSET)
+    if ws[0].startswith("command:"):           # a command line is words
+        return resolve(" ".join(ws)).spec
+    if ":" in ws[0] and not _is_url(ws[0]) and len(ws) > 1:
+        raise ValueError(f"a spec is one word ({ws[0]}), or say it in words: "
+                         "llm ollama MODEL [URL] | llm openrouter MODEL")
     if len(ws) == 1:
         if _is_url(ws[0]):
             raise ValueError("a URL needs a model after it: "
@@ -182,7 +187,7 @@ def _anthropic(prompt: str, model: str, timeout: int,
                          "https://api.anthropic.com").rstrip("/")
     out = _post(url + "/v1/messages", {
         "model": model or ANTHROPIC_DEFAULT_MODEL,
-        "max_tokens": max_tokens(),
+        "max_tokens": _cap(options),
         **({"temperature": options["temperature"]}
            if options and "temperature" in options else {}),
         **({"system": system} if system else {}),
@@ -195,31 +200,63 @@ def _anthropic(prompt: str, model: str, timeout: int,
                    for b in out.get("content", [])).strip()
 
 
+def _cap(options: dict = None) -> int:
+    """The tokens one request may write: the cap ([llm] max_tokens), or
+    the seat's own num_predict ([narrate] num_predict) when lower."""
+    cap = max_tokens()
+    try:
+        n = int((options or {}).get("num_predict") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return min(cap, n) if n > 0 else cap
+
+
+def _fences(text: str) -> str:
+    """A completion wrapped whole in a ``` fence, unwrapped (small local
+    models fence their answer)."""
+    t = text.strip()
+    if t.startswith("```") and t.endswith("```") and len(t) > 6:
+        t = t[3:-3]
+        t = t.split("\n", 1)[1] if "\n" in t and not t.split("\n", 1)[0].strip().count(" ") \
+            else t
+    return t.strip()
+
+
 def _ollama(prompt: str, model: str, url: str, timeout: int,
             options: dict = None, system: str = None,
             meta: dict = None) -> str:
-    """Ollama's /api/generate, one shot, no stream; num_predict is the cap."""
-    opts = {"num_predict": max_tokens()}
-    if options and "temperature" in options:
-        opts["temperature"] = options["temperature"]
+    """Ollama's /api/generate, one shot, no stream, think off (a thinking
+    model answers without thinking first). The seat's options ([narrate]:
+    temperature, num_ctx, repeat_penalty, ...) go over a temperature-0
+    default, as before loop-workspace; num_predict is the cap (_cap)."""
+    import urllib.error
+    opts = {"temperature": 0, **(options or {}), "num_predict": _cap(options)}
     try:
         out = _post(url + "/api/generate", {
-            "model": model, "prompt": prompt, "stream": False,
+            "model": model, "prompt": prompt, "stream": False, "think": False,
             **({"system": system} if system else {}), "options": opts,
         }, {}, timeout)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:              # a model not pulled, not a dead server
+            raise RuntimeError(f"ollama: model '{model}' is not pulled at {url} "
+                               f"(ollama pull {model}, or `llm ollama MODEL`)") from e
+        raise RuntimeError(f"ollama at {url}: HTTP {e.code}") from e
     except OSError as e:
-        raise RuntimeError(f"ollama at {url} not reachable: {e}") from e
+        raise RuntimeError(f"ollama at {url} not reachable: "
+                           f"{getattr(e, 'reason', e)}") from e
     if meta is not None:
         meta["cut"] = out.get("done_reason") == "length"
         meta["tokens"] = out.get("eval_count")
-    return str(out.get("response", "")).strip()
+    return _fences(str(out.get("response", "")))
 
 
 def _openrouter(prompt: str, model: str, timeout: int,
                 options: dict = None, system: str = None,
                 meta: dict = None, seat: str = "narrate") -> str:
     """OpenRouter's chat completions: the key from the environment only,
-    the token cap on every request, the API's cost into the cost log."""
+    the token cap on every request, reasoning off (a thinking model spent
+    the whole cap thinking: the smoke of 2026-11-04, 700 tokens for two
+    told sentences), the API's cost into the cost log."""
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY is not set (the key is read "
@@ -227,19 +264,32 @@ def _openrouter(prompt: str, model: str, timeout: int,
     url = os.environ.get("OPENROUTER_API_URL", OPENROUTER_URL).rstrip("/")
     messages = ([{"role": "system", "content": system}] if system else []) \
         + [{"role": "user", "content": prompt}]
-    out = _post(url + "/chat/completions", {
-        "model": model, "messages": messages, "max_tokens": max_tokens(),
-        **({"temperature": options["temperature"]}
-           if options and "temperature" in options else {}),
-        "usage": {"include": True},
-    }, {"Authorization": "Bearer " + key, "HTTP-Referer": "https://metis-lang.dev",
-        "X-Title": "metis REPL"}, timeout)
+    import urllib.error
+    try:
+        out = _post(url + "/chat/completions", {
+            "model": model, "messages": messages, "max_tokens": _cap(options),
+            **({"temperature": options["temperature"]}
+               if options and "temperature" in options else {}),
+            "usage": {"include": True},
+            "reasoning": {"enabled": False},      # think off, as Ollama's: the cap is the told text's
+        }, {"Authorization": "Bearer " + key, "HTTP-Referer": "https://metis-lang.dev",
+            "X-Title": "metis REPL"}, timeout)
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8", "replace")
+            body = str((json.loads(body).get("error") or {}).get("message") or body)
+        except Exception:  # noqa: BLE001 — the status alone then
+            body = ""
+        raise RuntimeError(f"openrouter: HTTP {e.code} {body[:200]}".rstrip()) from e
+    except OSError as e:
+        raise RuntimeError(f"openrouter not reachable: {getattr(e, 'reason', e)}") from e
     if out.get("error"):
         raise RuntimeError(f"openrouter: {str(out['error'])[:300]}")
     choice = (out.get("choices") or [{}])[0]
     usage = out.get("usage") or {}
     log_cost({"who": "repl", "seat": seat, "model": model,
               "tokens": usage.get("completion_tokens"),
+              "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens"),
               "prompt_tokens": usage.get("prompt_tokens"),
               "cost": usage.get("cost")})
     if meta is not None:

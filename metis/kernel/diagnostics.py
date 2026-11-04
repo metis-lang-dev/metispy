@@ -323,7 +323,8 @@ HINTS: Dict[str, str] = {
         "shrink the scene ({reason})",
     "llm-endpoint":
         "{problem}: set [llm] endpoint in the config dot file, or pick "
-        "one with `llm` (anthropic[:MODEL] | command:ARGV)",
+        "one with `llm` (llm ollama MODEL [URL] | llm openrouter MODEL | "
+        "llm anthropic [MODEL] | llm command:ARGV)",
 }
 
 

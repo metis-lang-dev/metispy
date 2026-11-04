@@ -262,15 +262,19 @@ def _op_seed(shell, arg):
 
 
 def _op_llm(shell, arg):
-    """llm [SPEC]: show, or set and validate, the LLM endpoint formalize
-    and narrate use: anthropic[:MODEL] | command:ARGV (no default)."""
-    from .llm import resolve
+    """llm [WORDS]: show the model narrate uses (checked), or set it —
+    `ollama phi3 [URL]`, `openrouter MODEL`, `URL MODEL`, `anthropic
+    [MODEL]`, a spec (metis.loop.llm.spec_from_words); a REPL saves it
+    in the config dot file (do_llm). No default."""
+    from .llm import spec_from_words
     a = arg.strip()
+    if getattr(shell, "capture", None) and hasattr(shell, "_llm_status"):
+        text = shell.capture("llm", a)
+        return {"ok": True, "llm": shell.llm or "(unset)", "text": text}
     if not a:
         return {"ok": True, "llm": shell.llm or "(unset)"}
-    resolve(a)
-    shell.llm = a
-    return {"ok": True, "llm": a}
+    shell.llm = spec_from_words(a)
+    return {"ok": True, "llm": shell.llm}
 
 
 def _op_narrate(shell, arg):
