@@ -187,10 +187,13 @@ class Segments:
     kept at least (0: all of them, a test run's); the oldest segments go with their checkpoints, whole."""
 
     def __init__(self, path, every=200, ring=0, keep=False):
-        """KEEP: a resumed run goes on after what is there (last_k); else a start begins anew."""
+        """KEEP: a resumed run goes on after what is there (last_k); else a start begins anew: its own files go (the
+        segments and checkpoints/), the others' beside them stay (a world's config.yaml, run.json, marks.jsonl)."""
         self.dir, self.every, self.ring = Path(path), int(every or 0), int(ring or 0)
         if self.dir.exists() and not keep:
-            shutil.rmtree(self.dir)
+            for f in self.dir.glob("seg-*.jsonl"):
+                f.unlink()
+            shutil.rmtree(self.dir / "checkpoints", ignore_errors=True)
         (self.dir / "checkpoints").mkdir(parents=True, exist_ok=True)
         self.fh = None
         self.k0s = sorted(int(p.stem[4:]) for p in self.dir.glob("seg-*.jsonl"))
