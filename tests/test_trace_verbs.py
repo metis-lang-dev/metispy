@@ -107,8 +107,8 @@ def test_a_rule_toggling_alone_is_paired_with_idle(tmp_path):
 def test_families_read_the_programs_declared_ones_when_it_has_them(trace, program, monkeypatch):
     real = T.open_session
 
-    def with_families(p, seed=1):
-        sh = real(p, seed)
+    def with_families(p, seed=1, weights=()):
+        sh = real(p, seed, weights)
         sh.doc.families = [("lights", ["red", "green"])]
         return sh
     monkeypatch.setattr(T, "open_session", with_families)

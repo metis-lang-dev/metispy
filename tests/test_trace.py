@@ -136,14 +136,6 @@ def test_another_program_is_refused_unless_asked(tmp_path, program):
     assert T.replay(d, "m", other, check_key=False).ok
 
 
-def test_a_member_with_weight_ports_is_refused_in_words(tmp_path, program):
-    d = write(tmp_path, program, GOOD)
-    f = d / "seg-0.jsonl"
-    rows = [json.loads(x) for x in f.read_text().splitlines()]
-    rows[0]["members"]["m"]["weights"] = ["look"]
-    f.write_text("\n".join(json.dumps(x) for x in rows) + "\n")
-    with pytest.raises(T.TraceError, match="weight ports"):
-        T.replay(d, "m", program)
 
 
 def test_the_session_round_trips_and_the_rng_is_a_string(program):

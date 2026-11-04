@@ -74,6 +74,9 @@ from typing import List, Optional
 
 FORMAT = 1
 STEPS = 200                         # the most rules a beat replays to quiescence: past it, a beat that never settles
+STAND_IN = 0.5                      # a weight port's value when the trace does not carry it (its host, which binds it, is not run in a
+                                    # replay): strictly inside (0, 1). At 1.0, ~p is 0, so the second clause of a choice site on the
+                                    # port (p | ~p) is never enabled, and a record that chose it would read as a divergence; at 0, the first.
 GROUND_BUDGET = 1000000             # a session's events unless METIS_GROUND_BUDGET says: about 900 MB (NetHack's measured 248,254 events, 220 MB)
 
 
@@ -266,24 +269,69 @@ class Replay:
     fired: dict = field(default_factory=dict)         # {k: [rule names fired at k]}
     out: dict = field(default_factory=dict)           # {k: [outputs at k]}
     divergence: Optional[dict] = None                 # the first: {k, what, want, got}
+    note: Optional[str] = None                        # stood_in_note: the member's weight ports stood in
 
     @property
     def ok(self):
         return self.divergence is None
 
 
-def open_session(program, seed=1):
+def open_session(program, seed=1, weights=()):
     """A session on PROGRAM, under a grounding budget: a rule that grounds past it is refused in its own words
-    (metis.kernel.ground.GroundBudget), before a replay eats the memory scope."""
+    (metis.kernel.ground.GroundBudget), before a replay eats the memory scope. WEIGHTS: the member's weight ports the
+    trace does not carry (its header's `weights`), each stood in at STAND_IN so the program opens (stood_in_note says so)."""
     from metis.lang.repl import Repl as Shell
+    kw = {}
+    if weights:
+        from metis.fw.registry import Registry
+        reg = Registry()
+        for w in weights:
+            reg.weight(str(w), STAND_IN)
+        kw["registry"] = reg
     set_here = "METIS_GROUND_BUDGET" not in os.environ
     if set_here:
         os.environ["METIS_GROUND_BUDGET"] = str(GROUND_BUDGET)
     try:
-        return Shell(str(program), seed=seed, stdout=io.StringIO())
+        return Shell(str(program), seed=seed, stdout=io.StringIO(), **kw)
     finally:
         if set_here:
             del os.environ["METIS_GROUND_BUDGET"]
+
+
+def weights_in(header, member):
+    """MEMBER's weight ports as a segment's HEADER names them (none: [])."""
+    return list(((header or {}).get("members") or {}).get(member, {}).get("weights") or ())
+
+
+def stood_in_note(weights):
+    """The one line every verb says for a member opened with its weight ports stood in, or None."""
+    if not weights:
+        return None
+    return "%s stood in at %s: this member's choices are the record's, not evidence" % (", ".join(weights), STAND_IN)
+
+
+def trace_note(path, member):
+    """stood_in_note for MEMBER of the trace at PATH, as a list of notes ([] when it declares no weight port)."""
+    n = stood_in_note(weights_in(read(path)[0].header, member))
+    return [n] if n else []
+
+
+def force_recorded(sh, queue):
+    """A member opened with its weight ports stood in draws the record's choice: its next sampled firing is QUEUE's next
+    rule when that rule is enabled (one draw of the stream spent, as the record spent it), else its own (and a replay
+    then says where it left the record)."""
+    own = sh._sample
+
+    def sample():
+        ws = sh._candidates()
+        if queue and ws:
+            hit = next((i for i, _ in ws if sh.events_tbl[i][2].name == queue[0]), None)
+            if hit is not None:
+                queue.pop(0)
+                sh.rng.unit()
+                return sh._fire(hit, "sampled", ws)
+        return own()
+    sh._sample = sample
 
 
 def _apply(sh, lines):
@@ -320,8 +368,7 @@ def replay_segment(seg, member, program, r, check_key=True):
     m = seg.header["members"].get(member)
     if m is None:
         raise TraceError("no member %r in the trace (it has: %s)" % (member, ", ".join(sorted(seg.header["members"]))))
-    if m.get("weights"):
-        raise TraceError("%s declares weight ports (%s): a trace does not carry their values yet" % (member, ", ".join(m["weights"])))
+    weights = list(m.get("weights") or ())
     have = seg.header.get("protocol")
     if have and have != protocol_key():
         raise TraceError("this trace is of another protocol (%s, this toolchain's %s): its checkpoints lack what changed since; "
@@ -329,9 +376,13 @@ def replay_segment(seg, member, program, r, check_key=True):
     if check_key and m.get("key") and m["key"] != program_key(program):
         raise TraceError("%s: %s is not the program the trace was written from" % (member, program))
     commands, out_preds = seg.header.get("commands") or (), set(m.get("out") or ())
-    sh = open_session(program, m.get("seed", 1))
+    sh = open_session(program, m.get("seed", 1), weights)
     restore_session(sh, seg.checkpoint["sessions"][member])
     events = {ev.name: ev for _, _, ev in sh.events_tbl}
+    queue = []                                     # the record's draws, forced where enabled (a weight port stood in)
+    if weights:
+        r.note = stood_in_note(weights)
+        force_recorded(sh, queue)
 
     def stop(k, what, want, got):
         r.divergence = {"k": k, "what": what, "want": want, "got": got}
@@ -359,6 +410,7 @@ def replay_segment(seg, member, program, r, check_key=True):
                     _apply(sh, item["beat"])
                     r.inputs += 1
                 want = item.get("fired") or []
+                queue[:] = list(want) if weights else []
                 got = _fire_all(sh, want, item.get("left"))
                 r.beats += 1
                 r.rules += len(got)
@@ -366,6 +418,7 @@ def replay_segment(seg, member, program, r, check_key=True):
                     return stop(k, "fired", want, got)
                 fired += got
             elif "step" in item:
+                queue[:] = list(item["step"]) if weights else []
                 got = [sh._sample() for _ in item["step"]]
                 r.rules += len(got)
                 if got != item["step"]:
@@ -526,11 +579,12 @@ def blame(path, member, k, atoms, program=None):
     if m is None:
         raise TraceError("no member %r in the trace" % member)
     program = session_program(start, member, program)
+    weights = list(m.get("weights") or ())
     counts, last = dict(start.checkpoint["sessions"][member]["counts"]), {}
     world_preds = {pred_of(a) for a in (start.checkpoint.get("copies") or {}).get(member, ())}
     events, generated = {}, set()
     if program:
-        sh = open_session(program, m.get("seed", 1))
+        sh = open_session(program, m.get("seed", 1), weights)
         events = {ev.name: ev for _, _, ev in sh.events_tbl}
         generated = generated_rules(sh.doc)
 
@@ -586,7 +640,10 @@ def blame(path, member, k, atoms, program=None):
                 row["whose"] = "the member's: nothing ever moved it"
             others = others or row["whose"] in ("the world's reading", "a take from the director", "the protocol's generated block (the stub's, not the member's)")
         out.append(row)
-    return {"atoms": out, "verdict": "not this package's" if others else "this package's"}
+    res = {"atoms": out, "verdict": "not this package's" if others else "this package's"}
+    if weights:
+        res["note"] = stood_in_note(weights)
+    return res
 
 
 # ── the goldens: a refusal names them ──
@@ -789,7 +846,7 @@ def timeline(path, member, program=None):
     program = session_program(segs[0], member, program)
     events = {}
     if program:
-        events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1)).events_tbl}
+        events = {ev.name: ev for _, _, ev in open_session(program, m.get("seed", 1), m.get("weights") or ()).events_tbl}
     ticks = []
     for seg in segs:
         counts = dict((seg.checkpoint.get("sessions") or {}).get(member, {}).get("counts") or {})
@@ -880,7 +937,7 @@ def _note_state(exact):
 def blame_rows(path, member, k, atoms, program=None):
     """Blame first: the CLI of `blame`, its result as rows (whose / atom / want / have / last mover) under the verdict line, nothing new in the logic. → Table."""
     r = blame(path, member, k, atoms, program)
-    t = Table(["whose", "atom", "want", "have", "last_k", "last_by", "last_what"], notes=["verdict: %s" % r["verdict"]])
+    t = Table(["whose", "atom", "want", "have", "last_k", "last_by", "last_what"], notes=["verdict: %s" % r["verdict"]] + ([r["note"]] if r.get("note") else []))
     for row in r["atoms"]:
         last = row["last"] or {}
         t.rows.append([row["whose"] or "nobody's: it holds as it should", row["atom"], row["want"], row["have"], last.get("k"), last.get("by"), last.get("what")])
@@ -899,7 +956,7 @@ def count(path, atom, by=(), member=None, program=None):
         table[key] = (with_ + 1, without) if held(atom, t.counts) else (with_, without + 1)
     total = len(ticks)
     n = sum(w for w, _ in table.values())
-    out = Table(list(by) + ["with_%s" % atom, "without"], notes=["ticks: %d" % total, "ticks with %s: %d" % (atom, n), _note_state(exact)])
+    out = Table(list(by) + ["with_%s" % atom, "without"], notes=["ticks: %d" % total, "ticks with %s: %d" % (atom, n), _note_state(exact)] + trace_note(path, member or _only_member(path)))
     for key, (w, wo) in sorted(table.items(), key=lambda kv: (-kv[1][0], kv[0])):
         out.rows.append(list(key) + [w, wo])
     return out
@@ -929,10 +986,10 @@ def families(path, fams=(), member=None, program=None):
     ticks, exact = timeline(path, member, program)
     fams = [("+".join(f), list(f)) for f in fams]
     if program:
-        doc = getattr(open_session(program), "doc", None)
+        doc = getattr(open_session(program, 1, weights_in(read(path)[0].header, member)), "doc", None)
         for name, members in getattr(doc, "families", None) or ():
             fams.append((str(getattr(name, "name", name)), [str(getattr(x, "name", x)) for x in members]))
-    summary = Table(["family", "members", "ticks", "ok", "zero", "two_or_more"], notes=["ticks: %d" % len(ticks), _note_state(exact)])
+    summary = Table(["family", "members", "ticks", "ok", "zero", "two_or_more"], notes=["ticks: %d" % len(ticks), _note_state(exact)] + trace_note(path, member))
     bad = Table(["family", "k", "held"])
     flicker = Table(["what", "name", "first_k", "last_k", "ticks", "pair"])
     for name, members in fams:
@@ -968,7 +1025,7 @@ def holds_windows(path, atom, max_ticks, member=None, program=None):
     """Bounded yield: every window where ATOM is held (count > 0) for more than MAX_TICKS consecutive ticks; one row per window with its first and last tick, its length and the
     rules (names) that fired on the member within it, so a reader sees whether a release ever fired. → Table."""
     ticks, exact = timeline(path, member or _only_member(path), program)
-    out = Table(["first_k", "last_k", "ticks", "rules_fired"], notes=["ticks: %d" % len(ticks), "windows of %s past %d ticks:" % (atom, max_ticks), _note_state(exact)])
+    out = Table(["first_k", "last_k", "ticks", "rules_fired"], notes=["ticks: %d" % len(ticks), "windows of %s past %d ticks:" % (atom, max_ticks), _note_state(exact)] + trace_note(path, member or _only_member(path)))
     for a, b in _windows(ticks, atom):
         if b - a + 1 > max_ticks:
             out.rows.append([ticks[a].k, ticks[b].k, b - a + 1, sorted({pred_of(x) for t in ticks[a:b + 1] for x in t.fired})])
@@ -1004,6 +1061,8 @@ def diff(path_a, path_b, member=None, program=None):
                 break
         if not found:
             table.notes.append("%s identical over %d ticks" % (what, min(n)) + ("" if n[0] == n[1] else " (A has %d ticks, B has %d)" % n))
+    for m in members:
+        fired.notes += ["%s: %s" % (m, x) for x in trace_note(path_a, m)]
     return [fired, state]
 
 
@@ -1012,7 +1071,7 @@ def outcomes(path, commit, done, cancel, member=None, program=None):
     or the one after), with CANCEL appearing, or with neither (the trace ended on it, or it was released otherwise: the row says which). Three counts in the notes, one row per
     window. → Table."""
     ticks, exact = timeline(path, member or _only_member(path), program)
-    out = Table(["first_k", "last_k", "ticks", "ended"], notes=[_note_state(exact)])
+    out = Table(["first_k", "last_k", "ticks", "ended"], notes=[_note_state(exact)] + trace_note(path, member or _only_member(path)))
     tally = {"done": 0, "cancel": 0, "neither": 0}
     for a, b in _windows(ticks, commit):
         end = ticks[b:b + 2]
@@ -1043,7 +1102,7 @@ def fired_on_seeds(path, rule, seeds, program, member):
         sh, first = None, None
         for seg in segs:
             if sh is None or "cut" in seg.header:
-                sh = open_session(program, seed)
+                sh = open_session(program, seed, m.get("weights") or ())
                 st = seg.checkpoint["sessions"][member]
                 sh.stage, sh.counts = st["stage"], dict(st["counts"])
             for t in seg.ticks:
@@ -1070,6 +1129,7 @@ def fired_on_seeds(path, rule, seeds, program, member):
                         break
         out.rows.append([seed, first is not None, first])
     out.notes.append("%s fired on %d of %d seeds" % (rule, sum(1 for r in out.rows if r[1]), seeds))
+    out.notes += trace_note(path, member)
     return out
 
 
@@ -1260,7 +1320,8 @@ def main(argv=None):
     a = parser().parse_args(argv)
     if a.verb == "replay":
         res = replay(a.trace, a.member, a.program)
-        print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence}))
+        print(json.dumps({"ok": res.ok, "ticks": res.ticks, "beats": res.beats, "rules": res.rules, "divergence": res.divergence,
+                          **({"note": res.note} if res.note else {})}))
         return 0 if res.ok else 1
     tables = None
     if a.verb == "blame":
