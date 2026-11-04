@@ -2614,15 +2614,20 @@ class Repl(LoopVerbs, Cmd):
                                 f"(it has: {', '.join(names[:8])})", f"model {ep.arg} not pulled")
             if seat == "loop":                   # the pi loop runs on tool calls
                 try:
-                    caps = ollama_show(ep).get("capabilities") or []
+                    info = ollama_show(ep)
                 except Exception:  # noqa: BLE001 — the tags answered; a show that does not is not a finding
-                    caps = []
+                    info = {}
+                caps = info.get("capabilities") or []
                 if caps and "tools" not in caps:
                     return llm_note(f"llm: {shown} — {ep.arg} cannot call tools (Ollama: {', '.join(caps)}): the "
                                     f"pi loop runs on tool calls; one that can: "
                                     + (", ".join(n for n in names if n != ep.arg)[:120] or "pull one"),
                                     f"{ep.arg} cannot call tools")
-                return f"{lead}: {shown} (no key, 0 USD" + (", tools" if "tools" in caps else "") + ")"
+                ctx = ("" if not info or "num_ctx" in str(info.get("parameters") or "") else
+                       "; the server's context must hold pi's prompt (~6k tokens): Ollama's /v1 takes no num_ctx, so "
+                       "run the server with OLLAMA_CONTEXT_LENGTH=32768 (its default on an 8 GB GPU is 4096: the "
+                       "prompt is cut and the model never sees its tools)")
+                return f"{lead}: {shown} (no key, 0 USD" + (", tools" if "tools" in caps else "") + ctx + ")"
             return f"{lead}: {shown}"
         try:
             argv = shlex.split(ep.arg)

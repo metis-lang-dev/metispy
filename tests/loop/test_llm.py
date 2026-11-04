@@ -297,10 +297,15 @@ def test_repl_llm_sets_and_shows_the_three_seats(stub, monkeypatch, tmp_path):
     assert "gemma3:4b cannot call tools (Ollama: completion, vision)" in out and "saved to" in out
     _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"]}
     out = _say(r, f"llm loop ollama phi4-mini {stub}")
-    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools)")
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools; the server's context must hold")
+    assert "OLLAMA_CONTEXT_LENGTH=32768" in out                    # the model carries no num_ctx of its own
+    _Stub.reply = {"models": [{"name": "phi4-mini:latest"}], "capabilities": ["completion", "tools"],
+                   "parameters": "num_ctx 32768"}
+    out = _say(r, f"llm loop ollama phi4-mini {stub}")
+    assert out.startswith(f"llm loop: ollama:phi4-mini@{stub} (no key, 0 USD, tools) — saved")
     assert f'loop = "ollama:phi4-mini@{stub}"' in f.read_text() and "endpoint" not in f.read_text()
     shown = _say(r, "llm").splitlines()
-    assert shown[0].startswith("llm: (unset)") and shown[1].startswith(f"llm loop: ollama:phi4-mini@{stub}")
+    assert shown[0].startswith("llm: (unset)") and shown[1].startswith(f"llm loop: ollama:phi4-mini@{stub} (no key")
     assert shown[2] == f"llm formalize: ollama:phi4-mini@{stub} ([llm] loop (formalize's default))"
     out = _say(r, "llm formalize openrouter deepseek/deepseek-v4.1-flash-1017")
     assert "llm formalize: openrouter:deepseek/deepseek-v4.1-flash-1017 — OPENROUTER_API_KEY is not set" in out
