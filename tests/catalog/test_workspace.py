@@ -538,3 +538,12 @@ def test_an_acceptance_after_a_try_is_the_ruling(tmp_path):
     j = json.loads(ws.rule(sid, "accepted", "accepted (inert)", pack="drop begin.\n").read_text())
     assert j["verdict"] == "accepted (inert)" and j["tries"] == 1 and j["pack"] == "packs/%s.llp" % sid
     assert ws.surprise(sid)["status"] == "ruled"
+
+
+def test_a_refusal_by_the_records_kind_stands_at_once(tmp_path):
+    """spec 20 §5: a record not structural is refused before the cascade; no corrected pack answers it, so no try."""
+    ws = W.workspace(tmp_path)
+    sid = ws.drop_surprise({"member": "planner", "atoms": ["brake"]})
+    ws.take_surprise(sid, pid=os.getpid())
+    ws.rule(sid, "# Ruling: refused\n\n**Kind:** probabilistic\n", "refused", why="kind", kind="probabilistic")
+    assert ws.surprise(sid)["status"] == "ruled" and "tries" not in ws.surprise(sid)

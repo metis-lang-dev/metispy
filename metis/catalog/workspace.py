@@ -707,7 +707,8 @@ class Workspace:
         (a path or its text) into packs/<id>.llp, then rulings/<id>.json {id, ts, verdict, md, pack, **FIELDS}
         (moved, lint, reads_absent, spent …) last: its existence is the status. The .taken goes. → the json's path.
         A REFUSED verdict on a surprise with fewer than TRIES - 1 tries is a try instead: rulings/tries/<id>-<n>.md and
-        .json (n from 1), its pack in packs/tries/, the take kept: the surprise stays taken for the corrected pack."""
+        .json (n from 1), its pack in packs/tries/, the take kept: the surprise stays taken for the corrected pack. A
+        refusal by the record's kind (why: kind, spec 20 §5) stands at once: no pack answers it."""
         rec = self.surprise(sid)
         if not isinstance(verdict, str) or not verdict:
             raise ValueError("a ruling has a verdict")
@@ -719,7 +720,7 @@ class Workspace:
             return p.read_text() if p is not None and p.is_file() else str(x)
         self.made()
         n = len(rec.get("tries") or []) + 1
-        if verdict.startswith("refused") and n < TRIES:
+        if verdict.startswith("refused") and n < TRIES and fields.get("why") != "kind":   # a kind refusal: no pack answers it
             md = write_whole(self.path("try_md", id=sid, n=n), text(ruling))
             out = {**fields, "id": sid, "try": n, "ts": _ts(), "verdict": verdict, "md": self.rel(md)}
             if pack is not None:
