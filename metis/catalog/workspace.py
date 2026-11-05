@@ -241,10 +241,19 @@ def _param(act, pos):
     return p
 
 
+KEPT = "kept.json"          # in a kept window's copy: {source, window} (keep_window); a drop pointing at one keeps it as it is
+
+# A verb's arguments the loops' tools do not get: `kind --write` is the triage's own (spec 20 §8: a model may dispute a
+# record's kind in its reading, never overwrite it; surprise-kinds step 1b).
+HIDDEN = {"kind": ("write",)}
+
+
 def _tool(name, module, verb, description, ap):
     props, req, pos = {}, [], 0
     for act in ap._actions:
         if act.dest in ("help", "json") or act.__class__.__name__ == "_SubParsersAction":
+            continue
+        if act.dest in HIDDEN.get(verb, ()):
             continue
         props[act.dest] = _param(act, pos)
         if not act.option_strings:
@@ -502,6 +511,7 @@ class Workspace:
                     if isinstance(r, dict) and isinstance(r.get("at_k"), int) and k0 <= r["at_k"] <= k1]
             if rows:
                 (tmp / "marks.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            (tmp / KEPT).write_text(json.dumps({"source": "traces/" + run, "window": [k0, k1]}) + "\n")
             try:
                 os.rename(tmp, dst)
             except OSError:                            # another keep of the same name made it meanwhile
@@ -583,7 +593,8 @@ class Workspace:
 
     def drop_surprise(self, rec, who="backend"):
         """Write a surprise: REC needs member and reading or atoms; trace ("traces/<run>") with k, k0 and window
-        ([k_start, k_end]) and words (the person's text) when there are. → its id."""
+        ([k_start, k_end]) and words (the person's text) when there are. A record with a trace keeps its window at the
+        drop (_keep_for: traces/<run>-<id>/, its `run` the source). → its id."""
         if not isinstance(rec, dict):
             raise ValueError("a surprise is an object")
         if not rec.get("member"):
@@ -611,6 +622,8 @@ class Workspace:
                "who": rec.get("who") or who, "status": "open"}
         if rec["who"] not in WHO:
             raise ValueError("who %r: one of %s" % (rec["who"], ", ".join(WHO)))
+        if tr is not None:                         # the record keeps its window: a rerun under the run's name cannot empty it
+            rec = self._keep_for(rec, sid)
         write_whole(self.path("surprise", id=sid), json.dumps(rec, indent=1) + "\n")
         self.journal(rec["who"], "surprise", id=sid, member=rec["member"], **({"trace": tr} if tr else {}),
                      **({"surprise_kind": rec["kind"]} if rec.get("kind") else {}))
@@ -633,6 +646,28 @@ class Workspace:
         write_whole(f, json.dumps(new, indent=1, default=sorted) + "\n")
         self.journal(who, "kind", id=sid, surprise_kind=kind, **({"then": then} if then else {}))
         return new
+
+    def _keep_for(self, rec, sid):
+        """REC's trace window kept at the drop (surprise-kinds step 1b, the architect's ruling): keep_window to
+        traces/<run>-<SID>/, the record's `trace` then the kept copy and `run` the run it came from. The window is
+        `window`, else [k0, k] or [k, k]; a record with no tick keeps its trace as it is. A window the trace does not
+        hold any more (or no trace at all) is the record's own `keep_error`, and the drop goes on: the triage then says
+        which column is missing."""
+        w = rec.get("window")
+        if not w:
+            k = rec.get("k")
+            if k is None:
+                return rec
+            w = [rec.get("k0", k), k]
+        run = rec["trace"][len("traces/"):].rstrip("/")
+        mark = _json(self.path("trace", run=run) / KEPT)
+        if isinstance(mark, dict):                  # a kept copy already (the console's and the chat's drops keep first)
+            return dict(rec, run=str(mark.get("source", "")).replace("traces/", "", 1) or run)
+        try:
+            kept = self.keep_window(run, int(w[0]), int(w[1]), sid, who=rec["who"])
+        except (ValueError, OSError) as e:          # TraceError is a ValueError: no segment, a window gone, a copy there
+            return dict(rec, keep_error=str(e))
+        return dict(rec, trace=kept, run=run)
 
     def take_surprise(self, sid, pid=None, who="pi"):
         """The pi loop starts on SID: surprises/<id>.taken {pid, ts}. Refused when it is ruled, or taken by a

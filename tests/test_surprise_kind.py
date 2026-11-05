@@ -246,3 +246,53 @@ def test_t10_truth_prints_the_truth_column_and_the_unbound_things(ws, capsys):
     assert T.main(["truth", str(trace_of(ws, rec)), "--id", "lead"]) == 0 and "lead" in capsys.readouterr().out
     with pytest.raises(T.TraceError, match="no truth column"):
         T.truth_table(trace_of(ws, rec_of(ws, "40f229")))
+
+
+# ── step 1b: a record keeps its window at the drop; the loops' tools never write a kind ──
+def _two_segment_trace(where):
+    s = T.Segments(where, every=5)
+    for k in range(10):
+        if s.due(k):
+            s.open_segment(k, {"members": {"m": {"key": "", "seed": 1, "weights": [], "out": [], "in": []}}},
+                           {"sessions": {"m": {"stage": "main", "quiet": None, "rng": "1", "counts": {}}}, "copies": {"m": {}}})
+        s.line({"k": k, "members": {"m": {"why": "change", "seq": [{"beat": ["+x%d" % k], "fired": []}]}}})
+    s.close()
+
+
+def test_a_dropped_record_keeps_its_window_past_a_rerun(tmp_path):
+    w = W.Workspace(tmp_path)
+    _two_segment_trace(w.state / "traces" / "card-1")
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/card-1", "k": 7, "window": [6, 8]})
+    rec = w.surprise(sid)
+    assert rec["trace"] == "traces/card-1-%s" % sid and rec["run"] == "card-1" and "keep_error" not in rec
+    assert [e["kind"] for e in w.events()] == ["keep", "surprise"]
+    shutil.rmtree(w.state / "traces" / "card-1")                 # a rerun under the run's name empties the original
+    _two_segment_trace(w.state / "traces" / "card-1")
+    ticks, _ = T.timeline(w.state / rec["trace"], "m")
+    assert {6, 7, 8} <= {t.k for t in ticks} and "x7" in ticks[[t.k for t in ticks].index(7)].counts
+
+
+def test_a_window_the_trace_lost_is_the_records_own_error_and_the_drop_goes_on(tmp_path):
+    w = W.Workspace(tmp_path)
+    _two_segment_trace(w.state / "traces" / "card-1")
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/card-1", "window": [40, 50]})
+    rec = w.surprise(sid)
+    assert rec["trace"] == "traces/card-1" and "not in traces/card-1 any more" in rec["keep_error"]
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/nowhere", "k": 3})
+    assert "keep_error" in w.surprise(sid) and w.surprise(sid)["trace"] == "traces/nowhere"
+
+
+def test_the_loops_tools_do_not_get_kind_write():
+    tools = {t["name"]: t for t in W.declarations()["tools"]}
+    props = tools["trace_kind"]["parameters"]["properties"]
+    assert "write" not in props and "record" in props and "program" in props
+
+
+def test_a_drop_pointing_at_a_kept_copy_keeps_it_as_it_is(tmp_path):
+    w = W.Workspace(tmp_path)
+    _two_segment_trace(w.state / "traces" / "card-1")
+    kept = w.keep_window("card-1", 6, 8, "w6-8")                   # the console's and the chat's drops keep first
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": kept, "window": [6, 8]})
+    rec = w.surprise(sid)
+    assert rec["trace"] == kept and rec["run"] == "card-1" and "keep_error" not in rec
+    assert sorted(p.name for p in (w.state / "traces").iterdir()) == ["card-1", "card-1-w6-8"]

@@ -492,11 +492,6 @@
       },
       "description": "a second host's trace of the same card",
       "flag": "--host"
-     },
-     "write": {
-      "type": "BOOLEAN",
-      "description": "write kind, evidence and response into the record (the workspace's whole-file write)",
-      "flag": "--write"
      }
     },
     "required": [
