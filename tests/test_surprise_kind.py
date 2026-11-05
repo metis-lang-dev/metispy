@@ -278,8 +278,10 @@ def test_a_window_the_trace_lost_is_the_records_own_error_and_the_drop_goes_on(t
     sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/card-1", "window": [40, 50]})
     rec = w.surprise(sid)
     assert rec["trace"] == "traces/card-1" and "not in traces/card-1 any more" in rec["keep_error"]
-    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/nowhere", "k": 3})
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/nowhere", "window": [2, 3]})
     assert "keep_error" in w.surprise(sid) and w.surprise(sid)["trace"] == "traces/nowhere"
+    sid = w.drop_surprise({"member": "m", "reading": "x", "trace": "traces/card-1", "k": 7})     # no window: as it is
+    assert w.surprise(sid)["trace"] == "traces/card-1" and "keep_error" not in w.surprise(sid)
 
 
 def test_the_loops_tools_do_not_get_kind_write():

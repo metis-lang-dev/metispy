@@ -650,15 +650,12 @@ class Workspace:
     def _keep_for(self, rec, sid):
         """REC's trace window kept at the drop (surprise-kinds step 1b, the architect's ruling): keep_window to
         traces/<run>-<SID>/, the record's `trace` then the kept copy and `run` the run it came from. The window is
-        `window`, else [k0, k] or [k, k]; a record with no tick keeps its trace as it is. A window the trace does not
-        hold any more (or no trace at all) is the record's own `keep_error`, and the drop goes on: the triage then says
-        which column is missing."""
+        `window`; a record with no window (a REPL's drop at one tick of its own session's trace, a name no rerun takes)
+        keeps its trace as it is. A window the trace does not hold any more (or no trace at all) is the record's own
+        `keep_error`, and the drop goes on: the triage then says which column is missing."""
         w = rec.get("window")
         if not w:
-            k = rec.get("k")
-            if k is None:
-                return rec
-            w = [rec.get("k0", k), k]
+            return rec
         run = rec["trace"][len("traces/"):].rstrip("/")
         mark = _json(self.path("trace", run=run) / KEPT)
         if isinstance(mark, dict):                  # a kept copy already (the console's and the chat's drops keep first)
