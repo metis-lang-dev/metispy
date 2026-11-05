@@ -171,6 +171,17 @@ def test_the_priority_taker_is_a_bound_crossed_and_also_structural(ws):
     assert "no longitudinal response" in out["evidence"]["why"][0]
 
 
+def test_a_thing_named_by_its_id_is_never_an_unheld_word(ws):
+    """cr-harvest: a world's record names its things by id (cr_triage: the contact partner, the bound things); an id names
+    the thing and is no value of it, so the procedure goes on to the thing's facts: here the priority taker again."""
+    rec = dict(rec_of(ws, "503be4"), words="cr7 cr7")
+    k1 = rec["window"][1]
+    write_truth(trace_of(ws, rec), [{"k": k, "ego": {"lane": "e_0", **({"contact": ["cr7"]} if k == k1 else {})},
+                                     "things": [car("cr7", "a1", lane="c_0")]} for k in window(rec)])
+    out = SK.triage(rec, trace_of(ws, rec))
+    assert out["kind"] == "probabilistic" and not any(w.startswith("ontological") for w in out["evidence"]["why"])
+
+
 @pytest.mark.parametrize("short, cut", [("40f229", 63), ("87279b", 83)])
 def test_a_cut_in_is_a_bound_crossed_with_only_a_lateral_response(ws, short, cut):
     """§9: 40f229 / 87279b, the car that cut in is the lead from the cut on; at contact the fold asks only a lateral response."""

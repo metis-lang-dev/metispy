@@ -350,9 +350,10 @@ def _triage(member, window, words, rec, path, program, hosts, check_key):
     # 2 ontological / perception
     if truth is not None:
         # a word found in a thing's class is held when the host says the class projects onto a type of the signature
-        # (`as`); a word found in any other attribute is held when the signature has it as a symbol
+        # (`as`); a word found in its id names the thing, never a value (cr-harvest: a world's record names its things by id);
+        # a word found in any other attribute is held when the signature has it as a symbol
         unheld = sorted({t for _, (th, hit) in named.items() for t, key in hit.items()
-                         if (key == "class" and not _class_held(th, sig, program)) or (key != "class" and t not in sig)})
+                         if (key == "class" and not _class_held(th, sig, program)) or (key not in ("class", "id") and t not in sig)})
         if unheld:
             found.append(("ontological", "the truth holds %s and no symbol of the member's signature can hold it"
                           % ", ".join(unheld)))
