@@ -500,5 +500,41 @@ def test_an_accepted_ruling_applies_as_the_judges_merge(tmp_path):
         ws.apply_plan(sid)
     other = ws.drop_surprise({"member": "lamp", "reading": "x"})
     ws.rule(other, "# Ruling: refused\n", "refused", pack=pack, member="lamp")
+    with pytest.raises(ValueError, match="not ruled: nothing to apply"):            # a refusal is a try (F3)
+        ws.apply_plan(other)
+    for _ in range(W.TRIES - 1):
+        ws.rule(other, "# Ruling: refused\n", "refused", pack=pack, member="lamp")
     with pytest.raises(ValueError, match="ruled REFUSED: only an accepted ruling is applied"):
         ws.apply_plan(other)
+
+
+def test_a_refusal_is_a_try_and_the_surprise_stays_taken(tmp_path):
+    """gpt-oss s-0f23f8cd F3 (the architect's ruling): a REFUSED ruling stays as history in rulings/tries/, the surprise
+    stays taken so the loop's corrected pack is judged; the TRIES-th refusal stands as the ruling."""
+    ws = W.workspace(tmp_path)
+    sid = ws.drop_surprise({"member": "grasp", "trace": "traces/s1", "k": 2, "reading": "begin took a full hand"})
+    ws.take_surprise(sid, pid=os.getpid())
+    for n in range(1, W.TRIES):
+        j = ws.rule(sid, "# Ruling: refused\n\nlex error %d\n" % n, "refused", pack="unit=x\n", lint=[])
+        assert j == ws.state / "rulings" / "tries" / ("%s-%d.json" % (sid, n))
+        t = json.loads(j.read_text())
+        assert (t["try"], t["verdict"], t["md"], t["pack"]) == \
+            (n, "refused", "rulings/tries/%s-%d.md" % (sid, n), "packs/tries/%s-%d.llp" % (sid, n))
+        rec = ws.surprise(sid)
+        assert rec["status"] == "taken" and [x["try"] for x in rec["tries"]] == list(range(1, n + 1))
+        assert (ws.state / "surprises" / (sid + ".taken")).exists(), "the take stays"
+    assert ws.rulings() == [], "a try is not a ruling"
+    j = ws.rule(sid, "# Ruling: refused\n\nthe third\n", "refused", pack="drop x.\n")
+    assert j == ws.state / "rulings" / (sid + ".json") and json.loads(j.read_text())["tries"] == W.TRIES - 1
+    assert ws.surprise(sid)["status"] == "ruled" and len(ws.surprise(sid)["tries"]) == W.TRIES - 1
+    assert [e["kind"] for e in ws.events()] == ["surprise", "take"] + ["try"] * (W.TRIES - 1) + ["ruling"]
+
+
+def test_an_acceptance_after_a_try_is_the_ruling(tmp_path):
+    ws = W.workspace(tmp_path)
+    sid = ws.drop_surprise({"member": "grasp", "atoms": ["handsfree"]})
+    ws.take_surprise(sid, pid=os.getpid())
+    ws.rule(sid, "refused", "refused", pack="unit=x\n")
+    j = json.loads(ws.rule(sid, "accepted", "accepted (inert)", pack="drop begin.\n").read_text())
+    assert j["verdict"] == "accepted (inert)" and j["tries"] == 1 and j["pack"] == "packs/%s.llp" % sid
+    assert ws.surprise(sid)["status"] == "ruled"

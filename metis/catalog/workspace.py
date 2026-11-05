@@ -62,6 +62,9 @@ from metis.surprise_kind import KINDS                                   # noqa: 
 EVIDENCE = ("truth", "facts", "law", "hosts", "budget", "missing", "why")
 VERDICTS = ("agreed", "disagreed")
 MARK = ("n", "k0", "k1", "said")
+# A refused ruling is a try (gpt-oss s-0f23f8cd F3, the architect's ruling): kept in rulings/tries/ as history, the
+# surprise still taken, so the loop's corrected pack is judged; the TRIES-th refusal of one surprise stands as its ruling.
+TRIES = 3
 # The face: the names both faces have, py's (Workspace's methods, this module's functions) and the TypeScript
 # face's (metis-loop sdk/ts/workspace.ts), one for one: its test reads them from layout()["face"].
 FACE = ("layout", "root", "path", "bundle", "context", "traces", "trace", "surprises", "surprise", "drop_surprise",
@@ -86,6 +89,10 @@ LAYOUT = {
     "ruling_md":  ("rulings/{id}.md", "text", "pi", "the pack verb's document (propose.py document())"),
     "ruling":     ("rulings/{id}.json", "json", "pi",
                    "{id, ts, verdict, md, pack?, moved?, lint?, reads_absent?, spent?}: its existence is the status ruled"),
+    "tries":      ("rulings/tries/", "dir", "", "the refused tries of a surprise still taken (TRIES)"),
+    "try_md":     ("rulings/tries/{id}-{n}.md", "text", "pi", "a refused try's document"),
+    "try":        ("rulings/tries/{id}-{n}.json", "json", "pi", "{id, try, ts, verdict, md, pack?, ...}: a refused try"),
+    "try_pack":   ("packs/tries/{id}-{n}.llp", "text", "pi", "a refused try's pack"),
     "packs":      ("packs/", "dir", "", "the candidate packs judged"),
     "pack":       ("packs/{id}.llp", "text", "pi", "the candidate pack judged (applied only through the gate)"),
     "traces":     ("traces/", "dir", "", "the traces, one dir per run"),
@@ -580,8 +587,14 @@ class Workspace:
                 out.append(rec)
         return sorted(out, key=_order)
 
+    def tries(self, sid):
+        """SID's refused tries (rulings/tries/<id>-<n>.json), in their order."""
+        d = self.path("tries")
+        got = [_json(f) for f in d.glob("%s-*.json" % _check_id(sid))] if d.is_dir() else []
+        return sorted([t for t in got if isinstance(t, dict)], key=lambda t: t.get("try", 0))
+
     def surprise(self, sid):
-        """One surprise with its status, and its ruling when ruled."""
+        """One surprise with its status, its ruling when ruled, and its refused tries when it has any."""
         f = self.path("surprise", id=_check_id(sid))
         rec = _json(f)
         if not isinstance(rec, dict):
@@ -589,6 +602,9 @@ class Workspace:
         rec = self._with_take(dict(rec, id=sid, status=self.status(sid)))
         if rec["status"] == "ruled":
             rec["ruling"] = _json(self.path("ruling", id=sid))
+        tries = self.tries(sid)
+        if tries:
+            rec["tries"] = tries
         return rec
 
     def drop_surprise(self, rec, who="backend"):
@@ -689,8 +705,10 @@ class Workspace:
     def rule(self, sid, ruling, verdict, who="pi", pack=None, **fields):
         """The ruling of SID: RULING (the pack verb's document, a path or its text) into rulings/<id>.md, PACK
         (a path or its text) into packs/<id>.llp, then rulings/<id>.json {id, ts, verdict, md, pack, **FIELDS}
-        (moved, lint, reads_absent, spent …) last: its existence is the status. The .taken goes. → the json's path."""
-        self.surprise(sid)
+        (moved, lint, reads_absent, spent …) last: its existence is the status. The .taken goes. → the json's path.
+        A REFUSED verdict on a surprise with fewer than TRIES - 1 tries is a try instead: rulings/tries/<id>-<n>.md and
+        .json (n from 1), its pack in packs/tries/, the take kept: the surprise stays taken for the corrected pack."""
+        rec = self.surprise(sid)
         if not isinstance(verdict, str) or not verdict:
             raise ValueError("a ruling has a verdict")
         if self.path("ruling", id=sid).exists():
@@ -700,6 +718,17 @@ class Workspace:
             p = Path(x) if isinstance(x, (str, Path)) and "\n" not in str(x) and len(str(x)) < 4096 else None
             return p.read_text() if p is not None and p.is_file() else str(x)
         self.made()
+        n = len(rec.get("tries") or []) + 1
+        if verdict.startswith("refused") and n < TRIES:
+            md = write_whole(self.path("try_md", id=sid, n=n), text(ruling))
+            out = {**fields, "id": sid, "try": n, "ts": _ts(), "verdict": verdict, "md": self.rel(md)}
+            if pack is not None:
+                out["pack"] = self.rel(write_whole(self.path("try_pack", id=sid, n=n), text(pack)))
+            j = write_whole(self.path("try", id=sid, n=n), json.dumps(out, indent=1, default=str) + "\n")
+            self.journal(who, "try", id=sid, n=n, verdict=verdict, ruling=self.rel(j))
+            return j
+        if n > 1:
+            fields = {**fields, "tries": n - 1}
         md = write_whole(self.path("ruling_md", id=sid), text(ruling))
         out = {**fields, "id": sid, "ts": _ts(), "verdict": verdict, "md": self.rel(md)}
         if pack is not None:
