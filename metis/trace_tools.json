@@ -422,6 +422,47 @@
    }
   },
   {
+   "name": "trace_truth",
+   "module": "metis.trace",
+   "verb": "truth",
+   "description": "the world's truth column of a trace (TRACE/truth.jsonl, spec 20 §10.2): per tick the ego and the bodies within the sensor range, bound or not (T10)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "k0": {
+      "type": "INTEGER",
+      "description": "the first tick (default: the first the column holds)",
+      "flag": "--from"
+     },
+     "k1": {
+      "type": "INTEGER",
+      "description": "the last tick",
+      "flag": "--to"
+     },
+     "id": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "only this thing (repeat for more)",
+      "flag": "--id"
+     },
+     "unbound": {
+      "type": "BOOLEAN",
+      "description": "only the things the host bound to no role",
+      "flag": "--unbound"
+     }
+    },
+    "required": [
+     "trace"
+    ]
+   }
+  },
+  {
    "name": "trace_kind",
    "module": "metis.trace",
    "verb": "kind",

@@ -59,6 +59,7 @@ each segment's checkpoint through the do-lines applied and, with --program, the 
     python -m metis.trace outcomes DIR --commit A --done B --cancel C [--member M]    each commitment window's end (Time to spare; Committed action)
     python -m metis.trace fired DIR RULE --seeds N --program P --member M             the seeds the rule fires on (Search the seeds for a firing)
     python -m metis.trace one-guard-away DIR MEMBER K0 K1 --program P                 the rules one premise short at each beat of the window (spec 20 §7)
+    python -m metis.trace truth DIR [--from K0] [--to K1] [--id ID] [--unbound]        T10: the world's truth column per tick (truth.jsonl, spec 20 §10.2)
     python -m metis.trace kind RECORD [--root WS] [--program P] [--host DIR] [--write]  a surprise record's kind over truth, facts and law
                                                                                       (spec 20 §4; metis.surprise_kind, its truth column's contract)
 """
@@ -1336,6 +1337,12 @@ def parser():
     g.add_argument("k1", type=int)
     g.add_argument("--program", required=True, help="the member's .llp: the trace's own (its key is checked)")
     g.add_argument("--json", action="store_true", help="one JSON row a line")
+    tr = sub.add_parser("truth", help="the world's truth column of a trace (TRACE/truth.jsonl, spec 20 §10.2): per tick the ego and the bodies within the sensor range, bound or not (T10)")
+    tr.add_argument("trace")
+    tr.add_argument("--from", dest="k0", type=int, help="the first tick (default: the first the column holds)")
+    tr.add_argument("--to", dest="k1", type=int, help="the last tick")
+    tr.add_argument("--id", action="append", default=[], help="only this thing (repeat for more)")
+    tr.add_argument("--unbound", action="store_true", help="only the things the host bound to no role")
     kd = sub.add_parser("kind", help="a surprise record's kind over its trace's three columns, truth, facts and law (spec 20 §4): kind, evidence, response")
     kd.add_argument("record", help="the record's file, or its id with --root")
     kd.add_argument("--root", help="the workspace (its .metis/ holds surprises/ and traces/); else the record's file says where")
@@ -1393,6 +1400,8 @@ def main(argv=None):
         tab.notes = ["%s at %d..%d: the ground rules of its current stage one atom short of enabled, at each beat's firings"
                      % (a.member, a.k0, a.k1)]
         tables = [tab]
+    elif a.verb == "truth":
+        tables = [truth_table(a.trace, a.k0, a.k1, a.id, a.unbound)]
     elif a.verb == "kind":
         return kind_main(a)
     if tables is not None:
@@ -1429,6 +1438,33 @@ def _ticks_text(ks):
         out.append(str(ks[i]) if i == j else "%d-%d" % (ks[i], ks[j]))
         i = j + 1
     return ",".join(out)
+
+
+def truth_table(path, k0=None, k1=None, ids=(), unbound=False):
+    """T10 `truth`: the truth column as rows (k, id, class, as, role, lane, s, v, the other attributes), the ego's lane
+    and contacts as the id `ego`; notes say how many ticks and things, and the header's `cannot`."""
+    from metis.surprise_kind import read_truth
+    rows, header = read_truth(path)
+    if rows is None:
+        raise TraceError("%s: no truth column (truth.jsonl): the host does not write it yet" % path)
+    ks = sorted(k for k in rows if (k0 is None or k >= k0) and (k1 is None or k <= k1))
+    tab = Table(["k", "id", "class", "as", "role", "lane", "s", "v", "more"], [])
+    ids = set(ids)
+    for k in ks:
+        r = rows[k]
+        ego = r.get("ego") or {}
+        if ego and (not ids or "ego" in ids) and not unbound:
+            tab.rows.append([k, "ego", "-", "-", "-", ego.get("lane"), ego.get("s"), ego.get("v"),
+                             ", ".join("%s=%s" % (x, ego[x]) for x in sorted(ego) if x not in ("lane", "s", "v")) or "-"])
+        for th in r.get("things") or ():
+            if (ids and th.get("id") not in ids) or (unbound and th.get("role")):
+                continue
+            tab.rows.append([k, th.get("id"), th.get("class"), th.get("as"), th.get("role"), th.get("lane"), th.get("s"), th.get("v"),
+                             ", ".join("%s=%s" % (x, th[x]) for x in sorted(th) if x not in ("id", "class", "as", "role", "lane", "s", "v")) or "-"])
+    tab.notes = ["truth: %d ticks (%s..%s), %d rows" % (len(ks), ks[0] if ks else "-", ks[-1] if ks else "-", len(tab.rows))]
+    if header.get("cannot"):
+        tab.notes.append("the world cannot hold: %s" % ", ".join(header["cannot"]))
+    return tab
 
 
 def kind_main(a):

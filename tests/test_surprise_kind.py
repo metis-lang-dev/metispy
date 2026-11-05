@@ -231,3 +231,18 @@ def test_the_kind_verb_writes_the_record(ws):
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout)["kind"] == "ontological"
     assert ws.surprise(rec["id"])["kind"] == "ontological" and ws.events()[-1]["kind"] == "kind"
+
+
+def test_t10_truth_prints_the_truth_column_and_the_unbound_things(ws, capsys):
+    rec = rec_of(ws, "503be4")
+    write_truth(trace_of(ws, rec), [{"k": 1, "t": 0.0, "ego": {"lane": "e_1", "kind": "driving", "contact": []},
+                                     "things": [{"id": "lead", "class": "passenger", "as": "obj", "role": "lead", "lane": "e_1", "s": 60.0, "v": 13.0, "kind": "driving"},
+                                                {"id": "x", "class": "passenger", "as": "obj", "role": None, "lane": "e_2", "s": 90.0, "v": 9.0}]}],
+                header={"truth": 1, "cannot": ["sidewalk"]})
+    t = T.truth_table(trace_of(ws, rec))
+    assert t.notes == ["truth: 1 ticks (1..1), 3 rows", "the world cannot hold: sidewalk"]
+    assert t.rows[0][:2] == [1, "ego"] and t.rows[1][:5] == [1, "lead", "passenger", "obj", "lead"]
+    assert [r[1] for r in T.truth_table(trace_of(ws, rec), unbound=True).rows] == ["x"]
+    assert T.main(["truth", str(trace_of(ws, rec)), "--id", "lead"]) == 0 and "lead" in capsys.readouterr().out
+    with pytest.raises(T.TraceError, match="no truth column"):
+        T.truth_table(trace_of(ws, rec_of(ws, "40f229")))
