@@ -530,8 +530,18 @@ def case(path, member, k, after=(), out=(), k0=None, note=None, units=()):
                 elif "beat" in item:
                     bounds.append({"lines": list(item["beat"])})
                     last = bounds[-1]
+                elif "step" in item:
+                    # a REPL trace has no beats: its rules fire as `step` items after the takes (session_trace;
+                    # loop-chat F2). A step runs the rules: the take before it becomes a beat (its lines, then the
+                    # rules to quiescence), steps in a row are one boundary, and a step after none adds an empty beat
+                    if bounds and bounds[-1] is not last and bounds[-1].get("run") is False:
+                        bounds[-1].pop("run")
+                        last = bounds[-1]
+                    elif last is None or bounds[-1] is not last:
+                        bounds.append({"lines": []})
+                        last = bounds[-1]
     if last is None:
-        raise TraceError("%s did not beat in the window to tick %d" % (member, k))
+        raise TraceError("%s did not beat (nor step) in the window to tick %d" % (member, k))
     # what the window's last beat must show, the takes after it being what brought the member there
     last.setdefault("expect", {})
     if after:

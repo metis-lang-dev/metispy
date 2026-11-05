@@ -308,6 +308,28 @@ def test_a_case_may_assert_the_command_kind_a_norm_requires(tmp_path, program):
     assert "the norm forbids" in " ".join(x for b in run_it(program, no).boundaries for x in b.failures)
 
 
+# a REPL session's trace (metis.session_trace): takes and steps, never a beat (loop-chat F2: case() skipped steps, so no
+# REPL trace ever gave a case, and every acceptance of the loop's chat was inert)
+REPL = [tick(0, {"take": ["+a"], "by": "tool"}),
+        tick(1, {"step": ["a_to_b"], "by": "tool"}, {"step": ["b_to_c"], "by": "tool"}, out=["out_b"]),
+        tick(2, {"take": ["+a"], "by": "tool"}, {"step": ["a_to_b", "b_to_c"], "by": "tool"}, out=["out_b"])]
+
+
+def test_a_repl_traces_steps_are_its_beats(tmp_path, program):
+    d = write(tmp_path, program, REPL)
+    c = yaml.safe_load(T.case(d, "m", 2, after=["b 2"]))
+    # each take its step runs becomes a beat (its lines, then the rules); steps in a row are one boundary
+    assert [(b["lines"], b.get("run", True)) for b in c["boundaries"]] == [(["+a"], True), (["+a"], True)]
+    assert c["boundaries"][-1]["expect"] == {"after": ["b 2"]}
+    r = run_it(program, as_case(tmp_path, T.case(d, "m", 2, after=["b 2"])))
+    assert not r.passed and "after: b is 0, the world made it 2" in r.boundaries[-1].failures     # fails until a rule passes it
+    assert run_it(program, as_case(tmp_path, T.case(d, "m", 2, after=["c 3"]))).passed          # the start's a and the two takes
+    alone = write(tmp_path / "s", program, [tick(0, {"step": ["a_to_b"], "by": "tool"})])
+    assert yaml.safe_load(T.case(alone, "m", 0, after=["b"]))["boundaries"] == [{"lines": [], "expect": {"after": ["b"]}}]
+    with pytest.raises(T.TraceError, match="did not beat"):
+        T.case(write(tmp_path / "t2", program, [tick(0, {"take": ["+a"], "by": "tool"})]), "m", 0, after=["a"])
+
+
 def test_a_cases_start_holds_the_rng_and_the_stage(tmp_path, program):
     from metis.catalog import stub
     f = tmp_path / "c.yaml"
