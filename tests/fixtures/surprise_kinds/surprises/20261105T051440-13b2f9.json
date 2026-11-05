@@ -1,0 +1,15 @@
+{
+ "member": "planner",
+ "trace": "traces/card_YieldToEmergencyVehicle@Town03#49-1",
+ "window": [
+  345,
+  538
+ ],
+ "k": 538,
+ "words": "an emergency vehicle closed from behind on the ego's lane at the ego's speed + 25 km/h (CARLA YieldToEmergencyVehicle, SUMO Town03 site 49), and the ego kept its lane at 51 km/h with the vehicle within 30 m for 13.1 s; the free lane beside was never taken. Town03 site 42: 36 s held (red-light waits not counted). The Leaderboard counts one yield_emergency_vehicle infraction (DS 70). No rule of the family yields to a vehicle from behind, so this card was expected to fail (the gap card, nina's triage row 38).",
+ "reading": "an emergency vehicle closed from behind at the ego's speed + 25 km/h and the ego kept its lane for 13 s with it within 30 m: it never freed the lane.",
+ "id": "20261105T051440-13b2f9",
+ "ts": "2026-11-05T05:14:40.466150+02:00",
+ "who": "backend",
+ "status": "open"
+}

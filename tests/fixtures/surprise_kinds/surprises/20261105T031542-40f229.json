@@ -1,0 +1,15 @@
+{
+ "member": "responder",
+ "trace": "traces/card_StaticCutIn-1",
+ "window": [
+  39,
+  64
+ ],
+ "k": 64,
+ "words": "a stopped car from the queue on the next lane cut into the ego's lane about 16 m ahead, going for the ego's speed (CARLA StaticCutIn), and the ego never braked: it collided at t 6.4. RSS put the duty on the car that cut in (the lateral distance became unsafe last), so no violation was the ego's, but the collision happened and the Leaderboard counts it. The card expected responder brake_lon; the planner's progress stage did not brake either (no brake_follow or keep_lead) while the facts carried lead_slow, which nina's review asks the ruling to look at: does dangerous(lead) hold the planner off when the response asked is lateral only?",
+ "reading": "a stopped car from the queue on the next lane cut into the ego's lane about 16 m ahead, going for the ego's speed (CARLA StaticCutIn), and the ego never braked: it collided at t 6.4.",
+ "id": "20261105T031542-40f229",
+ "ts": "2026-11-05T03:15:42.538673+02:00",
+ "who": "backend",
+ "status": "open"
+}

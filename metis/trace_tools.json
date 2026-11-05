@@ -383,6 +383,87 @@
    }
   },
   {
+   "name": "trace_one-guard-away",
+   "module": "metis.trace",
+   "verb": "one-guard-away",
+   "description": "the rules of MEMBER's stage, at each beat of K0..K1, every premise of which holds but one, and the one that does not (spec 20 §7)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "trace": {
+      "type": "STRING",
+      "positional": 0
+     },
+     "member": {
+      "type": "STRING",
+      "positional": 1
+     },
+     "k0": {
+      "type": "INTEGER",
+      "positional": 2
+     },
+     "k1": {
+      "type": "INTEGER",
+      "positional": 3
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: the trace's own (its key is checked)",
+      "flag": "--program"
+     }
+    },
+    "required": [
+     "trace",
+     "member",
+     "k0",
+     "k1",
+     "program"
+    ]
+   }
+  },
+  {
+   "name": "trace_kind",
+   "module": "metis.trace",
+   "verb": "kind",
+   "description": "a surprise record's kind over its trace's three columns, truth, facts and law (spec 20 §4): kind, evidence, response",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "record": {
+      "type": "STRING",
+      "description": "the record's file, or its id with --root",
+      "positional": 0
+     },
+     "root": {
+      "type": "STRING",
+      "description": "the workspace (its .metis/ holds surprises/ and traces/); else the record's file says where",
+      "flag": "--root"
+     },
+     "program": {
+      "type": "STRING",
+      "description": "the member's .llp: the law column's one-guard-away listing and the signature; without it the law column is partial",
+      "flag": "--program"
+     },
+     "host": {
+      "type": "ARRAY",
+      "items": {
+       "type": "STRING"
+      },
+      "description": "a second host's trace of the same card",
+      "flag": "--host"
+     },
+     "write": {
+      "type": "BOOLEAN",
+      "description": "write kind, evidence and response into the record (the workspace's whole-file write)",
+      "flag": "--write"
+     }
+    },
+    "required": [
+     "record"
+    ]
+   }
+  },
+  {
    "name": "trace_fired",
    "module": "metis.trace",
    "verb": "fired",

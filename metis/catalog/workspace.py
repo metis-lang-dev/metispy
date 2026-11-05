@@ -10,8 +10,10 @@ they meet here, in files, and the UI tails one journal.
     ws.bundle(name=None)              # {name, composition, members, image, golden, config, build, stale, why} or None
     ws.context(patterns=None)         # the text a brain is given first (paths, never the patterns' text)
     ws.traces(), ws.trace(run)        # .metis/traces/<run>/ (metis.trace's Segments layout as it is)
-    ws.surprises(status=None)         # .metis/surprises/<id>.json, each with its status: open | taken | ruled
-    ws.drop_surprise(rec)             # the backend's write: → the id
+    ws.surprises(status=None)         # .metis/surprises/<id>.json, each with its status: open | taken | ruled | closed
+                                      #   (closed: a confusion record whose verdict is agreed, spec 20 §8)
+    ws.drop_surprise(rec)             # the backend's write: → the id (spec 20 §8's kind, evidence and confusion fields checked)
+    ws.set_kind(id, kind, evidence, response, then=None, also=())   # the triage's write (metis.trace kind): the record whole
     ws.take_surprise(id, pid=None)    # the pi loop's: .metis/surprises/<id>.taken
     ws.rule(id, ruling, verdict, …)   # the pi loop's (the judge's document): .metis/rulings/<id>.md + .json
     ws.rulings()                      # the rulings, each with its verdict and fields
@@ -54,7 +56,12 @@ FORMAT = "metis-workspace/1"
 WHO = ("backend", "pi", "judge", "world")
 LOCKS = ("pi", "backend")
 ID = r"^\d{8}T\d{6}-[0-9a-f]{6}$"
-STATUS = ("open", "taken", "ruled")
+STATUS = ("open", "taken", "ruled", "closed")
+# spec 20 §8 (surprise-kinds s-7a02c2ac): a record's kind, its evidence's columns, a confusion record's fields
+from metis.surprise_kind import KINDS                                   # noqa: E402 (the kinds live with their triage)
+EVIDENCE = ("truth", "facts", "law", "hosts", "budget", "missing", "why")
+VERDICTS = ("agreed", "disagreed")
+MARK = ("n", "k0", "k1", "said")
 # The face: the names both faces have, py's (Workspace's methods, this module's functions) and the TypeScript
 # face's (metis-loop sdk/ts/workspace.ts), one for one: its test reads them from layout()["face"].
 FACE = ("layout", "root", "path", "bundle", "context", "traces", "trace", "surprises", "surprise", "drop_surprise",
@@ -71,7 +78,9 @@ LAYOUT = {
                    "{ts, who, kind, ...pointers}: the UI's feed, the one append-only file"),
     "surprises":  ("surprises/", "dir", "", "the surprises dropped to the loop"),
     "surprise":   ("surprises/{id}.json", "json", "backend",
-                   "{id, ts, who, member, trace?, k?, k0?, window?, reading | atoms, words?, status: open}"),
+                   "{id, ts, who, member, trace?, k?, k0?, window?, reading | atoms, words?, status: open, kind?, evidence?, "
+                   "response?, also?; confusion: mark {n, k0, k1, said}, narration [lines], verdict agreed|disagreed, then} "
+                   "(spec 20 §8: the kind and evidence the triage writes, metis.trace kind)"),
     "taken":      ("surprises/{id}.taken", "json", "pi", "{pid, ts}: the pi loop started on it; removed on a ruling"),
     "rulings":    ("rulings/", "dir", "", "the rulings"),
     "ruling_md":  ("rulings/{id}.md", "text", "pi", "the pack verb's document (propose.py document())"),
@@ -528,10 +537,14 @@ class Workspace:
 
     # ── surprises and rulings ──
     def status(self, sid):
-        """ruled (its ruling's json exists), taken (a .taken whose pid lives), else open: a take whose pid is gone
-        is stale, the lock's own rule, and the surprise is open again (the next take_surprise re-takes it)."""
+        """ruled (its ruling's json exists), closed (a confusion record whose verdict is agreed: a closed mark, spec 20
+        §8), taken (a .taken whose pid lives), else open: a take whose pid is gone is stale, the lock's own rule, and the
+        surprise is open again (the next take_surprise re-takes it)."""
         if self.path("ruling", id=sid).is_file():
             return "ruled"
+        rec = _json(self.path("surprise", id=sid))
+        if isinstance(rec, dict) and rec.get("kind") == "confusion" and rec.get("verdict") == "agreed":
+            return "closed"
         tk = _json(self.path("taken", id=sid))
         return "taken" if isinstance(tk, dict) and _alive(tk.get("pid")) else "open"
 
@@ -589,6 +602,7 @@ class Workspace:
         for k in ("k", "k0"):
             if rec.get(k) is not None and not isinstance(rec[k], int):
                 raise ValueError("%s %r: a tick (an integer)" % (k, rec[k]))
+        check_kind_fields(rec)
         self.made()
         sid = new_id()
         while self.path("surprise", id=sid).exists():
@@ -598,8 +612,27 @@ class Workspace:
         if rec["who"] not in WHO:
             raise ValueError("who %r: one of %s" % (rec["who"], ", ".join(WHO)))
         write_whole(self.path("surprise", id=sid), json.dumps(rec, indent=1) + "\n")
-        self.journal(rec["who"], "surprise", id=sid, member=rec["member"], **({"trace": tr} if tr else {}))
+        self.journal(rec["who"], "surprise", id=sid, member=rec["member"], **({"trace": tr} if tr else {}),
+                     **({"surprise_kind": rec["kind"]} if rec.get("kind") else {}))
         return sid
+
+    def set_kind(self, sid, kind, evidence, response, then=None, also=(), who="judge"):
+        """The triage's write (metis.trace kind, spec 20 §8): the record SID rewritten whole with its KIND, EVIDENCE,
+        RESPONSE (§5's row as a sentence), ALSO (the later kinds §4 found) and, for a confusion record, THEN. The words
+        and the reading stay as they were: a model may dispute the kind in its reading, never overwrite it. → the record."""
+        f = self.path("surprise", id=_check_id(sid))
+        rec = _json(f)
+        if not isinstance(rec, dict):
+            raise KeyError("no surprise %s" % sid)
+        new = dict(rec, kind=kind, evidence=evidence, response=response)
+        if also:
+            new["also"] = list(also)
+        if then is not None:
+            new["then"] = then
+        check_kind_fields(new)
+        write_whole(f, json.dumps(new, indent=1, default=sorted) + "\n")
+        self.journal(who, "kind", id=sid, surprise_kind=kind, **({"then": then} if then else {}))
+        return new
 
     def take_surprise(self, sid, pid=None, who="pi"):
         """The pi loop starts on SID: surprises/<id>.taken {pid, ts}. Refused when it is ruled, or taken by a
@@ -757,6 +790,40 @@ class Workspace:
 
 
 LOCAL_MODELS = ("ollama/",)              # a pi model on the person's own server: 0 USD, no key
+
+
+def check_kind_fields(rec):
+    """spec 20 §8's fields of a surprise record, when it has them: kind one of KINDS; evidence an object over EVIDENCE;
+    a confusion record's mark {n, k0, k1, said}, narration [lines], verdict agreed|disagreed and then (a kind, or
+    "narration"); a verdict or a mark only on a confusion record."""
+    kind = rec.get("kind")
+    if kind is not None and kind not in KINDS:
+        raise ValueError("kind %r: one of %s" % (kind, ", ".join(KINDS)))
+    ev = rec.get("evidence")
+    if ev is not None:
+        if not isinstance(ev, dict) or set(ev) - set(EVIDENCE):
+            raise ValueError("evidence: an object over %s" % ", ".join(EVIDENCE))
+    confusion = ("mark", "narration", "verdict", "then")
+    if any(rec.get(f) is not None for f in confusion) and kind not in (None, "confusion"):
+        raise ValueError("mark, narration, verdict and then belong to a confusion record (kind %r)" % kind)
+    m = rec.get("mark")
+    if m is not None:
+        if not isinstance(m, dict) or set(m) - set(MARK):
+            raise ValueError("mark: an object over %s" % ", ".join(MARK))
+        for k in ("k0", "k1"):
+            if m.get(k) is not None and not isinstance(m[k], int):
+                raise ValueError("mark %s %r: a tick (an integer)" % (k, m[k]))
+    n = rec.get("narration")
+    if n is not None and not (isinstance(n, list) and all(isinstance(x, str) for x in n)):
+        raise ValueError("narration: the lines the person heard, a list of strings")
+    v = rec.get("verdict")
+    if v is not None and v not in VERDICTS:
+        raise ValueError("verdict %r: one of %s" % (v, ", ".join(VERDICTS)))
+    th = rec.get("then")
+    if th is not None and th not in KINDS + ("narration",) or th == "confusion":
+        raise ValueError("then %r: the kind the triage found on the words, or narration" % (th,))
+    if kind == "confusion" and rec.get("verdict") is None:
+        raise ValueError("a confusion record carries the person's verdict: agreed or disagreed")
 
 
 def spend_of(events, cost):

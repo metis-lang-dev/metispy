@@ -58,6 +58,9 @@ each segment's checkpoint through the do-lines applied and, with --program, the 
     python -m metis.trace diff DIR_A DIR_B [--member M]                               the first tick the fired rows or the state differ (Sim race in the log)
     python -m metis.trace outcomes DIR --commit A --done B --cancel C [--member M]    each commitment window's end (Time to spare; Committed action)
     python -m metis.trace fired DIR RULE --seeds N --program P --member M             the seeds the rule fires on (Search the seeds for a firing)
+    python -m metis.trace one-guard-away DIR MEMBER K0 K1 --program P                 the rules one premise short at each beat of the window (spec 20 §7)
+    python -m metis.trace kind RECORD [--root WS] [--program P] [--host DIR] [--write]  a surprise record's kind over truth, facts and law
+                                                                                      (spec 20 §4; metis.surprise_kind, its truth column's contract)
 """
 import hashlib
 import io
@@ -346,10 +349,16 @@ def _apply(sh, lines):
     sh.counts = after
 
 
-def _fire_all(sh, want, left):
+def _fire_all(sh, want, left, probe=None):
+    """The beat's rules to quiescence (or WANT's count when the record says it LEFT rules enabled). PROBE(sh), when
+    given, is called before each firing and once at the end (metis.surprise_kind's one-guard-away listing)."""
     got = []
     while sh._candidates() and len(got) < (len(want) if left else STEPS):
+        if probe:
+            probe(sh)
         got.append(sh._sample())
+    if probe:
+        probe(sh)
     return got
 
 
@@ -365,9 +374,9 @@ def _state_differs(sh, state):
     return None
 
 
-def replay_segment(seg, member, program, r, check_key=True):
+def replay_segment(seg, member, program, r, check_key=True, probe=None):
     """SEG for MEMBER on PROGRAM into R: from its checkpoint. → False at a divergence, or at a reload (the next segment
-    starts from its own checkpoint)."""
+    starts from its own checkpoint). PROBE(k, sh), when given, is called at each beat's firings (_fire_all's)."""
     m = seg.header["members"].get(member)
     if m is None:
         raise TraceError("no member %r in the trace (it has: %s)" % (member, ", ".join(sorted(seg.header["members"]))))
@@ -414,7 +423,7 @@ def replay_segment(seg, member, program, r, check_key=True):
                     r.inputs += 1
                 want = item.get("fired") or []
                 queue[:] = list(want) if weights else []
-                got = _fire_all(sh, want, item.get("left"))
+                got = _fire_all(sh, want, item.get("left"), (lambda s, k=k: probe(k, s)) if probe else None)
                 r.beats += 1
                 r.rules += len(got)
                 if got != want:
@@ -1320,6 +1329,19 @@ def parser():
     so.add_argument("--release-pred", default="settled_to")
     so.add_argument("--holder", default=":xing_ego_prio", help="the mark in a pair id of a way the ego holds")
     so.add_argument("--cases", help="a directory: a surprise case per violation")
+    g = sub.add_parser("one-guard-away", help="the rules of MEMBER's stage, at each beat of K0..K1, every premise of which holds but one, and the one that does not (spec 20 §7)")
+    g.add_argument("trace")
+    g.add_argument("member")
+    g.add_argument("k0", type=int)
+    g.add_argument("k1", type=int)
+    g.add_argument("--program", required=True, help="the member's .llp: the trace's own (its key is checked)")
+    g.add_argument("--json", action="store_true", help="one JSON row a line")
+    kd = sub.add_parser("kind", help="a surprise record's kind over its trace's three columns, truth, facts and law (spec 20 §4): kind, evidence, response")
+    kd.add_argument("record", help="the record's file, or its id with --root")
+    kd.add_argument("--root", help="the workspace (its .metis/ holds surprises/ and traces/); else the record's file says where")
+    kd.add_argument("--program", help="the member's .llp: the law column's one-guard-away listing and the signature; without it the law column is partial")
+    kd.add_argument("--host", action="append", default=[], help="a second host's trace of the same card")
+    kd.add_argument("--write", action="store_true", help="write kind, evidence and response into the record (the workspace's whole-file write)")
     s = sub.add_parser("fired", help="how many of seeds 1..N the rule fires on when the member is replayed over the trace's inputs (Search the seeds for a firing)")
     s.add_argument("trace")
     s.add_argument("rule", help="a rule's name, or one firing with its bindings: rule[X=a]")
@@ -1358,6 +1380,21 @@ def main(argv=None):
         return 0
     elif a.verb == "fired":
         tables = [fired_on_seeds(a.trace, a.rule, a.seeds, a.program, a.member)]
+    elif a.verb == "one-guard-away":
+        from metis.surprise_kind import one_guard_away
+        rows = one_guard_away(a.trace, a.member, a.k0, a.k1, a.program)
+        if a.json:
+            for r in rows:
+                print(json.dumps(r))
+            return 0
+        tab = Table(["rule", "missing", "stage", "ticks", "fired at"], [])
+        for r in rows:
+            tab.rows.append([r["ground"], r["missing"], r["stage"], _ticks_text(r["ticks"]), _ticks_text(r["fired_at"]) or "-"])
+        tab.notes = ["%s at %d..%d: the ground rules of its current stage one atom short of enabled, at each beat's firings"
+                     % (a.member, a.k0, a.k1)]
+        tables = [tab]
+    elif a.verb == "kind":
+        return kind_main(a)
     if tables is not None:
         print("\n\n".join(str(t) for t in tables))
         return 0
@@ -1378,6 +1415,47 @@ def main(argv=None):
         print(f)
     else:
         print(text)
+    return 0
+
+
+def _ticks_text(ks):
+    """Ticks as runs: 39-44,51."""
+    out, ks = [], sorted(ks)
+    i = 0
+    while i < len(ks):
+        j = i
+        while j + 1 < len(ks) and ks[j + 1] == ks[j] + 1:
+            j += 1
+        out.append(str(ks[i]) if i == j else "%d-%d" % (ks[i], ks[j]))
+        i = j + 1
+    return ",".join(out)
+
+
+def kind_main(a):
+    """`kind RECORD`: the triage's {kind, also, response, evidence} as JSON; with --write, into the record."""
+    from metis import surprise_kind as SK
+    from metis.catalog import workspace as W
+    p = Path(a.record)
+    if a.root:
+        ws = W.workspace(a.root)
+        sid = p.stem if p.suffix == ".json" else a.record
+        rec = ws.surprise(sid)
+        state = ws.state
+    else:
+        if not p.is_file():
+            raise TraceError("%s: no record file (give its path, or its id with --root)" % a.record)
+        rec = json.loads(p.read_text())
+        state, ws = p.resolve().parent.parent, None                   # .metis/surprises/<id>.json → .metis/
+    tr = rec.get("trace")
+    if not tr:
+        raise TraceError("%s names no trace: the triage reads the trace's columns" % rec.get("id", a.record))
+    out = SK.triage(rec, state / tr, a.program, a.host)
+    print(json.dumps(out, indent=1, default=sorted))
+    if a.write:
+        if ws is not None:
+            ws.set_kind(rec["id"], out["kind"], out["evidence"], out["response"], then=out.get("then"), also=out.get("also"))
+        else:
+            W.Workspace(state.parent).set_kind(rec["id"], out["kind"], out["evidence"], out["response"], then=out.get("then"), also=out.get("also"))
     return 0
 
 

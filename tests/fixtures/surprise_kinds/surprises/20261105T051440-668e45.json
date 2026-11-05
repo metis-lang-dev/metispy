@@ -1,0 +1,15 @@
+{
+ "member": "planner",
+ "trace": "traces/card_ParkedObstacleTwoWays@Town01#0-1",
+ "window": [
+  135,
+  300
+ ],
+ "k": 300,
+ "words": "a car parked in the ego's lane on a two-way road of one lane each way, with oncoming cars 40 m apart at 40 km/h (CARLA ParkedObstacleTwoWays, SUMO Town01 site 0), and the ego stopped behind it at t 13.5 and waited until the run ended at t 260: it never passed through the oncoming lane in a gap. The same at all four sites (Town01 0 and 1, Town02 0 and 1). No rule of the family lends the opposite lane for a pass, so this card was expected to fail (the gap card).",
+ "reading": "a car parked in the ego's lane on a two-way road, oncoming cars 40 m apart; the ego stopped behind it and waited out the run: it never passed through the oncoming lane in a gap.",
+ "id": "20261105T051440-668e45",
+ "ts": "2026-11-05T05:14:40.410525+02:00",
+ "who": "backend",
+ "status": "open"
+}

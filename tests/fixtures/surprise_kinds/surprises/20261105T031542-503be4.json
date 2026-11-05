@@ -1,0 +1,15 @@
+{
+ "member": "responder",
+ "trace": "traces/card_OppositeVehicleTakingPriority-1",
+ "window": [
+  39,
+  64
+ ],
+ "k": 64,
+ "words": "a car from the side road took the ego's priority at 60 km/h, 2.2 s before the junction (CARLA OppositeVehicleTakingPriority), and the ego never braked: it collided at t 6.4. 2.2 s was more than the 1.85 s it needed to stop. The card expected planner brake_cross and responder brake_lon; the family held only accel and keep.",
+ "reading": "a car from the side road took the ego's priority at 60 km/h, 2.2 s before the junction (CARLA OppositeVehicleTakingPriority), and the ego never braked: it collided at t 6.4. SUMO (road-scenarios 2f, sensor range 100 m on both hosts): the 16 rows at junction 730 (S10 #1-8, both sides) collide likewise with resp none, reproducing this record; at 2e's 60 m they held only because the standing crosser was out of range until the trigger (first seen at first sight already dangerous: brake_min).",
+ "id": "20261105T031542-503be4",
+ "ts": "2026-11-05T03:15:42.447989+02:00",
+ "who": "backend",
+ "status": "open"
+}

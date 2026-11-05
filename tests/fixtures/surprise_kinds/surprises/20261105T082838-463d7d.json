@@ -1,0 +1,15 @@
+{
+ "member": "planner",
+ "trace": "traces/card_Accident@Town03#127-1",
+ "window": [
+  78,
+  504
+ ],
+ "k": 460,
+ "words": "an accident blocks the ego's lane on Town03 (CARLA Accident, SUMO site 127); the planner changes left at t 7.3 (change[D=left,L=leadleft,F=followleft,C=none]) into 65_2, the edge's bidirectional centre lane (OpenDRIVE type bidirectional, 1.39 m/s), passes the crash and the police car, and stays there to the run's end (s 244, t 50.4): it never changes back to its route's lane 65_1, which is free beside it. On that lane the ego crawls at 2.55 m/s. The Leaderboard counts 111 of 207 m outside the route lanes (53.8 %, DS 46.2). The same at ParkedObstacle Town03 #49 (traces/card_ParkedObstacle@Town03#49-1: 67_2, 182 of 277 m, 65.6 %, DS 34.5). The card's expect holds (arrived, 0 collisions); the lane choice after the pass is the surprise: no rule returns to the route's lane once the obstacle is passed.",
+ "reading": "after passing an obstacle through the bidirectional centre lane, the ego stays there instead of changing back to its free route lane.",
+ "id": "20261105T082838-463d7d",
+ "ts": "2026-11-05T08:28:38.822432+02:00",
+ "who": "backend",
+ "status": "open"
+}

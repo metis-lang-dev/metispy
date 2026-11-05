@@ -1,0 +1,15 @@
+{
+ "member": "responder",
+ "trace": "traces/card_ParkingCutIn-1",
+ "window": [
+  59,
+  84
+ ],
+ "k": 84,
+ "words": "a car parked at the side pulled out into the ego's lane at 20 km/h just ahead (CARLA ParkingCutIn), and the ego did not brake enough: it collided at t 8.4. As in StaticCutIn, RSS put the duty on the car pulling out, so no ego violation, but a collision. The card expected responder brake_lon; the planner's progress stage did not brake either (no brake_follow or keep_lead) while the facts carried lead_slow, which nina's review asks the ruling to look at: does dangerous(lead) hold the planner off when the response asked is lateral only?",
+ "reading": "a car parked at the side pulled out into the ego's lane at 20 km/h just ahead (CARLA ParkingCutIn), and the ego did not brake enough: it collided at t 8.4. SUMO (road-scenarios 2f, 100 m; nina's review, opus's trace card:ParkingCutIn@Town03#96-1): the cut-in collides at all four parking-lane sites (1 event, DS factor 0.60); the long run times and #96's not-arrived (RC 85.5) are record 463d7d's lane stay, not this record: after the contact (k 42) the ego changes into the 1.39 m/s parking lane -76_0 (k 46) and crawls, outside% 0 because parking counts inside. Read this record from the collision event only until the worlds lane-kind half lands.",
+ "id": "20261105T031542-87279b",
+ "ts": "2026-11-05T03:15:42.585871+02:00",
+ "who": "backend",
+ "status": "open"
+}
