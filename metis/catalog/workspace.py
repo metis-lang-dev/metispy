@@ -479,8 +479,8 @@ class Workspace:
 
     def keep_window(self, run, k0, k1, name, who="backend"):
         """The window [K0, K1] of traces/<RUN>/ kept past the writer's ring: the segments that hold it, each with the
-        checkpoint it starts from, and the run's marks.jsonl and config.yaml when there are, copied to
-        traces/<RUN>-<NAME>/ (whole, then renamed; the marks inside the window only). Refused when the window is not in the
+        checkpoint it starts from, and the run's marks.jsonl, truth.jsonl and config.yaml when there are, copied to
+        traces/<RUN>-<NAME>/ (whole, then renamed; the marks and the truth's rows inside the window only, the truth's header kept). Refused when the window is not in the
         trace any more, with the k range it holds (also when a live writer's ring drops a segment during the copy), or when
         the copy is there already; a refused copy leaves nothing. → "traces/<RUN>-<NAME>"."""
         import shutil
@@ -518,6 +518,10 @@ class Workspace:
                     if isinstance(r, dict) and isinstance(r.get("at_k"), int) and k0 <= r["at_k"] <= k1]
             if rows:
                 (tmp / "marks.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            truth = [r for r in _rows(src / "truth.jsonl")              # the truth column (spec 20 §10.2): its header, the window's rows
+                     if isinstance(r, dict) and ("k" not in r or isinstance(r["k"], int) and k0 <= r["k"] <= k1)]
+            if any("k" in r for r in truth):
+                (tmp / "truth.jsonl").write_text("".join(json.dumps(r) + "\n" for r in truth))
             (tmp / KEPT).write_text(json.dumps({"source": "traces/" + run, "window": [k0, k1]}) + "\n")
             try:
                 os.rename(tmp, dst)

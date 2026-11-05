@@ -298,3 +298,17 @@ def test_a_drop_pointing_at_a_kept_copy_keeps_it_as_it_is(tmp_path):
     rec = w.surprise(sid)
     assert rec["trace"] == kept and rec["run"] == "card-1" and "keep_error" not in rec
     assert sorted(p.name for p in (w.state / "traces").iterdir()) == ["card-1", "card-1-w6-8"]
+
+
+def test_a_kept_window_carries_the_truth_columns_header_and_its_rows(tmp_path):
+    """keep_window (cr-harvest s-f4e297da): a record dropped with a window points at the kept copy, which the triage reads; the
+    copy keeps the truth column (spec 20 §10.2) inside the window, its header too, or every kept record would be evidential."""
+    w = W.Workspace(tmp_path)
+    tr = w.state / "traces" / "card-1"
+    _two_segment_trace(tr)
+    (tr / "truth.jsonl").write_text("".join(json.dumps(r) + "\n" for r in
+                                            [{"truth": 1, "cannot": ["weather"]}] + [{"k": k, "ego": {"lane": "E_0"}, "things": []} for k in range(1, 12)]))
+    kept = w.keep_window("card-1", 6, 8, "w6-8")
+    rows = [json.loads(x) for x in (w.state / kept / "truth.jsonl").read_text().splitlines()]
+    assert rows[0] == {"truth": 1, "cannot": ["weather"]} and [r["k"] for r in rows[1:]] == [6, 7, 8]
+    assert SK.read_truth(w.state / kept)[1] == {"truth": 1, "cannot": ["weather"]}
