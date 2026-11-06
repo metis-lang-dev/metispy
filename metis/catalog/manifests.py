@@ -407,8 +407,9 @@ def check_manifest(p, root=None):
     return m
 
 
-# never a catalog's: a dot directory (.metis/ the loops' state, .git/, .venv/ …) and these
-SKIP = ("build", "records", "__pycache__", "node_modules")
+# never a catalog's: a dot directory (.metis/ the loops' state, .git/, .venv/ …) and these; maps/ a world's maps and their
+# caches (metis-worlds road/maps/cr: thousands of converted scenarios, walked about 10 times a tick, made a tick 1.6 s)
+SKIP = ("build", "records", "__pycache__", "node_modules", "maps")
 
 
 def walk(r, name):

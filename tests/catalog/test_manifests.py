@@ -223,14 +223,15 @@ def test_a_package_may_name_its_neighbours_files_never_outside(tmp_path):
 def test_a_package_is_a_manifest_anywhere_under_the_root(tmp_path):
     """cwd-root s-ddac2cbf rule 9: domains/ is a convention, not a
     requirement — a domain.yaml anywhere under the root is a package (its
-    name the directory's), never one under a dot directory, build/, records/
-    or __pycache__; the catalog's own domains/ceptre/ is a root of its 13."""
+    name the directory's), never one under a dot directory, build/, records/,
+    __pycache__ or maps/ (a world's maps and caches); the catalog's own domains/ceptre/ is a root of its 13."""
     for rel in ("lamp", "shelf/bell", "domains/clock"):
         d = tmp_path / rel
         d.mkdir(parents=True)
         (d / "domain.yaml").write_text("program: %s.llp\n" % d.name)
         (d / ("%s.llp" % d.name)).write_text("%% the %s\n" % d.name)
-    for rel in (".metis/scratch/ghost", ".git/x", "lamp/build/copy", "lamp/records/r", "node_modules/n"):
+    for rel in (".metis/scratch/ghost", ".git/x", "lamp/build/copy", "lamp/records/r", "node_modules/n",
+                "maps/cr/ZAM_Ghost-1_1_T-1"):
         d = tmp_path / rel
         d.mkdir(parents=True)
         (d / "domain.yaml").write_text("program: x.llp\n")
