@@ -612,6 +612,82 @@ class Workspace:
             rec["tries"] = tries
         return rec
 
+    def director(self):
+        """The bundle's director (its composition's `direct:` member), or None: the member a tester's window is never about."""
+        comp = self._composition()
+        if comp is None:
+            return None
+        try:
+            return (yaml.safe_load(Path(comp).read_text()) or {}).get("direct")
+        except (OSError, yaml.YAMLError):
+            return None
+
+    def member_of(self, trace, k0, k1):
+        """The member a window of TRACE (a run name or "traces/<run>") is about (surprise interface §6): the most WORDED
+        firings in [K0, K1] (a rule with a %% line: the protocol's own rules have none), never the bundle's director (its
+        grants and bookkeeping are not what a person marks), else the most firings of any member but the director; None
+        when nothing fired."""
+        from collections import Counter
+        from metis import trace as T
+        run = str(trace)[len("traces/"):] if str(trace).startswith("traces/") else str(trace)
+        segs = T.read(self.path("trace", run=_check_run(run.rstrip("/"))))
+        fired = Counter()
+        for sg in segs:
+            for t in sg.ticks:
+                if not (k0 <= t.get("k", -1) <= k1):
+                    continue
+                for m, v in (t.get("members") or {}).items():
+                    for q in v.get("seq") or []:
+                        for name in q.get("fired") or []:
+                            fired[(m, name.split("[")[0])] += 1
+        direct = self.director()
+        docs = {}
+        for m in {m for m, _ in fired}:
+            try:
+                from metis.domain.package import rule_docs
+                docs[m] = rule_docs(catalog.get(m, self.root).program)
+            except Exception:                                   # a member the catalog cannot give: no words known for it
+                docs[m] = {}
+        worded, rest = Counter(), Counter()
+        for (m, r), c in fired.items():
+            if m == direct:
+                continue
+            rest[m] += c
+            if r in docs.get(m, {}):
+                worded[m] += c
+        best = worded or rest
+        return best.most_common(1)[0][0] if best else None
+
+    def drop_window(self, run, k0, k1, words, key, member=None, kind=None, k=None, source=None, who="backend", **extra):
+        """The ONE producer path (surprise interface §6): the window [K0, K1] of traces/<RUN> kept under a copy NAMED BY
+        THE KEY (never by a mere event number: a re-run numbers its marks from 1 again), the run's config.yaml taken, the
+        member found when not given (member_of), the surprise written with its finding KEY (one finding, one surprise:
+        a second path returns the first id). → its id."""
+        import re
+        if not key or not isinstance(key, str):
+            raise ValueError("a window's surprise needs its finding key (surprise interface §5)")
+        same = self.find_key(key)
+        if same:
+            return same
+        words = " ".join(str(words or "").split())
+        if not words:
+            raise ValueError("a surprise carries the words of what was seen")
+        slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", key).strip("-")[:80] or "w%d-%d" % (k0, k1)
+        kept = self.path("trace", run="%s-%s" % (_check_run(run), slug))
+        trace = "traces/" + kept.name if kept.is_dir() else self.keep_window(run, int(k0), int(k1), slug, who=who)
+        member = member or self.member_of(trace, int(k0), int(k1))
+        if not member:
+            raise ValueError("no member fired in %s %d..%d: name the member" % (run, k0, k1))
+        rec = {**extra, "member": member, "trace": trace, "window": [int(k0), int(k1)], "k": int(k if k is not None else k1),
+               "words": words, "reading": extra.get("reading") or words, "who": who}
+        if source:
+            rec["source"] = source
+        if kind:
+            rec["finding"] = kind               # the producer's finding kind (collision, violation, rule, end, mark): not spec 20's `kind`
+        if (self.state / trace / "config.yaml").is_file():
+            rec["config"] = str((self.state / trace / "config.yaml").relative_to(self.root))
+        return self.drop_surprise(rec, who=who, key=key)
+
     def find_key(self, key):
         """The id of the surprise whose finding KEY is KEY (surprise interface spec §5), or None."""
         if not key:

@@ -568,3 +568,28 @@ def test_a_finding_key_makes_one_surprise_by_two_paths(tmp_path):
     c = ws.drop_surprise({"member": "m", "atoms": ["x"]}, key="run1:collision:43")
     assert a == b != c and ws.find_key("run1:collision:42") == a and ws.surprise(a)["key"] == "run1:collision:42"
     assert len(ws.surprises()) == 2 and ws.find_key("none") is None
+
+
+ROAD_E2E = Path("/bigdata/work/bond/plugin/e2e/metis-worlds/road")
+
+
+@pytest.mark.skipif(not (ROAD_E2E / ".metis/traces/Town03-1-20261116T133826-mark-1").is_dir(), reason="no recorded road window here")
+def test_drop_window_is_the_one_producer_path(tmp_path):
+    """The surprise interface §6: drop_window keeps the window under a copy named by the KEY, takes the run's config,
+    finds the member (never the composition's director), and one key makes one surprise."""
+    import shutil
+    ws_root = tmp_path / "ws"
+    shutil.copytree(ROAD_E2E / "domains", ws_root / "domains", ignore=shutil.ignore_patterns("build"))
+    src = ROAD_E2E / ".metis/traces/Town03-1-20261116T133826-mark-1"
+    shutil.copytree(src, ws_root / ".metis/traces/run1")
+    ws = W.Workspace(ws_root)
+    assert ws.director() == "road_director"
+    tr = ws.trace("run1")
+    k0, k1 = tr["k0"] + 30, tr["k0"] + 56
+    m = ws.member_of("traces/run1", k0, k1)
+    assert m and m != "road_director"
+    a = ws.drop_window("run1", k0, k1, "the ego crawls", key="run1:mark:1:%d-%d" % (k0, k1), source="ui:test", kind="mark")
+    b = ws.drop_window("run1", k0, k1, "again", key="run1:mark:1:%d-%d" % (k0, k1))
+    rec = ws.surprise(a)
+    assert a == b and rec["member"] == m and rec["finding"] == "mark" and rec["source"] == "ui:test"
+    assert rec["trace"] == "traces/run1-run1-mark-1-%d-%d" % (k0, k1) and rec["config"].endswith("config.yaml")
