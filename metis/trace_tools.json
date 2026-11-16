@@ -115,7 +115,7 @@
      },
      "atoms": {
       "type": "STRING",
-      "description": "comma-separated: `atom` should hold, `atom 0` should not, `atom 3` should hold thrice",
+      "description": "comma-separated (an atom's own commas, inside its parentheses, are kept): `atom` should hold, `atom 0` should not, `atom 3` should hold thrice",
       "flag": "--atoms"
      },
      "program": {
