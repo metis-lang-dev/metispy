@@ -612,7 +612,16 @@ class Workspace:
             rec["tries"] = tries
         return rec
 
-    def drop_surprise(self, rec, who="backend"):
+    def find_key(self, key):
+        """The id of the surprise whose finding KEY is KEY (surprise interface spec §5), or None."""
+        if not key:
+            return None
+        for x in self.surprises():
+            if x.get("key") == key:
+                return x["id"]
+        return None
+
+    def drop_surprise(self, rec, who="backend", key=None):
         """Write a surprise: REC needs member and reading or atoms; trace ("traces/<run>") with k, k0 and window
         ([k_start, k_end]) and words (the person's text) when there are. A record with a trace keeps its window at the
         drop (_keep_for: traces/<run>-<id>/, its `run` the source). → its id."""
@@ -635,6 +644,14 @@ class Workspace:
             if rec.get(k) is not None and not isinstance(rec[k], int):
                 raise ValueError("%s %r: a tick (an integer)" % (k, rec[k]))
         check_kind_fields(rec)
+        key = key or rec.get("key")
+        if key:                                    # one finding, one surprise (spec §5): a second path returns the first id
+            if not isinstance(key, str):
+                raise ValueError("key %r: a string" % (key,))
+            same = self.find_key(key)
+            if same:
+                return same
+            rec = {**rec, "key": key}
         self.made()
         sid = new_id()
         while self.path("surprise", id=sid).exists():

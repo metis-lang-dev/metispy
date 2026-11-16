@@ -558,3 +558,13 @@ def test_a_declared_tools_integer_zero_is_passed_not_dropped():
         W.tool_argv("trace_holds", {"trace": "t", "atom": "busy"})
     argv = W.tool_argv("trace_holds", {"trace": "t", "atom": "busy", "max": 3, "member": None})
     assert "--member" not in argv
+
+
+def test_a_finding_key_makes_one_surprise_by_two_paths(tmp_path):
+    """The surprise interface spec §5: the same finding written twice (headless and interactive) is ONE surprise."""
+    ws = W.Workspace(tmp_path)
+    a = ws.drop_surprise({"member": "m", "atoms": ["x"]}, key="run1:collision:42")
+    b = ws.drop_surprise({"member": "m", "atoms": ["x"], "key": "run1:collision:42"})
+    c = ws.drop_surprise({"member": "m", "atoms": ["x"]}, key="run1:collision:43")
+    assert a == b != c and ws.find_key("run1:collision:42") == a and ws.surprise(a)["key"] == "run1:collision:42"
+    assert len(ws.surprises()) == 2 and ws.find_key("none") is None
