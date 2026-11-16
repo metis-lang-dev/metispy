@@ -306,14 +306,15 @@ def tool_argv(name, args):
     extra = sorted(set(args) - set(props))
     if extra:
         raise ValueError("%s: no parameter %s" % (name, ", ".join(extra)))
-    missing = [k for k in t["parameters"]["required"] if args.get(k) in (None, "", [])]
+    missing = [k for k in t["parameters"]["required"] if args.get(k) is None or args.get(k) == "" or args.get(k) == []]
     if missing:
         raise ValueError("%s: %s required" % (name, ", ".join(missing)))
     pos = sorted((p["positional"], k) for k, p in props.items() if "positional" in p)
     argv = [sys.executable, "-m", t["module"]] + ([t["verb"]] if t["verb"] else [])
     argv += [str(args[k]) for _, k in pos]
     for k, p in props.items():
-        if "flag" not in p or args.get(k) in (None, False, []):
+        v = args.get(k)
+        if "flag" not in p or v is None or v is False or (isinstance(v, list) and not v):   # an integer 0 is a value
             continue
         if p["type"] == "BOOLEAN":
             argv.append(p["flag"])
