@@ -612,15 +612,24 @@ class Workspace:
             rec["tries"] = tries
         return rec
 
-    def director(self):
-        """The bundle's director (its composition's `direct:` member), or None: the member a tester's window is never about."""
+    def director(self, segs=None):
+        """The bundle's director, the member a person's window is never about: its composition's `direct:` member; else,
+        from a trace's header (SEGS), the member the tick protocol makes the director: the one whose ports put out
+        `tick__grant`; else None."""
         comp = self._composition()
-        if comp is None:
-            return None
-        try:
-            return (yaml.safe_load(Path(comp).read_text()) or {}).get("direct")
-        except (OSError, yaml.YAMLError):
-            return None
+        if comp is not None:
+            try:
+                d = (yaml.safe_load(Path(comp).read_text()) or {}).get("direct")
+                if d:
+                    return d
+            except (OSError, yaml.YAMLError):
+                pass
+        for sg in segs or ():
+            members = (getattr(sg, "header", None) or {}).get("members") or {}
+            grant = [m for m, v in members.items() if "tick__grant" in ((v or {}).get("out") or [])]
+            if len(grant) == 1:
+                return grant[0]
+        return None
 
     def member_of(self, trace, k0, k1):
         """The member a window of TRACE (a run name or "traces/<run>") is about (surprise interface §6): the most WORDED
@@ -640,7 +649,7 @@ class Workspace:
                     for q in v.get("seq") or []:
                         for name in q.get("fired") or []:
                             fired[(m, name.split("[")[0])] += 1
-        direct = self.director()
+        direct = self.director(segs)
         docs = {}
         for m in {m for m, _ in fired}:
             try:
@@ -672,7 +681,8 @@ class Workspace:
         words = " ".join(str(words or "").split())
         if not words:
             raise ValueError("a surprise carries the words of what was seen")
-        slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", key).strip("-")[:80] or "w%d-%d" % (k0, k1)
+        name = key[len(run) + 1:] if key.startswith(str(run) + ":") else key      # the copy is named <run>-<the rest>
+        slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-")[:80] or "w%d-%d" % (k0, k1)
         kept = self.path("trace", run="%s-%s" % (_check_run(run), slug))
         trace = "traces/" + kept.name if kept.is_dir() else self.keep_window(run, int(k0), int(k1), slug, who=who)
         member = member or self.member_of(trace, int(k0), int(k1))

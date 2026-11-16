@@ -592,4 +592,17 @@ def test_drop_window_is_the_one_producer_path(tmp_path):
     b = ws.drop_window("run1", k0, k1, "again", key="run1:mark:1:%d-%d" % (k0, k1))
     rec = ws.surprise(a)
     assert a == b and rec["member"] == m and rec["finding"] == "mark" and rec["source"] == "ui:test"
-    assert rec["trace"] == "traces/run1-run1-mark-1-%d-%d" % (k0, k1) and rec["config"].endswith("config.yaml")
+    assert rec["trace"] == "traces/run1-mark-1-%d-%d" % (k0, k1) and rec["config"].endswith("config.yaml")
+
+
+def test_the_director_from_the_tick_protocol_when_no_composition_names_it(tmp_path):
+    """No composition's `direct:`: the trace's header says it: the member whose ports put out tick__grant."""
+    import shutil
+    vt = Path("/bigdata/work/bond/road/vtrace/red_light")
+    if not vt.is_dir():
+        pytest.skip("the recorded trace is not on this host")
+    shutil.copytree(vt, tmp_path / ".metis/traces/run1")
+    ws = W.Workspace(tmp_path)
+    from metis import trace as T
+    assert ws.director() is None and ws.director(T.read(tmp_path / ".metis/traces/run1")) == "road_director"
+    assert ws.member_of("run1", 0, 199) not in (None, "road_director")
