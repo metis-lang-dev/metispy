@@ -53,8 +53,8 @@ import yaml
 from metis import catalog
 
 FORMAT = "metis-workspace/1"
-WHO = ("backend", "pi", "judge", "world")
-LOCKS = ("pi", "backend")
+WHO = ("backend", "pi", "judge", "world", "claude")     # claude: Claude Code through the metis plugin (metis-plugin s-df4ff191)
+LOCKS = ("pi", "backend", "claude")
 ID = r"^\d{8}T\d{6}-[0-9a-f]{6}$"
 STATUS = ("open", "taken", "ruled", "closed")
 # spec 20 §8 (surprise-kinds s-7a02c2ac): a record's kind, its evidence's columns, a confusion record's fields
@@ -787,7 +787,7 @@ class Workspace:
 
     # ── the locks: one active pi loop, one backend (WORKSPACE.md §2.3) ──
     def loops(self):
-        """{pi: lock or None, backend: lock or None}; a lock carries alive: false when its pid is gone (stale: the
+        """{pi: lock or None, backend: lock or None, claude: lock or None}; a lock carries alive: false when its pid is gone (stale: the
         next lock() of its kind takes it over)."""
         out = {}
         for k in LOCKS:

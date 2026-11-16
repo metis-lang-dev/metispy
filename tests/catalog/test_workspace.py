@@ -25,7 +25,7 @@ def dead_pid():
 def test_the_layout_is_one_table_of_relative_paths(tmp_path):
     lay = W.layout()
     assert lay["format"] == "metis-workspace/1" and lay["state"] == ".metis"
-    assert lay["who"] == ["backend", "pi", "judge", "world"] and lay["locks"] == ["pi", "backend"]
+    assert lay["who"] == ["backend", "pi", "judge", "world", "claude"] and lay["locks"] == ["pi", "backend", "claude"]
     for name, row in lay["paths"].items():
         p = row["path"]
         assert not p.startswith("/") and ".." not in p.split("/"), name
@@ -307,7 +307,7 @@ def test_metis_worlds_road_is_a_workspace_read_and_its_run_dir_untouched():
 # ── the locks (WORKSPACE.md §2.3) ──
 def test_one_pi_loop_a_second_is_refused_with_the_holders_line(tmp_path):
     ws = W.workspace(tmp_path)
-    assert ws.loops() == {"pi": None, "backend": None}
+    assert ws.loops() == {"pi": None, "backend": None, "claude": None}
     ws.lock("pi", pid=os.getpid(), mode="tui", model="m", cwd=str(tmp_path))
     with pytest.raises(ValueError, match=r"the pi loop holds this workspace: pid %d since .*: mode tui, model m" % os.getpid()):
         ws.lock("pi", pid=os.getppid(), mode="rpc")
