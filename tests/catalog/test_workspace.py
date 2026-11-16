@@ -25,7 +25,7 @@ def dead_pid():
 def test_the_layout_is_one_table_of_relative_paths(tmp_path):
     lay = W.layout()
     assert lay["format"] == "metis-workspace/1" and lay["state"] == ".metis"
-    assert lay["who"] == ["backend", "pi", "judge", "world"] and lay["locks"] == ["pi", "backend"]
+    assert lay["who"] == ["backend", "pi", "judge", "world", "claude"] and lay["locks"] == ["pi", "backend", "claude"]
     for name, row in lay["paths"].items():
         p = row["path"]
         assert not p.startswith("/") and ".." not in p.split("/"), name
@@ -307,7 +307,7 @@ def test_metis_worlds_road_is_a_workspace_read_and_its_run_dir_untouched():
 # ── the locks (WORKSPACE.md §2.3) ──
 def test_one_pi_loop_a_second_is_refused_with_the_holders_line(tmp_path):
     ws = W.workspace(tmp_path)
-    assert ws.loops() == {"pi": None, "backend": None}
+    assert ws.loops() == {"pi": None, "backend": None, "claude": None}
     ws.lock("pi", pid=os.getpid(), mode="tui", model="m", cwd=str(tmp_path))
     with pytest.raises(ValueError, match=r"the pi loop holds this workspace: pid %d since .*: mode tui, model m" % os.getpid()):
         ws.lock("pi", pid=os.getppid(), mode="rpc")
@@ -547,3 +547,62 @@ def test_a_refusal_by_the_records_kind_stands_at_once(tmp_path):
     ws.take_surprise(sid, pid=os.getpid())
     ws.rule(sid, "# Ruling: refused\n\n**Kind:** probabilistic\n", "refused", why="kind", kind="probabilistic")
     assert ws.surprise(sid)["status"] == "ruled" and "tries" not in ws.surprise(sid)
+
+
+def test_a_declared_tools_integer_zero_is_passed_not_dropped():
+    """metis-plugin s-df4ff191: `trace holds --max 0` was dropped (0 in (None, False, []) is True in Python): an
+    integer 0 is a value, both as a required argument and as a flag's."""
+    argv = W.tool_argv("trace_holds", {"trace": "t", "atom": "busy", "max": 0})
+    assert argv[-2:] == ["--max", "0"]
+    with pytest.raises(ValueError, match="required"):
+        W.tool_argv("trace_holds", {"trace": "t", "atom": "busy"})
+    argv = W.tool_argv("trace_holds", {"trace": "t", "atom": "busy", "max": 3, "member": None})
+    assert "--member" not in argv
+
+
+def test_a_finding_key_makes_one_surprise_by_two_paths(tmp_path):
+    """The surprise interface spec §5: the same finding written twice (headless and interactive) is ONE surprise."""
+    ws = W.Workspace(tmp_path)
+    a = ws.drop_surprise({"member": "m", "atoms": ["x"]}, key="run1:collision:42")
+    b = ws.drop_surprise({"member": "m", "atoms": ["x"], "key": "run1:collision:42"})
+    c = ws.drop_surprise({"member": "m", "atoms": ["x"]}, key="run1:collision:43")
+    assert a == b != c and ws.find_key("run1:collision:42") == a and ws.surprise(a)["key"] == "run1:collision:42"
+    assert len(ws.surprises()) == 2 and ws.find_key("none") is None
+
+
+ROAD_E2E = Path("/bigdata/work/bond/plugin/e2e/metis-worlds/road")
+
+
+@pytest.mark.skipif(not (ROAD_E2E / ".metis/traces/Town03-1-20261116T133826-mark-1").is_dir(), reason="no recorded road window here")
+def test_drop_window_is_the_one_producer_path(tmp_path):
+    """The surprise interface §6: drop_window keeps the window under a copy named by the KEY, takes the run's config,
+    finds the member (never the composition's director), and one key makes one surprise."""
+    import shutil
+    ws_root = tmp_path / "ws"
+    shutil.copytree(ROAD_E2E / "domains", ws_root / "domains", ignore=shutil.ignore_patterns("build"))
+    src = ROAD_E2E / ".metis/traces/Town03-1-20261116T133826-mark-1"
+    shutil.copytree(src, ws_root / ".metis/traces/run1")
+    ws = W.Workspace(ws_root)
+    assert ws.director() == "road_director"
+    tr = ws.trace("run1")
+    k0, k1 = tr["k0"] + 30, tr["k0"] + 56
+    m = ws.member_of("traces/run1", k0, k1)
+    assert m and m != "road_director"
+    a = ws.drop_window("run1", k0, k1, "the ego crawls", key="run1:mark:1:%d-%d" % (k0, k1), source="ui:test", kind="mark")
+    b = ws.drop_window("run1", k0, k1, "again", key="run1:mark:1:%d-%d" % (k0, k1))
+    rec = ws.surprise(a)
+    assert a == b and rec["member"] == m and rec["finding"] == "mark" and rec["source"] == "ui:test"
+    assert rec["trace"] == "traces/run1-mark-1-%d-%d" % (k0, k1) and rec["config"].endswith("config.yaml")
+
+
+def test_the_director_from_the_tick_protocol_when_no_composition_names_it(tmp_path):
+    """No composition's `direct:`: the trace's header says it: the member whose ports put out tick__grant."""
+    import shutil
+    vt = Path("/bigdata/work/bond/road/vtrace/red_light")
+    if not vt.is_dir():
+        pytest.skip("the recorded trace is not on this host")
+    shutil.copytree(vt, tmp_path / ".metis/traces/run1")
+    ws = W.Workspace(tmp_path)
+    from metis import trace as T
+    assert ws.director() is None and ws.director(T.read(tmp_path / ".metis/traces/run1")) == "road_director"
+    assert ws.member_of("run1", 0, 199) not in (None, "road_director")

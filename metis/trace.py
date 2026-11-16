@@ -1262,6 +1262,24 @@ def sort_summary(rows):
     return {"violations": len(rows), "by_class": {SORT_CLASSES[n]: sum(r["class"] == n for r in rows) for n in SORT_CLASSES}}
 
 
+def split_atoms(text):
+    """A comma-separated list of atoms, split on the commas OUTSIDE parentheses: `tick__grant(planner,controls),busy 0`
+    -> ['tick__grant(planner,controls)', 'busy 0'] (metis-plugin s-df4ff191: an atom's own commas split it before)."""
+    out, cur, depth = [], [], 0
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            out.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+    out.append("".join(cur).strip())
+    return [x for x in out if x]
+
+
 def parser():
     """The verbs' argparse: the CLI's, and the one source of metis/trace_tools.json (tools/gen_trace_tools.py)."""
     import argparse
@@ -1289,7 +1307,7 @@ def parser():
     b.add_argument("trace")
     b.add_argument("--member", required=True)
     b.add_argument("--k", type=int, required=True)
-    b.add_argument("--atoms", required=True, help="comma-separated: `atom` should hold, `atom 0` should not, `atom 3` should hold thrice")
+    b.add_argument("--atoms", required=True, help="comma-separated (an atom's own commas, inside its parentheses, are kept): `atom` should hold, `atom 0` should not, `atom 3` should hold thrice")
     b.add_argument("--program", help=state_help)
     n = sub.add_parser("count", help="the cross-tab: the ticks on which ATOM holds, by the value of each --by atom at the same tick (Measure the class first; A norm with its domain)")
     n.add_argument("trace")
@@ -1367,11 +1385,11 @@ def main(argv=None):
         return 0 if res.ok else 1
     tables = None
     if a.verb == "blame":
-        tables = [blame_rows(a.trace, a.member, a.k, [x.strip() for x in a.atoms.split(",") if x.strip()], a.program)]
+        tables = [blame_rows(a.trace, a.member, a.k, split_atoms(a.atoms), a.program)]
     elif a.verb == "count":
         tables = [count(a.trace, a.atom, a.by, a.member, a.program)]
     elif a.verb == "families":
-        tables = families(a.trace, [[x.strip() for x in fam.split(",") if x.strip()] for fam in a.family], a.member, a.program)
+        tables = families(a.trace, [split_atoms(fam) for fam in a.family], a.member, a.program)
     elif a.verb == "holds":
         tables = [holds_windows(a.trace, a.atom, a.max, a.member, a.program)]
     elif a.verb == "diff":

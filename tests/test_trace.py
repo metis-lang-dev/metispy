@@ -610,3 +610,11 @@ def test_no_segment_is_said(tmp_path):
     (tmp_path / "t").mkdir()
     with pytest.raises(T.TraceError, match="no segment"):
         T.read(tmp_path / "t")
+
+
+def test_an_atoms_own_commas_stay_in_it_when_a_list_is_split():
+    """metis-plugin s-df4ff191: blame's --atoms split tick__grant(planner,controls) into two broken atoms."""
+    from metis.trace import split_atoms
+    assert split_atoms("tick__grant(planner,controls),busy 0,  go") == ["tick__grant(planner,controls)", "busy 0", "go"]
+    assert split_atoms("a(b,c(d,e)),f") == ["a(b,c(d,e))", "f"]
+    assert split_atoms("") == []
