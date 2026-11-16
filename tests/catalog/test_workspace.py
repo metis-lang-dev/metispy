@@ -547,3 +547,14 @@ def test_a_refusal_by_the_records_kind_stands_at_once(tmp_path):
     ws.take_surprise(sid, pid=os.getpid())
     ws.rule(sid, "# Ruling: refused\n\n**Kind:** probabilistic\n", "refused", why="kind", kind="probabilistic")
     assert ws.surprise(sid)["status"] == "ruled" and "tries" not in ws.surprise(sid)
+
+
+def test_a_declared_tools_integer_zero_is_passed_not_dropped():
+    """metis-plugin s-df4ff191: `trace holds --max 0` was dropped (0 in (None, False, []) is True in Python): an
+    integer 0 is a value, both as a required argument and as a flag's."""
+    argv = W.tool_argv("trace_holds", {"trace": "t", "atom": "busy", "max": 0})
+    assert argv[-2:] == ["--max", "0"]
+    with pytest.raises(ValueError, match="required"):
+        W.tool_argv("trace_holds", {"trace": "t", "atom": "busy"})
+    argv = W.tool_argv("trace_holds", {"trace": "t", "atom": "busy", "max": 3, "member": None})
+    assert "--member" not in argv
